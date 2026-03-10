@@ -34,10 +34,11 @@ function Instructions() {
                         <div>
                             <h3 className="font-bold flex items-center mb-2"><CheckCircle2 className="w-4 h-4 mr-1" /> 操作步驟 & 新功能</h3>
                             <ul className="list-decimal list-inside text-sm space-y-2 leading-relaxed">
-                                <li>於下方表單輸入機票資訊，可以選擇 <strong>幣別 (TWD/JPY/USD 等)</strong> 作匯率換算。</li>
-                                <li>新增後，切換 <strong>「實際飛行配對」</strong> 頁籤，系統為你拼湊真正的旅行趟次，並自動分攤並計算出<strong>「該趟實際成本」</strong>。</li>
+                                <li>於下方表單輸入機票資訊，支援 <strong>單程票 (One-way)</strong> 與 <strong>多幣別換算 (TWD/JPY/USD)</strong>。</li>
+                                <li>切換 <strong>「實際飛行配對」</strong>，系統為你拼湊真正的趟次並精算成本。點擊趟次標題旁的 ✏️ 即可<strong>自訂行程命名</strong>。</li>
+                                <li>系統支援寬鬆配對，若去回程為「不同點進出 (Open-Jaw)」，系統將自動標上黃色警示。</li>
                                 <li>切換 <strong>「月曆視角」</strong> 頁籤，將密集的航段以時間軸羅列，方便一眼看出各個月份的動態。</li>
-                                <li>點擊右上角的 <strong>「備份成 JSON / 匯入資料」</strong> 來將輸入好的機票資料跨電腦搬移！</li>
+                                <li>點擊右上角的 <strong>「備份成 JSON / 匯入資料」</strong> 來將輸入好的機票資料與標籤跨電腦搬移！</li>
                             </ul>
                         </div>
                     </div>
@@ -338,7 +339,7 @@ function TicketList({ tickets, onDelete }) {
     );
 }
 
-function TripTimeline({ tickets }) {
+function TripTimeline({ tickets, tripLabels, onUpdateLabel }) {
     const segments = useMemo(() => {
         let segs = [];
         tickets.forEach(t => {
@@ -372,16 +373,36 @@ function TripTimeline({ tickets }) {
         </div>
     );
 
+    const isTaiwan = (regionStr) => {
+        const twCodes = ['TPE', 'TSA', 'KHH', 'RMQ'];
+        return twCodes.some(code => regionStr.includes(code));
+    };
+
     return (
         <div className="space-y-6 mt-6">
             {trips.map((trip, idx) => {
-                const hasError = trip.in && new Date(trip.out.date) > new Date(trip.in.date);
                 const isComplete = trip.out && trip.in;
+                // Loose Matching: Date contradiction check
+                const hasDateError = trip.in && new Date(trip.out.date) > new Date(trip.in.date);
+
+                // Open-Jaw Check
+                let isOpenJawError = false;
+                if (isComplete && !hasDateError) {
+                    const outFromTw = isTaiwan(trip.out.from);
+                    const inToTw = isTaiwan(trip.in.to);
+                    // Standard matching assumes Outbound is From Home, Inbound is To Home
+                    if (!outFromTw || !inToTw) isOpenJawError = true;
+                }
+
+                const hasError = hasDateError;
 
                 // Calculate Trip Cost
-                const outCost = Math.round((trip.out.ticket.priceTWD || trip.out.ticket.price) / 2);
-                const inCost = trip.in ? Math.round((trip.in.ticket.priceTWD || trip.in.ticket.price) / 2) : 0;
+                const outCost = Math.round((trip.out.ticket.priceTWD || trip.out.ticket.price) / (trip.out.ticket.type === 'oneway' ? 1 : 2));
+                const inCost = trip.in ? Math.round((trip.in.ticket.priceTWD || trip.in.ticket.price) / (trip.in.ticket.type === 'oneway' ? 1 : 2)) : 0;
                 const tripTotalCost = outCost + inCost;
+
+                const comboKey = trip.in ? `${trip.out.id}_${trip.in.id}` : `${trip.out.id}_null`;
+                const customName = tripLabels && tripLabels[comboKey] ? tripLabels[comboKey] : `趟次 #${idx + 1}`;
 
                 return (
                     <div key={idx} className={`p-5 rounded-xl border-2 shadow-sm relative overflow-hidden ${hasError ? 'border-red-400 bg-red-50' : 'border-indigo-100 bg-white'}`}>
@@ -390,7 +411,7 @@ function TripTimeline({ tickets }) {
                         <div className="flex justify-between items-center mb-4 pl-3">
                             <h3 className="font-extrabold text-xl text-gray-800 flex items-center group cursor-pointer"
                                 onClick={() => {
-                                    const newName = window.prompt('請輸入自訂趟次名稱 (留空則恢復預設):', tripLabels[comboKey] || '');
+                                    const newName = window.prompt('請輸入自訂趟次名稱 (留空則恢復預設):', (tripLabels && tripLabels[comboKey]) || '');
                                     if (newName !== null) {
                                         onUpdateLabel(comboKey, newName.trim());
                                     }
@@ -421,8 +442,8 @@ function TripTimeline({ tickets }) {
                                     <div className="text-sm text-gray-600 flex justify-between items-center">
                                         <span className="flex items-center font-medium"><Calendar className="w-4 h-4 mr-1.5 text-indigo-400" /> {trip.out.date}</span>
                                         <span className={`px-2 py-1 rounded shadow-sm text-[10px] font-bold ${trip.out.ticket.type === 'normal' ? 'bg-indigo-100 text-indigo-800' :
-                                                trip.out.ticket.type === 'reverse' ? 'bg-purple-100 text-purple-800' :
-                                                    'bg-emerald-100 text-emerald-800'
+                                            trip.out.ticket.type === 'reverse' ? 'bg-purple-100 text-purple-800' :
+                                                'bg-emerald-100 text-emerald-800'
                                             }`}>
                                             {trip.out.ticket.airline} ({trip.out.ticket.type === 'normal' ? '正向票' : trip.out.ticket.type === 'reverse' ? '反向票' : '單程票'})
                                         </span>
@@ -441,8 +462,8 @@ function TripTimeline({ tickets }) {
                                         <div className="text-sm text-gray-600 flex justify-between items-center">
                                             <span className="flex items-center font-medium"><Calendar className="w-4 h-4 mr-1.5 text-orange-400" /> {trip.in.date}</span>
                                             <span className={`px-2 py-1 rounded shadow-sm text-[10px] font-bold ${trip.in.ticket.type === 'normal' ? 'bg-indigo-100 text-indigo-800' :
-                                                    trip.in.ticket.type === 'reverse' ? 'bg-purple-100 text-purple-800' :
-                                                        'bg-emerald-100 text-emerald-800'
+                                                trip.in.ticket.type === 'reverse' ? 'bg-purple-100 text-purple-800' :
+                                                    'bg-emerald-100 text-emerald-800'
                                                 }`}>
                                                 {trip.in.ticket.airline} ({trip.in.ticket.type === 'normal' ? '正向票' : trip.in.ticket.type === 'reverse' ? '反向票' : '單程票'})
                                             </span>
@@ -523,8 +544,11 @@ function TripCalendar({ tickets }) {
                                             </div>
                                         </div>
                                         <div className="flex gap-2">
-                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${seg.ticket.type === 'normal' ? 'bg-indigo-100 text-indigo-800' : 'bg-purple-100 text-purple-800'}`}>
-                                                機票來源: {seg.ticket.airline} ({seg.ticket.type === 'normal' ? '正向' : '反向'})
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${seg.ticket.type === 'normal' ? 'bg-indigo-100 text-indigo-800' :
+                                                    seg.ticket.type === 'reverse' ? 'bg-purple-100 text-purple-800' :
+                                                        'bg-emerald-100 text-emerald-800'
+                                                }`}>
+                                                機票來源: {seg.ticket.airline} ({seg.ticket.type === 'normal' ? '正向' : seg.ticket.type === 'reverse' ? '反向' : '單程'})
                                             </span>
                                         </div>
                                     </div>
