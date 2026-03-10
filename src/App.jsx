@@ -71,12 +71,12 @@ function TicketForm({ onAddTicket }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (!formData.airline || !formData.price || !formData.outboundDate || !formData.inboundDate) {
+        if (!formData.airline || !formData.price || !formData.outboundDate || (formData.type !== 'oneway' && !formData.inboundDate)) {
             alert('請填寫完整資訊');
             return;
         }
         // Simple validation: make sure segment 2 doesn't happen before segment 1 inside the SAME ticket
-        if (new Date(formData.inboundDate) < new Date(formData.outboundDate)) {
+        if (formData.type !== 'oneway' && new Date(formData.inboundDate) < new Date(formData.outboundDate)) {
             alert('同一張發票中，回程段的日期不能早於去程段喔！');
             return;
         }
@@ -110,16 +110,23 @@ function TicketForm({ onAddTicket }) {
                         <button
                             type="button"
                             onClick={() => setFormData({ ...formData, type: 'normal' })}
-                            className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-colors ${!isReverse ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`flex-1 text-sm py-1.5 rounded-l-md font-medium transition-colors ${formData.type === 'normal' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             正向 (台灣出發)
                         </button>
                         <button
                             type="button"
                             onClick={() => setFormData({ ...formData, type: 'reverse' })}
-                            className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-colors ${isReverse ? 'bg-white shadow-sm text-purple-600' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`flex-1 text-sm py-1.5 font-medium transition-colors ${formData.type === 'reverse' ? 'bg-white shadow-sm text-purple-600' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             反向 (外站出發)
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, type: 'oneway' })}
+                            className={`flex-1 text-sm py-1.5 rounded-r-md font-medium transition-colors border-l border-gray-200 ${formData.type === 'oneway' ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            單程
                         </button>
                     </div>
                 </div>
@@ -213,7 +220,7 @@ function TicketForm({ onAddTicket }) {
                 {/* Row 3: Segment Dates with adaptive labels based on type */}
                 <div className="bg-indigo-50/50 p-3 rounded-lg border border-indigo-100">
                     <label className="block text-sm font-bold text-indigo-900 mb-1">
-                        第 1 段航班日期
+                        {formData.type === 'oneway' ? '出發日期' : '第 1 段航班日期'}
                         <span className="block text-xs text-indigo-600 font-normal mt-0.5">
                             ({isReverse ? formData.returnRegion : formData.departRegion} ✈️ {isReverse ? formData.departRegion : formData.returnRegion})
                         </span>
@@ -225,20 +232,22 @@ function TicketForm({ onAddTicket }) {
                         onChange={e => setFormData({ ...formData, outboundDate: e.target.value })}
                     />
                 </div>
-                <div className="bg-indigo-50/50 p-3 rounded-lg border border-indigo-100">
-                    <label className="block text-sm font-bold text-indigo-900 mb-1">
-                        第 2 段航班日期
-                        <span className="block text-xs text-indigo-600 font-normal mt-0.5">
-                            ({isReverse ? formData.departRegion : formData.returnRegion} ✈️ {isReverse ? formData.returnRegion : formData.departRegion})
-                        </span>
-                    </label>
-                    <input
-                        type="date"
-                        className="w-full p-2 border border-indigo-200 rounded-md focus:ring-indigo-500"
-                        value={formData.inboundDate}
-                        onChange={e => setFormData({ ...formData, inboundDate: e.target.value })}
-                    />
-                </div>
+                {formData.type !== 'oneway' && (
+                    <div className="bg-indigo-50/50 p-3 rounded-lg border border-indigo-100">
+                        <label className="block text-sm font-bold text-indigo-900 mb-1">
+                            第 2 段航班日期
+                            <span className="block text-xs text-indigo-600 font-normal mt-0.5">
+                                ({isReverse ? formData.departRegion : formData.returnRegion} ✈️ {isReverse ? formData.returnRegion : formData.departRegion})
+                            </span>
+                        </label>
+                        <input
+                            type="date"
+                            className="w-full p-2 border border-indigo-200 rounded-md focus:ring-indigo-500"
+                            value={formData.inboundDate}
+                            onChange={e => setFormData({ ...formData, inboundDate: e.target.value })}
+                        />
+                    </div>
+                )}
 
                 <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-2">
                     <button type="submit" className="w-full sm:w-auto px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition duration-200 shadow hover:shadow-lg flex items-center justify-center">
@@ -272,20 +281,24 @@ function TicketList({ tickets, onDelete }) {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {tickets.map(ticket => {
-                            const Segment1 = ticket.type === 'normal'
+                            const Segment1 = ticket.type === 'normal' || ticket.type === 'oneway'
                                 ? `${ticket.departRegion} ✈️ ${ticket.returnRegion}`
                                 : `${ticket.returnRegion} ✈️ ${ticket.departRegion}`;
-                            const Segment2 = ticket.type === 'normal'
-                                ? `${ticket.returnRegion} ✈️ ${ticket.departRegion}`
-                                : `${ticket.departRegion} ✈️ ${ticket.returnRegion}`;
+                            const Segment2 = ticket.type === 'oneway'
+                                ? '無 (單程票)'
+                                : ticket.type === 'normal'
+                                    ? `${ticket.returnRegion} ✈️ ${ticket.departRegion}`
+                                    : `${ticket.departRegion} ✈️ ${ticket.returnRegion}`;
 
                             return (
                                 <tr key={ticket.id} className="hover:bg-gray-50 transition-colors">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex flex-col items-start gap-1">
-                                            <span className={`px-2 py-1 inline-flex text-xs leading-4 font-bold rounded shadow-sm ${ticket.type === 'normal' ? 'bg-indigo-100 text-indigo-700' : 'bg-purple-100 text-purple-700'
+                                            <span className={`px-2 py-1 inline-flex text-xs leading-4 font-bold rounded shadow-sm ${ticket.type === 'normal' ? 'bg-indigo-100 text-indigo-700' :
+                                                ticket.type === 'reverse' ? 'bg-purple-100 text-purple-700' :
+                                                    'bg-emerald-100 text-emerald-700'
                                                 }`}>
-                                                {ticket.type === 'normal' ? '正向票' : '反向票'}
+                                                {ticket.type === 'normal' ? '正向票' : ticket.type === 'reverse' ? '反向票' : '單程票'}
                                             </span>
                                             <span className="text-sm font-medium text-gray-900">{ticket.airline}</span>
                                         </div>
@@ -296,7 +309,9 @@ function TicketList({ tickets, onDelete }) {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="text-sm text-gray-900 font-medium">{Segment2}</div>
-                                        <div className="text-sm text-gray-500 mt-1 flex items-center"><Calendar className="w-3 h-3 mr-1" /> {ticket.inboundDate}</div>
+                                        {ticket.type !== 'oneway' && (
+                                            <div className="text-sm text-gray-500 mt-1 flex items-center"><Calendar className="w-3 h-3 mr-1" /> {ticket.inboundDate}</div>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-700">
                                         {ticket.currency === 'TWD' ? (
@@ -370,17 +385,28 @@ function TripTimeline({ tickets }) {
 
                 return (
                     <div key={idx} className={`p-5 rounded-xl border-2 shadow-sm relative overflow-hidden ${hasError ? 'border-red-400 bg-red-50' : 'border-indigo-100 bg-white'}`}>
-                        <div className={`absolute left-0 top-0 bottom-0 w-2 ${hasError ? 'bg-red-500' : 'bg-indigo-500'}`}></div>
+                        <div className={`absolute left-0 top-0 bottom-0 w-2 ${hasError ? 'bg-red-500' : isOpenJawError ? 'bg-yellow-500' : 'bg-indigo-500'}`}></div>
 
                         <div className="flex justify-between items-center mb-4 pl-3">
-                            <h3 className="font-extrabold text-xl text-gray-800">趟次 #{idx + 1}</h3>
+                            <h3 className="font-extrabold text-xl text-gray-800 flex items-center group cursor-pointer"
+                                onClick={() => {
+                                    const newName = window.prompt('請輸入自訂趟次名稱 (留空則恢復預設):', tripLabels[comboKey] || '');
+                                    if (newName !== null) {
+                                        onUpdateLabel(comboKey, newName.trim());
+                                    }
+                                }}
+                            >
+                                {customName}
+                                <span className="ml-2 text-xs text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">✏️ 編輯命名</span>
+                            </h3>
                             <div className="flex gap-2">
                                 <span className="flex items-center text-slate-700 font-bold text-sm bg-slate-100 px-3 py-1 rounded-full shadow-sm">
                                     此趟成本: NT$ {tripTotalCost.toLocaleString()}
                                 </span>
                                 {hasError && <span className="flex items-center text-white font-bold text-xs bg-red-500 px-3 py-1 rounded-full shadow-sm"><AlertCircle className="w-3 h-3 mr-1" /> 日期矛盾</span>}
+                                {isOpenJawError && !hasError && <span className="flex items-center text-yellow-800 font-bold text-xs bg-yellow-200 px-3 py-1 rounded-full shadow-sm"><AlertCircle className="w-3 h-3 mr-1" /> 不同點進出 (可能錯置)</span>}
                                 {!isComplete && <span className="flex items-center text-orange-800 font-bold text-xs bg-orange-200 px-3 py-1 rounded-full"><AlertCircle className="w-3 h-3 mr-1" /> 缺回程段</span>}
-                                {isComplete && !hasError && <span className="flex items-center text-green-800 font-bold text-xs bg-green-100 px-3 py-1 rounded-full"><CheckCircle2 className="w-3 h-3 mr-1" /> 配對成功</span>}
+                                {isComplete && !hasError && !isOpenJawError && <span className="flex items-center text-green-800 font-bold text-xs bg-green-100 px-3 py-1 rounded-full"><CheckCircle2 className="w-3 h-3 mr-1" /> 配對成功</span>}
                             </div>
                         </div>
 
@@ -394,8 +420,11 @@ function TripTimeline({ tickets }) {
                                     </div>
                                     <div className="text-sm text-gray-600 flex justify-between items-center">
                                         <span className="flex items-center font-medium"><Calendar className="w-4 h-4 mr-1.5 text-indigo-400" /> {trip.out.date}</span>
-                                        <span className={`px-2 py-1 rounded shadow-sm text-[10px] font-bold ${trip.out.ticket.type === 'normal' ? 'bg-indigo-100 text-indigo-800' : 'bg-purple-100 text-purple-800'}`}>
-                                            {trip.out.ticket.airline} ({trip.out.ticket.type === 'normal' ? '正向票' : '反向票'})
+                                        <span className={`px-2 py-1 rounded shadow-sm text-[10px] font-bold ${trip.out.ticket.type === 'normal' ? 'bg-indigo-100 text-indigo-800' :
+                                                trip.out.ticket.type === 'reverse' ? 'bg-purple-100 text-purple-800' :
+                                                    'bg-emerald-100 text-emerald-800'
+                                            }`}>
+                                            {trip.out.ticket.airline} ({trip.out.ticket.type === 'normal' ? '正向票' : trip.out.ticket.type === 'reverse' ? '反向票' : '單程票'})
                                         </span>
                                     </div>
                                 </div>
@@ -411,8 +440,11 @@ function TripTimeline({ tickets }) {
                                         </div>
                                         <div className="text-sm text-gray-600 flex justify-between items-center">
                                             <span className="flex items-center font-medium"><Calendar className="w-4 h-4 mr-1.5 text-orange-400" /> {trip.in.date}</span>
-                                            <span className={`px-2 py-1 rounded shadow-sm text-[10px] font-bold ${trip.in.ticket.type === 'normal' ? 'bg-indigo-100 text-indigo-800' : 'bg-purple-100 text-purple-800'}`}>
-                                                {trip.in.ticket.airline} ({trip.in.ticket.type === 'normal' ? '正向票' : '反向票'})
+                                            <span className={`px-2 py-1 rounded shadow-sm text-[10px] font-bold ${trip.in.ticket.type === 'normal' ? 'bg-indigo-100 text-indigo-800' :
+                                                    trip.in.ticket.type === 'reverse' ? 'bg-purple-100 text-purple-800' :
+                                                        'bg-emerald-100 text-emerald-800'
+                                                }`}>
+                                                {trip.in.ticket.airline} ({trip.in.ticket.type === 'normal' ? '正向票' : trip.in.ticket.type === 'reverse' ? '反向票' : '單程票'})
                                             </span>
                                         </div>
                                     </div>
@@ -445,11 +477,16 @@ function TripCalendar({ tickets }) {
                 { id: t.id + '-1', ticket: t, date: t.outboundDate, from: t.departRegion, to: t.returnRegion },
                 { id: t.id + '-2', ticket: t, date: t.inboundDate, from: t.returnRegion, to: t.departRegion }
             ];
-        } else {
+        } else if (t.type === 'reverse') {
             return [
                 { id: t.id + '-1', ticket: t, date: t.outboundDate, from: t.returnRegion, to: t.departRegion },
                 { id: t.id + '-2', ticket: t, date: t.inboundDate, from: t.departRegion, to: t.returnRegion }
             ];
+        } else {
+            // One-way
+            return [
+                { id: t.id + '-1', ticket: t, date: t.outboundDate, from: t.departRegion, to: t.returnRegion }
+            ]
         }
     }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
@@ -504,6 +541,7 @@ function TripCalendar({ tickets }) {
 
 function App() {
     const [tickets, setTickets] = useLocalStorage('reverse-tickets', []);
+    const [tripLabels, setTripLabels] = useLocalStorage('reverse-trip-labels', {});
     const [activeTab, setActiveTab] = useState('timeline');
     const fileInputRef = useRef(null);
 
@@ -514,8 +552,19 @@ function App() {
         }
     };
 
+    const updateLabel = (comboKey, name) => {
+        if (!name) {
+            const newLabels = { ...tripLabels };
+            delete newLabels[comboKey];
+            setTripLabels(newLabels);
+        } else {
+            setTripLabels({ ...tripLabels, [comboKey]: name });
+        }
+    };
+
     const handleExport = () => {
-        const dataStr = JSON.stringify(tickets, null, 2);
+        const dataToExport = { tickets, tripLabels };
+        const dataStr = JSON.stringify(dataToExport, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -535,17 +584,27 @@ function App() {
         reader.onload = (event) => {
             try {
                 const importedData = JSON.parse(event.target.result);
+                // Backward compatibility: imported data might be just an array of tickets
+                let newTickets = [];
+                let newLabels = {};
+
                 if (Array.isArray(importedData)) {
-                    // simple validation
-                    if (importedData.length > 0 && !importedData[0].id) {
-                        throw new Error('Invalid format');
-                    }
-                    if (window.confirm(`成功讀取 ${importedData.length} 筆資料，要覆寫目前所有訂單嗎？`)) {
-                        setTickets(importedData);
-                        alert('匯入成功！');
-                    }
+                    newTickets = importedData;
+                } else if (importedData.tickets && Array.isArray(importedData.tickets)) {
+                    newTickets = importedData.tickets;
+                    newLabels = importedData.tripLabels || {};
                 } else {
-                    throw new Error('Data is not an array');
+                    throw new Error('Invalid format');
+                }
+
+                if (newTickets.length > 0 && !newTickets[0].id) {
+                    throw new Error('Invalid format');
+                }
+
+                if (window.confirm(`成功讀取 ${newTickets.length} 筆機票資料，要覆寫目前所有訂單嗎？`)) {
+                    setTickets(newTickets);
+                    setTripLabels(newLabels);
+                    alert('匯入成功！');
                 }
             } catch (err) {
                 alert('檔案格式錯誤或損毀，匯入失敗。');
@@ -655,7 +714,7 @@ function App() {
                     </div>
 
                     <div className="p-4 md:p-6 bg-white min-h-[400px]">
-                        {activeTab === 'timeline' && <TripTimeline tickets={tickets} />}
+                        {activeTab === 'timeline' && <TripTimeline tickets={tickets} tripLabels={tripLabels} onUpdateLabel={updateLabel} />}
                         {activeTab === 'list' && <TicketList tickets={tickets} onDelete={deleteTicket} />}
                         {activeTab === 'calendar' && <TripCalendar tickets={tickets} />}
                     </div>
