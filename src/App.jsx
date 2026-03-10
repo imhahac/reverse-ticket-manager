@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Plane, Calendar, Trash2, ArrowRight, BookOpen, AlertCircle, CheckCircle2, ListFilter } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { Plane, Calendar, Trash2, ArrowRight, BookOpen, AlertCircle, CheckCircle2, ListFilter, Download, Upload } from 'lucide-react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
 function Instructions() {
@@ -49,12 +49,20 @@ function Instructions() {
     );
 }
 
+const AIRPORTS = [
+    'TPE (台北桃園)', 'TSA (台北松山)', 'KHH (高雄小港)', 'RMQ (台中清泉崗)',
+    'NRT (東京成田)', 'HND (東京羽田)', 'KIX (大阪關西)', 'NGO (名古屋中部)',
+    'CTS (札幌新千歲)', 'OKA (沖繩那霸)', 'FUK (福岡)', 'SDJ (仙台)', 'HKD (函館)'
+];
+
 function TicketForm({ onAddTicket }) {
     const [formData, setFormData] = useState({
         airline: '',
         price: '',
-        departRegion: '台北 (TPE/TSA)',
-        returnRegion: '東京 (NRT/HND)',
+        currency: 'TWD',
+        exchangeRate: '1',
+        departRegion: 'TPE (台北桃園)',
+        returnRegion: 'NRT (東京成田)',
         outboundDate: '',
         inboundDate: '',
         type: 'normal',
@@ -72,10 +80,15 @@ function TicketForm({ onAddTicket }) {
             return;
         }
 
+        const basePrice = Number(formData.price);
+        const rate = Number(formData.exchangeRate) || 1;
+        const priceInTWD = Math.round(basePrice * rate);
+
         onAddTicket({
             ...formData,
             id: Date.now().toString(),
-            price: Number(formData.price),
+            price: basePrice,
+            priceTWD: priceInTWD,
         });
         setFormData({ ...formData, airline: '', price: '', outboundDate: '', inboundDate: '' });
     };
@@ -110,7 +123,11 @@ function TicketForm({ onAddTicket }) {
                     </div>
                 </div>
 
-                <div>
+                <datalist id="airports-list">
+                    {AIRPORTS.map(ap => <option key={ap} value={ap} />)}
+                </datalist>
+
+                <div className="col-span-1 md:col-span-2 lg:col-span-1">
                     <label className="block text-sm font-bold text-gray-700 mb-1">航空公司 / 備註</label>
                     <input
                         type="text"
@@ -120,37 +137,76 @@ function TicketForm({ onAddTicket }) {
                         onChange={e => setFormData({ ...formData, airline: e.target.value })}
                     />
                 </div>
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">總價格 (NTD)</label>
-                    <input
-                        type="number"
-                        placeholder="例如: 16000"
-                        className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                        value={formData.price}
-                        onChange={e => setFormData({ ...formData, price: e.target.value })}
-                    />
+                <div className="col-span-1 md:col-span-2 lg:col-span-2 grid grid-cols-3 gap-2">
+                    <div className="col-span-1">
+                        <label className="block text-sm font-bold text-gray-700 mb-1">幣別</label>
+                        <select
+                            className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            value={formData.currency}
+                            onChange={e => {
+                                const newCurrency = e.target.value;
+                                setFormData({
+                                    ...formData,
+                                    currency: newCurrency,
+                                    // Auto-suggest rough exchange rates
+                                    exchangeRate: newCurrency === 'TWD' ? '1' : newCurrency === 'JPY' ? '0.21' : formData.exchangeRate
+                                });
+                            }}
+                        >
+                            <option value="TWD">TWD 台幣</option>
+                            <option value="JPY">JPY 日幣</option>
+                            <option value="USD">USD 美金</option>
+                        </select>
+                    </div>
+                    <div className="col-span-1">
+                        <label className="block text-sm font-bold text-gray-700 mb-1">匯率(對台幣)</label>
+                        <input
+                            type="number" step="0.001"
+                            disabled={formData.currency === 'TWD'}
+                            className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 disabled:opacity-50"
+                            value={formData.exchangeRate}
+                            onChange={e => setFormData({ ...formData, exchangeRate: e.target.value })}
+                        />
+                    </div>
+                    <div className="col-span-1">
+                        <label className="block text-sm font-bold text-gray-700 mb-1">原幣總價</label>
+                        <input
+                            type="number"
+                            placeholder="例如: 16000"
+                            className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
+                            value={formData.price}
+                            onChange={e => setFormData({ ...formData, price: e.target.value })}
+                        />
+                    </div>
                 </div>
-
-                <div className="hidden lg:block"></div>
 
                 {/* Row 2: Regions Configuration */}
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">您的出發地 (Home)</label>
-                    <input
-                        type="text"
-                        className="w-full p-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-                        value={formData.departRegion}
-                        onChange={e => setFormData({ ...formData, departRegion: e.target.value })}
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">國外目的地 (Away)</label>
-                    <input
-                        type="text"
-                        className="w-full p-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
-                        value={formData.returnRegion}
-                        onChange={e => setFormData({ ...formData, returnRegion: e.target.value })}
-                    />
+                <div className="col-span-1 md:col-span-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">航點設定 (支援 IATA 代碼)</div>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                        <div className="flex-1">
+                            <label className="block text-xs font-bold text-gray-600 mb-1">您的出發地 (Home)</label>
+                            <input
+                                autoComplete="off"
+                                list="airports-list"
+                                type="text"
+                                className="w-full p-2 border border-gray-300 rounded bg-white text-gray-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                value={formData.departRegion}
+                                onChange={e => setFormData({ ...formData, departRegion: e.target.value })}
+                            />
+                        </div>
+                        <div className="flex-1">
+                            <label className="block text-xs font-bold text-gray-600 mb-1">國外目的地 (Away)</label>
+                            <input
+                                autoComplete="off"
+                                list="airports-list"
+                                type="text"
+                                className="w-full p-2 border border-gray-300 rounded bg-white text-gray-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                value={formData.returnRegion}
+                                onChange={e => setFormData({ ...formData, returnRegion: e.target.value })}
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 {/* Row 3: Segment Dates with adaptive labels based on type */}
@@ -241,7 +297,16 @@ function TicketList({ tickets, onDelete }) {
                                         <div className="text-sm text-gray-900 font-medium">{Segment2}</div>
                                         <div className="text-sm text-gray-500 mt-1 flex items-center"><Calendar className="w-3 h-3 mr-1" /> {ticket.inboundDate}</div>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-700">NT$ {ticket.price.toLocaleString()}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-700">
+                                        {ticket.currency === 'TWD' ? (
+                                            `NT$ ${ticket.priceTWD?.toLocaleString() || ticket.price.toLocaleString()}`
+                                        ) : (
+                                            <div className="flex flex-col">
+                                                <span>NT$ {ticket.priceTWD?.toLocaleString() || Math.round(ticket.price).toLocaleString()}</span>
+                                                <span className="text-xs text-gray-400 font-normal">{ticket.currency} {ticket.price.toLocaleString()} (@{ticket.exchangeRate})</span>
+                                            </div>
+                                        )}
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <button onClick={() => onDelete(ticket.id)} className="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 transition">
                                             <Trash2 className="w-5 h-5" />
@@ -297,6 +362,11 @@ function TripTimeline({ tickets }) {
                 const hasError = trip.in && new Date(trip.out.date) > new Date(trip.in.date);
                 const isComplete = trip.out && trip.in;
 
+                // Calculate Trip Cost
+                const outCost = Math.round((trip.out.ticket.priceTWD || trip.out.ticket.price) / 2);
+                const inCost = trip.in ? Math.round((trip.in.ticket.priceTWD || trip.in.ticket.price) / 2) : 0;
+                const tripTotalCost = outCost + inCost;
+
                 return (
                     <div key={idx} className={`p-5 rounded-xl border-2 shadow-sm relative overflow-hidden ${hasError ? 'border-red-400 bg-red-50' : 'border-indigo-100 bg-white'}`}>
                         <div className={`absolute left-0 top-0 bottom-0 w-2 ${hasError ? 'bg-red-500' : 'bg-indigo-500'}`}></div>
@@ -304,6 +374,9 @@ function TripTimeline({ tickets }) {
                         <div className="flex justify-between items-center mb-4 pl-3">
                             <h3 className="font-extrabold text-xl text-gray-800">趟次 #{idx + 1}</h3>
                             <div className="flex gap-2">
+                                <span className="flex items-center text-slate-700 font-bold text-sm bg-slate-100 px-3 py-1 rounded-full shadow-sm">
+                                    此趟成本: NT$ {tripTotalCost.toLocaleString()}
+                                </span>
                                 {hasError && <span className="flex items-center text-white font-bold text-xs bg-red-500 px-3 py-1 rounded-full shadow-sm"><AlertCircle className="w-3 h-3 mr-1" /> 日期矛盾</span>}
                                 {!isComplete && <span className="flex items-center text-orange-800 font-bold text-xs bg-orange-200 px-3 py-1 rounded-full"><AlertCircle className="w-3 h-3 mr-1" /> 缺回程段</span>}
                                 {isComplete && !hasError && <span className="flex items-center text-green-800 font-bold text-xs bg-green-100 px-3 py-1 rounded-full"><CheckCircle2 className="w-3 h-3 mr-1" /> 配對成功</span>}
@@ -357,9 +430,81 @@ function TripTimeline({ tickets }) {
     );
 }
 
+function TripCalendar({ tickets }) {
+    if (tickets.length === 0) return (
+        <div className="p-12 mt-6 text-center bg-white border border-gray-100 rounded-xl shadow-sm text-gray-400">
+            <Calendar className="w-12 h-12 mx-auto mb-4 opacity-20" />
+            <p>請先新增機票，系統會自動為您繪製飛行月曆。</p>
+        </div>
+    );
+
+    const segments = tickets.flatMap(t => {
+        if (t.type === 'normal') {
+            return [
+                { id: t.id + '-1', ticket: t, date: t.outboundDate, from: t.departRegion, to: t.returnRegion },
+                { id: t.id + '-2', ticket: t, date: t.inboundDate, from: t.returnRegion, to: t.departRegion }
+            ];
+        } else {
+            return [
+                { id: t.id + '-1', ticket: t, date: t.outboundDate, from: t.returnRegion, to: t.departRegion },
+                { id: t.id + '-2', ticket: t, date: t.inboundDate, from: t.departRegion, to: t.returnRegion }
+            ];
+        }
+    }).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Group segments by month
+    const segmentsByMonth = segments.reduce((acc, seg) => {
+        const monthKey = seg.date.substring(0, 7); // YYYY-MM
+        if (!acc[monthKey]) acc[monthKey] = [];
+        acc[monthKey].push(seg);
+        return acc;
+    }, {});
+
+    const sortedMonths = Object.keys(segmentsByMonth).sort();
+
+    return (
+        <div className="mt-6 space-y-8">
+            {sortedMonths.map(month => (
+                <div key={month} className="bg-white border text-slate-800 border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                    <div className="bg-slate-100 px-4 py-3 border-b border-gray-200 font-bold text-lg flex items-center">
+                        <Calendar className="w-5 h-5 mr-2 text-indigo-600" /> {month}
+                    </div>
+                    <div className="p-4 flex flex-col gap-3">
+                        {segmentsByMonth[month].map(seg => {
+                            const isReturnToTaiwan = seg.to.includes('TPE') || seg.to.includes('TSA') || seg.to.includes('KHH') || seg.to.includes('RMQ');
+                            return (
+                                <div key={seg.id} className="flex flex-col sm:flex-row p-3 hover:bg-slate-50 border border-slate-100 rounded-lg group transition-colors">
+                                    <div className="sm:w-32 flex-shrink-0 font-bold text-indigo-700 flex items-center mb-2 sm:mb-0">
+                                        <span className="bg-indigo-50 px-2 py-1 rounded text-sm group-hover:bg-indigo-100">{seg.date.substring(8, 10)} 日</span>
+                                        <span className="mx-2 text-slate-300">|</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className={`text-lg font-bold ${isReturnToTaiwan ? 'text-orange-600' : 'text-indigo-600'}`}>
+                                                {seg.from} <ArrowRight className="inline w-4 h-4 text-slate-400" /> {seg.to}
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${seg.ticket.type === 'normal' ? 'bg-indigo-100 text-indigo-800' : 'bg-purple-100 text-purple-800'}`}>
+                                                機票來源: {seg.ticket.airline} ({seg.ticket.type === 'normal' ? '正向' : '反向'})
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            ))}
+            <div className="text-center text-slate-400 text-sm italic mt-8">💡 上方月曆依日期將每一段單程獨立顯示，方便您一眼看出各個月份的動態。</div>
+        </div>
+    );
+}
+
 function App() {
     const [tickets, setTickets] = useLocalStorage('reverse-tickets', []);
     const [activeTab, setActiveTab] = useState('timeline');
+    const fileInputRef = useRef(null);
 
     const addTicket = (ticket) => setTickets([...tickets, ticket]);
     const deleteTicket = (id) => {
@@ -368,17 +513,83 @@ function App() {
         }
     };
 
-    const totalPrice = tickets.reduce((sum, t) => sum + t.price, 0);
+    const handleExport = () => {
+        const dataStr = JSON.stringify(tickets, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `reverse-tickets-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleImport = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const importedData = JSON.parse(event.target.result);
+                if (Array.isArray(importedData)) {
+                    // simple validation
+                    if (importedData.length > 0 && !importedData[0].id) {
+                        throw new Error('Invalid format');
+                    }
+                    if (window.confirm(`成功讀取 ${importedData.length} 筆資料，要覆寫目前所有訂單嗎？`)) {
+                        setTickets(importedData);
+                        alert('匯入成功！');
+                    }
+                } else {
+                    throw new Error('Data is not an array');
+                }
+            } catch (err) {
+                alert('檔案格式錯誤或損毀，匯入失敗。');
+                console.error(err);
+            }
+            // reset input
+            e.target.value = '';
+        };
+        reader.readAsText(file);
+    };
+
+    const totalPriceTWD = tickets.reduce((sum, t) => sum + (t.priceTWD || t.price), 0);
 
     return (
         <div className="min-h-screen p-4 md:p-8 bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900">
             <div className="max-w-5xl mx-auto">
 
-                <header className="mb-8 pt-4">
-                    <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-3 tracking-tight flex items-center">
-                        <Plane className="w-8 h-8 mr-3 text-indigo-600" /> 航班反向票管理系統
-                    </h1>
-                    <p className="text-slate-500 text-lg">解決來回機票分段購買時，出發方向與日期混淆的問題。</p>
+                <header className="mb-8 pt-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div>
+                        <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-3 tracking-tight flex items-center">
+                            <Plane className="w-8 h-8 mr-3 text-indigo-600" /> 航班反向票管理系統
+                        </h1>
+                        <p className="text-slate-500 text-lg">解決來回機票分段購買時，出發方向與日期混淆的問題。</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleExport}
+                            className="flex items-center px-4 py-2 bg-white border border-gray-200 text-gray-700 font-bold text-sm rounded-lg hover:bg-gray-50 shadow-sm transition"
+                        >
+                            <Download className="w-4 h-4 mr-2 text-indigo-500" /> 備份成 JSON
+                        </button>
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex items-center px-4 py-2 bg-white border border-gray-200 text-gray-700 font-bold text-sm rounded-lg hover:bg-gray-50 shadow-sm transition"
+                        >
+                            <Upload className="w-4 h-4 mr-2 text-emerald-500" /> 匯入資料
+                        </button>
+                        <input
+                            type="file"
+                            accept=".json"
+                            ref={fileInputRef}
+                            className="hidden"
+                            onChange={handleImport}
+                        />
+                    </div>
                 </header>
 
                 <Instructions />
@@ -401,8 +612,8 @@ function App() {
                     </div>
                     <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
                         <div className="relative z-10">
-                            <p className="text-slate-300 font-medium mb-1">總預算支出 (NTD)</p>
-                            <p className="text-3xl font-extrabold">${totalPrice.toLocaleString()}</p>
+                            <p className="text-slate-300 font-medium mb-1">總預算支出 (TWD)</p>
+                            <p className="text-3xl font-extrabold">${totalPriceTWD.toLocaleString()}</p>
                         </div>
                         <div className="text-6xl font-black absolute -right-2 -bottom-6 text-white opacity-[0.03]">$</div>
                     </div>
@@ -416,8 +627,8 @@ function App() {
                         <button
                             onClick={() => setActiveTab('timeline')}
                             className={`flex-1 py-3 px-4 font-bold text-sm sm:text-base rounded-t-lg transition-colors ${activeTab === 'timeline'
-                                    ? 'bg-white text-indigo-700 border-b-2 border-indigo-500 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                                ? 'bg-white text-indigo-700 border-b-2 border-indigo-500 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                                 }`}
                         >
                             📆 實際飛行配對 (Timeline)
@@ -425,20 +636,27 @@ function App() {
                         <button
                             onClick={() => setActiveTab('list')}
                             className={`flex-1 py-3 px-4 font-bold text-sm sm:text-base rounded-t-lg transition-colors ${activeTab === 'list'
-                                    ? 'bg-white text-indigo-700 border-b-2 border-indigo-500 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                                ? 'bg-white text-indigo-700 border-b-2 border-indigo-500 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                                 }`}
                         >
                             🎟️ 購買清單管理 (Purchases)
                         </button>
+                        <button
+                            onClick={() => setActiveTab('calendar')}
+                            className={`flex-1 py-3 px-2 sm:px-4 font-bold text-sm sm:text-base rounded-t-lg transition-colors ${activeTab === 'calendar'
+                                ? 'bg-white text-indigo-700 border-b-2 border-indigo-500 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                                }`}
+                        >
+                            📅 月曆視角 (Calendar)
+                        </button>
                     </div>
 
                     <div className="p-4 md:p-6 bg-white min-h-[400px]">
-                        {activeTab === 'timeline' ? (
-                            <TripTimeline tickets={tickets} />
-                        ) : (
-                            <TicketList tickets={tickets} onDelete={deleteTicket} />
-                        )}
+                        {activeTab === 'timeline' && <TripTimeline tickets={tickets} />}
+                        {activeTab === 'list' && <TicketList tickets={tickets} onDelete={deleteTicket} />}
+                        {activeTab === 'calendar' && <TripCalendar tickets={tickets} />}
                     </div>
                 </div>
 
