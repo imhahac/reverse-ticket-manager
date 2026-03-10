@@ -32,16 +32,17 @@ function Instructions() {
                             </ul>
                         </div>
                         <div>
-                            <h3 className="font-bold flex items-center mb-2"><CheckCircle2 className="w-4 h-4 mr-1" /> 操作步驟</h3>
+                            <h3 className="font-bold flex items-center mb-2"><CheckCircle2 className="w-4 h-4 mr-1" /> 操作步驟 & 新功能</h3>
                             <ul className="list-decimal list-inside text-sm space-y-2 leading-relaxed">
-                                <li>於下方表單輸入機票資訊，重點是選擇正確的<strong>機票類型</strong>。</li>
-                                <li>新增後，系統會在<strong>「實際飛行配對」</strong>區域依時間軸為你拼湊出真正的旅行趟次。</li>
-                                <li>請隨時留意是否有紅色警告（代表日期配對失敗，可能漏買或日期輸入錯誤）。</li>
+                                <li>於下方表單輸入機票資訊，可以選擇 <strong>幣別 (TWD/JPY/USD 等)</strong> 作匯率換算。</li>
+                                <li>新增後，切換 <strong>「實際飛行配對」</strong> 頁籤，系統為你拼湊真正的旅行趟次，並自動分攤並計算出<strong>「該趟實際成本」</strong>。</li>
+                                <li>切換 <strong>「月曆視角」</strong> 頁籤，將密集的航段以時間軸羅列，方便一眼看出各個月份的動態。</li>
+                                <li>點擊右上角的 <strong>「備份成 JSON / 匯入資料」</strong> 來將輸入好的機票資料跨電腦搬移！</li>
                             </ul>
                         </div>
                     </div>
                     <div className="mt-4 pt-3 border-t border-blue-200/50 flex space-x-2 text-xs text-blue-700">
-                        <span className="bg-blue-100 flex items-center px-2 py-1 rounded">🛡️ 隱私保證：你的資料只存在自己瀏覽器內，不會上傳雲端。</span>
+                        <span className="bg-blue-100 flex items-center px-2 py-1 rounded">🛡️ 隱私保證：你的資料只存在自己瀏覽器內，不會上傳雲端。(匯入匯出亦在本地完成)</span>
                     </div>
                 </div>
             )}
@@ -149,7 +150,7 @@ function TicketForm({ onAddTicket }) {
                                     ...formData,
                                     currency: newCurrency,
                                     // Auto-suggest rough exchange rates
-                                    exchangeRate: newCurrency === 'TWD' ? '1' : newCurrency === 'JPY' ? '0.21' : formData.exchangeRate
+                                    exchangeRate: newCurrency === 'TWD' ? '1' : newCurrency === 'JPY' ? '0.21' : newCurrency === 'USD' ? '32.5' : formData.exchangeRate
                                 });
                             }}
                         >
