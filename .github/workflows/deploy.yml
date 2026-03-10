@@ -1,0 +1,58 @@
+name: Deploy React SPA to GitHub Pages
+
+# 設定觸發條件：當推送到 main 分支時執行
+on:
+  push:
+    branches: ["main"]
+  # 允許手動從 GitHub 介面觸發部署
+  workflow_dispatch:
+
+# 設定 GITHUB_TOKEN 的權限，這是部署到 Pages 必須的
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 確保同一時間只有一個部署在執行
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  # 1. 建置專案 (Build)
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      # 將打包好的 dist 資料夾上傳為 artifact，供部署 job 使用
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+  # 2. 部署到 GitHub Pages (Deploy)
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    name: Deploy
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
