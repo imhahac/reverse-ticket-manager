@@ -649,7 +649,10 @@ function App() {
             setAccessToken(codeResponse.access_token);
             alert('Google 登入成功！');
         },
-        onError: (error) => console.log('Login Failed:', error),
+        onError: (error) => {
+            console.error('Login Failed:', error);
+            alert(`Google 登入失敗\n錯誤訊息: ${error?.error_description || error?.error || '未知錯誤'}\n請確認您的 Client ID 是否正確，以及是否將目前網址加入 GCP Console 的「已授權的 JavaScript 來源」。`);
+        },
         scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events'
     });
 

@@ -13,6 +13,9 @@ permissions:
   pages: write
   id-token: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 # 確保同一時間只有一個部署在執行
 concurrency:
   group: "pages"
@@ -24,13 +27,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         uses: actions/checkout@v4
 
       - name: Set up Node.js
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -45,8 +44,6 @@ jobs:
 
       # 將打包好的 dist 資料夾上傳為 artifact，供部署 job 使用
       - name: Upload artifact
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         uses: actions/upload-pages-artifact@v3
         with:
           path: './dist'
@@ -62,6 +59,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         uses: actions/deploy-pages@v4
