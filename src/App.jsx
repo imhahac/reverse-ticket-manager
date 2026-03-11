@@ -19,10 +19,28 @@ function App() {
     const [isSyncing, setIsSyncing] = useState(false);
     const fileInputRef = useRef(null);
 
+    const [editingTicket, setEditingTicket] = useState(null);
+
     // Calculate smart groupings via custom hook
     const { segments, trips } = useTrips(tickets);
 
-    const addTicket = (ticket) => setTickets([...tickets, ticket]);
+    const handleSaveTicket = (ticket) => {
+        if (editingTicket) {
+            setTickets(tickets.map(t => t.id === ticket.id ? ticket : t));
+            setEditingTicket(null);
+        } else {
+            setTickets([...tickets, ticket]);
+        }
+    };
+
+    const handleEditTicket = (ticket) => {
+        setEditingTicket(ticket);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingTicket(null);
+    };
     const deleteTicket = (id) => {
         if (window.confirm('確定要刪除這筆機票訂單嗎？相關的趟次配對將會被移除。')) {
             setTickets(tickets.filter(t => t.id !== id));
@@ -263,7 +281,11 @@ function App() {
                     </div>
                 </div>
 
-                <TicketForm onAddTicket={(newT) => setTickets([...tickets, newT])} />
+                <TicketForm 
+                    onAddTicket={handleSaveTicket} 
+                    editingTicket={editingTicket} 
+                    onCancelEdit={handleCancelEdit} 
+                />
 
                 {/* 主視覺 Tab 切換區 */}
                 <div className="mt-12 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -299,7 +321,7 @@ function App() {
 
                     <div className="p-4 md:p-6 bg-white min-h-[400px]">
                         {activeTab === 'timeline' && <TripTimeline trips={trips} tripLabels={tripLabels} onUpdateLabel={(id, val) => setTripLabels(p => ({ ...p, [id]: val }))} />}
-                        {activeTab === 'list' && <TicketList tickets={tickets} onDelete={(id) => setTickets(t => t.filter(x => x.id !== id))} />}
+                        {activeTab === 'list' && <TicketList tickets={tickets} onDelete={deleteTicket} onEdit={handleEditTicket} />}
                         {activeTab === 'calendar' && <TripCalendar segments={segments} />}
                     </div>
                 </div>

@@ -7,8 +7,8 @@ const AIRPORTS = [
     'CTS (札幌新千歲)', 'OKA (沖繩那霸)', 'FUK (福岡)', 'SDJ (仙台)', 'HKD (函館)'
 ];
 
-export default function TicketForm({ onAddTicket }) {
-    const [formData, setFormData] = useState({
+export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit }) {
+    const defaultFormData = {
         airline: '',
         price: '',
         currency: 'TWD',
@@ -22,7 +22,17 @@ export default function TicketForm({ onAddTicket }) {
         outboundFlightNo: '',
         inboundFlightNo: '',
         type: 'normal',
-    });
+    };
+
+    const [formData, setFormData] = useState(defaultFormData);
+
+    React.useEffect(() => {
+        if (editingTicket) {
+            setFormData(editingTicket);
+        } else {
+            setFormData(defaultFormData);
+        }
+    }, [editingTicket]);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -48,7 +58,8 @@ export default function TicketForm({ onAddTicket }) {
 
         const newTicket = {
             ...formData,
-            id: Date.now().toString(),
+            id: editingTicket ? editingTicket.id : Date.now().toString(),
+            calendarIds: editingTicket ? editingTicket.calendarIds : undefined,
             price: Number(formData.price),
             exchangeRate: Number(formData.exchangeRate),
             priceTWD: Math.round(Number(formData.price) * Number(formData.exchangeRate)),
@@ -57,15 +68,15 @@ export default function TicketForm({ onAddTicket }) {
         };
 
         onAddTicket(newTicket);
-        setFormData({ ...formData, airline: '', price: '', outboundDate: '', outboundTime: '', inboundDate: '', inboundTime: '', outboundFlightNo: '', inboundFlightNo: '' });
+        setFormData(defaultFormData);
     };
 
     const isReverse = formData.type === 'reverse';
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 mb-8 mt-4">
+        <div className={`bg-white p-6 rounded-xl shadow-md border ${editingTicket ? 'border-amber-400' : 'border-gray-100'} mb-8 mt-4 transition-colors duration-300`}>
             <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center border-b pb-3">
-                <Plane className="mr-2 text-indigo-500" /> 新增購買機票訂單
+                <Plane className={`mr-2 ${editingTicket ? 'text-amber-500' : 'text-indigo-500'}`} /> {editingTicket ? '✏️ 修改機票訂單' : '新增購買機票訂單'}
             </h2>
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
 
@@ -257,10 +268,15 @@ export default function TicketForm({ onAddTicket }) {
                     )}
                 </div>
 
-                <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-2">
-                    <button type="submit" className="w-full sm:w-auto px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition duration-200 shadow hover:shadow-lg flex items-center justify-center">
-                        ＋ 將此訂單加入系統
+                <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-2 flex flex-col sm:flex-row gap-3">
+                    <button type="submit" className={`w-full sm:w-auto px-8 py-3 text-white font-bold rounded-lg transition duration-200 shadow hover:shadow-lg flex items-center justify-center ${editingTicket ? 'bg-amber-500 hover:bg-amber-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                        {editingTicket ? '💾 儲存修改' : '＋ 將此訂單加入系統'}
                     </button>
+                    {editingTicket && (
+                        <button type="button" onClick={onCancelEdit} className="w-full sm:w-auto px-8 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition duration-200 shadow-sm flex items-center justify-center border border-gray-300">
+                            取消修改
+                        </button>
+                    )}
                 </div>
             </form>
         </div>

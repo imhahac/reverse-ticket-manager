@@ -1,7 +1,7 @@
 import React from 'react';
-import { Trash2, Calendar, Clock } from 'lucide-react';
+import { Trash2, Calendar, Clock, Edit2 } from 'lucide-react';
 
-export default function TicketList({ tickets, onDelete }) {
+export default function TicketList({ tickets, onDelete, onEdit }) {
     if (tickets.length === 0) return (
         <div className="p-8 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
             尚未購買機票，請上方新增
@@ -73,9 +73,12 @@ export default function TicketList({ tickets, onDelete }) {
                                             </div>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <button onClick={() => onDelete(ticket.id)} className="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 transition">
-                                            <Trash2 className="w-5 h-5" />
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex gap-2 justify-end">
+                                        <button onClick={() => onEdit(ticket)} className="text-amber-500 hover:text-amber-700 p-2 rounded hover:bg-amber-50 transition" title="修改訂單">
+                                            <Edit2 className="w-4 h-4" />
+                                        </button>
+                                        <button onClick={() => onDelete(ticket.id)} className="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 transition" title="刪除訂單">
+                                            <Trash2 className="w-4 h-4" />
                                         </button>
                                     </td>
                                 </tr>

@@ -34,6 +34,7 @@ export default function Instructions() {
                             <h3 className="font-bold flex items-center mb-2"><CheckCircle2 className="w-4 h-4 mr-1" /> 操作步驟 & 新功能</h3>
                             <ul className="list-decimal list-inside text-sm space-y-2 leading-relaxed">
                                 <li>於下方表單輸入機票資訊，支援 <strong>單程票 (One-way)</strong> 與 <strong>多幣別換算 (TWD/JPY/USD)</strong>。可以輸入精確航班時間！</li>
+                                <li>在 <strong>「購買清單管理」</strong> 分頁中，可以隨時點選 ✏️ <strong>修改訂單內容</strong> 或是 🗑️ 刪除不在計畫內的機票。</li>
                                 <li>切換 <strong>「實際飛行配對」</strong>，系統為你拼湊真正的趟次並精算成本。點擊趟次標題旁的 ✏️ 即可<strong>自訂行程命名</strong>。</li>
                                 <li><strong>【雲端跨裝置同步】</strong>點擊右上角「登入 Google」，授權後即可一鍵 <strong>雲端備份/載入</strong> 到你私人的 Google Drive。</li>
                                 <li><strong>【行事曆與推播】</strong>登入後點擊「同步日曆」，航班將自動排入你的 Google 行事曆；若有設定 GitHub Actions，系統還會每日透過 LINE 推播提醒！</li>
