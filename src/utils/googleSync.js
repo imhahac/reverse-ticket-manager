@@ -5,47 +5,55 @@
  */
 export const syncToDrive = async (tickets, tripLabels, accessToken) => {
     try {
-        // 1. 尋找是否存在該檔案
         const query = encodeURIComponent(`name="reverse-tickets.json" and trashed=false`);
         const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive`, {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
         
-        if (!searchRes.ok) {
-            throw new Error(`搜尋 Drive 失敗: [${searchRes.status}] ${await searchRes.text()}`);
-        }
+        if (searchRes.status === 401) return { success: false, expired: true };
+        if (!searchRes.ok) throw new Error(`搜尋 Drive 失敗: [${searchRes.status}] ${await searchRes.text()}`);
 
         const searchData = await searchRes.json();
         const existingFile = searchData.files && searchData.files.length > 0 ? searchData.files[0] : null;
 
-        const fileMetadata = { name: 'reverse-tickets.json', mimeType: 'application/json' };
-        
-        // 為了相容，我們將 tickets 與 tripLabels 包裝起來
         const fileContent = { tickets, tripLabels };
 
-        const form = new FormData();
-        form.append('metadata', new Blob([JSON.stringify(fileMetadata)], { type: 'application/json' }));
-        form.append('file', new Blob([JSON.stringify(fileContent)], { type: 'application/json' }));
-
-        let uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+        let uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=media';
         let method = 'POST';
+        
         if (existingFile) {
-            uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}?uploadType=multipart`;
+            uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}?uploadType=media`;
             method = 'PATCH';
         }
 
         const res = await fetch(uploadUrl, {
             method,
-            headers: { Authorization: `Bearer ${accessToken}` },
-            body: form
+            headers: { 
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(fileContent)
         });
 
-        if (!res.ok) {
+        // If it's a new file (POST), we also need to set the filename metadata
+        if (method === 'POST' && res.ok) {
+            const uploadedData = await res.json();
+            await fetch(`https://www.googleapis.com/drive/v3/files/${uploadedData.id}`, {
+                method: 'PATCH',
+                headers: { 
+                    Authorization: `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name: 'reverse-tickets.json' })
+            });
+            return { success: true, fileId: uploadedData.id };
+        } else if (res.ok) {
+            const resData = await res.json();
+            return { success: true, fileId: resData.id };
+        } else {
+            if (res.status === 401) return { success: false, expired: true };
             throw new Error(`上傳檔案失敗: [${res.status}] ${await res.text()}`);
         }
-        
-        const resData = await res.json();
-        return { success: true, fileId: resData.id };
     } catch (e) {
         console.error(e);
         return { success: false, error: e.message };
@@ -63,6 +71,7 @@ export const loadFromDrive = async (accessToken) => {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
         
+        if (searchRes.status === 401) return { success: false, expired: true };
         if (!searchRes.ok) {
             throw new Error(`搜尋 Drive 失敗: [${searchRes.status}] ${await searchRes.text()}`);
         }
@@ -82,6 +91,7 @@ export const loadFromDrive = async (accessToken) => {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
         
+        if (downloadRes.status === 401) return { success: false, expired: true };
         if (!downloadRes.ok) {
             throw new Error(`下載 Content 失敗: [${downloadRes.status}] ${await downloadRes.text()}`);
         }
@@ -127,46 +137,73 @@ export const syncToCalendar = async (tickets, accessToken) => {
 
         const calendarId = 'primary';
         let errorLog = '';
+        const updatedCalendarIds = {};
         
         for (const seg of allSegments) {
             const eventSummary = `[航班] ${seg.airline} ${seg.from}✈️${seg.to}`;
             
-            // 嘗試搜尋這天是否已經有這個事件了 (粗略比對 summary)
-            const minTime = encodeURIComponent(new Date(`${seg.date}T00:00:00Z`).toISOString());
-            const maxTime = encodeURIComponent(new Date(`${seg.date}T23:59:59Z`).toISOString());
-            
-            const checkRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?timeMin=${minTime}&timeMax=${maxTime}&singleEvents=true`, {
-                headers: { Authorization: `Bearer ${accessToken}` }
-            });
-            
-            if (!checkRes.ok) {
-                errorLog += `搜尋事件失敗 [${checkRes.status}] ${await checkRes.text()}\n`;
-                continue;
+            // Generate full ISO string based on exact time or all-day.
+            let startObj, endObj;
+            if (seg.time) {
+                const sDt = new Date(seg.dateTime.getTime() - (8 * 3600000)); // Remove manual UTC offset for naive date formatting logic...
+                // Actually Calendar API accepts pure ISO string `2024-05-01T15:30:00+08:00`
+                // Let's use standard ISO 8601 formatting
+                const dtStr = `${seg.date}T${seg.time}:00+08:00`;
+                const eDt = new Date(new Date(dtStr).getTime() + 2 * 3600000); // Add 2 hours for duration mapping
+                const eDtStr = `${eDt.getFullYear()}-${String(eDt.getMonth()+1).padStart(2,'0')}-${String(eDt.getDate()).padStart(2,'0')}T${String(eDt.getHours()).padStart(2,'0')}:${String(eDt.getMinutes()).padStart(2,'0')}:00+08:00`;
+                
+                startObj = { dateTime: dtStr, timeZone: 'Asia/Taipei' };
+                endObj = { dateTime: eDtStr, timeZone: 'Asia/Taipei' };
+            } else {
+                const dt = new Date(seg.date);
+                dt.setDate(dt.getDate() + 1);
+                const nextDayStr = dt.toISOString().split('T')[0];
+                startObj = { date: seg.date };
+                endObj = { date: nextDayStr };
             }
 
-            const checkData = await checkRes.json();
-            
-            const exists = checkData.items && checkData.items.some(item => item.summary === eventSummary);
-            if (exists) {
-                console.log(`事件已存在，跳過: ${eventSummary}`);
-                continue;
+            // check if eventId already stored on ticket
+            let existingEventId = seg.ticket.calendarIds ? seg.ticket.calendarIds[seg.id] : null;
+
+            if (existingEventId) {
+                 const verifyRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${existingEventId}`, {
+                     headers: { Authorization: `Bearer ${accessToken}` }
+                 });
+                 if (!verifyRes.ok) existingEventId = null;
             }
 
-            // 新增事件
-            // Google Calendar 全天事件的 end date 必須是「開始日期的隔天」
-            const dt = new Date(seg.date);
-            dt.setDate(dt.getDate() + 1);
-            const nextDayStr = dt.toISOString().split('T')[0];
+            // Fallback to text searching if no direct match
+            if (!existingEventId) {
+                const minTime = encodeURIComponent(new Date(`${seg.date}T00:00:00Z`).toISOString());
+                const maxTime = encodeURIComponent(new Date(`${seg.date}T23:59:59Z`).toISOString());
+                
+                const checkRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?timeMin=${minTime}&timeMax=${maxTime}&singleEvents=true`, {
+                    headers: { Authorization: `Bearer ${accessToken}` }
+                });
+                
+                if (checkRes.status === 401) return { success: false, expired: true };
+                if (!checkRes.ok) {
+                    errorLog += `搜尋事件失敗 [${checkRes.status}]\n`;
+                    continue;
+                }
+
+                const checkData = await checkRes.json();
+                const matched = checkData.items && checkData.items.find(item => item.summary === eventSummary);
+                if (matched) existingEventId = matched.id;
+            }
 
             const body = {
                 summary: eventSummary,
                 description: `由航班反向票管理系統自動建立。\n航線：${seg.from} 到 ${seg.to}\n航班號碼：${seg.airline}`,
-                start: { date: seg.date },
-                end: { date: nextDayStr }
+                start: startObj,
+                end: endObj
             };
 
-            const insertRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`, {
-                method: 'POST',
+            const method = existingEventId ? 'PUT' : 'POST';
+            const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events${existingEventId ? `/${existingEventId}` : ''}`;
+
+            const insertRes = await fetch(url, {
+                method,
                 headers: { 
                     'Authorization': `Bearer ${accessToken}`,
                     'Content-Type': 'application/json'
@@ -175,11 +212,14 @@ export const syncToCalendar = async (tickets, accessToken) => {
             });
 
             if (insertRes.ok) {
+                const resData = await insertRes.json();
                 addedCount++;
+                if (!updatedCalendarIds[seg.ticket.id]) updatedCalendarIds[seg.ticket.id] = {};
+                updatedCalendarIds[seg.ticket.id][seg.id] = resData.id;
             } else {
+                if (insertRes.status === 401) return { success: false, expired: true };
                 const errText = await insertRes.text();
-                console.error('Insert Event Failed:', errText);
-                errorLog += `新增事件失敗 (${seg.date} ${seg.airline}): ${errText}\n`;
+                errorLog += `同步事件失敗 (${seg.date} ${seg.airline}): ${errText}\n`;
             }
         }
         
@@ -187,7 +227,7 @@ export const syncToCalendar = async (tickets, accessToken) => {
             return { success: true, count: 0, error: '您尚未新增任何機票，或者機票沒有填寫日期。' };
         }
 
-        return { success: addedCount > 0 || errorLog === '', count: addedCount, error: errorLog };
+        return { success: addedCount > 0 || errorLog === '', count: addedCount, error: errorLog, updatedCalendarIds };
     } catch (e) {
         console.error(e);
         return { success: false, count: 0, error: e.message };
