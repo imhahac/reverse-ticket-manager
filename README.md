@@ -48,6 +48,11 @@ VITE_GOOGLE_CLIENT_ID=你的_Google_OAuth_Client_ID
 ```
 *(如何取得: 請至 [Google Cloud Console](https://console.cloud.google.com/) 建立專案，選擇「API 和服務」>「憑證」，建立一個 OAuth 2.0 用戶端 ID)*
 
+**⚠️ 重要必做步驟 (啟用 API)：**
+建立專案後，您必須在 Google Cloud Console 左側的「資料庫與服務 (Library)」中，手動搜尋並**啟用 (Enable)** 以下兩個服務，否則登入後會報錯 403：
+1. `Google Drive API`
+2. `Google Calendar API`
+
 啟動本地開發環境：
 ```bash
 npm install
