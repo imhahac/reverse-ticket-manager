@@ -1,0 +1,31 @@
+name: LINE Bot Cron Job
+
+on:
+  schedule:
+    # 每天早上 8 點執行 (UTC +8 的早上 8 點 = UTC 0 點)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 允許手動觸發測試
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install Dependencies
+      run: npm install
+
+    - name: Run LINE Notify Script
+      env:
+        GOOGLE_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS }}
+        LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+        LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+      run: node scripts/line-bot.js
