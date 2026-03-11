@@ -6,9 +6,15 @@
 export const syncToDrive = async (tickets, tripLabels, accessToken) => {
     try {
         // 1. 尋找是否存在該檔案
-        const searchRes = await fetch('https://www.googleapis.com/drive/v3/files?q=name="reverse-tickets.json" and trashed=false&spaces=appDataFolder,drive', {
+        const query = encodeURIComponent(`name="reverse-tickets.json" and trashed=false`);
+        const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive`, {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
+        
+        if (!searchRes.ok) {
+            throw new Error(`搜尋 Drive 失敗: [${searchRes.status}] ${await searchRes.text()}`);
+        }
+
         const searchData = await searchRes.json();
         const existingFile = searchData.files && searchData.files.length > 0 ? searchData.files[0] : null;
 
@@ -34,11 +40,15 @@ export const syncToDrive = async (tickets, tripLabels, accessToken) => {
             body: form
         });
 
-        if (!res.ok) throw new Error('上傳 Google Drive 失敗');
-        return true;
+        if (!res.ok) {
+            throw new Error(`上傳檔案失敗: [${res.status}] ${await res.text()}`);
+        }
+        
+        const resData = await res.json();
+        return { success: true, fileId: resData.id };
     } catch (e) {
         console.error(e);
-        return false;
+        return { success: false, error: e.message };
     }
 };
 
@@ -47,19 +57,34 @@ export const syncToDrive = async (tickets, tripLabels, accessToken) => {
  */
 export const loadFromDrive = async (accessToken) => {
     try {
-        const searchRes = await fetch('https://www.googleapis.com/drive/v3/files?q=name="reverse-tickets.json" and trashed=false&spaces=appDataFolder,drive', {
+        // 先列出所有看起來相符的檔案，協助 Debug
+        const query = encodeURIComponent(`name="reverse-tickets.json" and trashed=false`);
+        const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive`, {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
-        const searchData = await searchRes.json();
-        const existingFile = searchData.files && searchData.files.length > 0 ? searchData.files[0] : null;
+        
+        if (!searchRes.ok) {
+            throw new Error(`搜尋 Drive 失敗: [${searchRes.status}] ${await searchRes.text()}`);
+        }
 
-        if (!existingFile) return null;
+        const searchData = await searchRes.json();
+        
+        if (!searchData.files || searchData.files.length === 0) {
+            return { success: false, error: `雲端找不到 reverse-tickets.json 的檔案。\n近期您是否有清除資料或變更帳號？` };
+        }
+
+        const existingFile = searchData.files[0];
+        
+        // 將所有找到的檔名收集起來傳回前端顯示
+        const allFoundFiles = searchData.files.map(f => `${f.name} (ID: ${f.id})`).join('\n');
 
         const downloadRes = await fetch(`https://www.googleapis.com/drive/v3/files/${existingFile.id}?alt=media`, {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
         
-        if (!downloadRes.ok) throw new Error('下載資料失敗');
+        if (!downloadRes.ok) {
+            throw new Error(`下載 Content 失敗: [${downloadRes.status}] ${await downloadRes.text()}`);
+        }
         
         const data = await downloadRes.json();
         
@@ -73,10 +98,10 @@ export const loadFromDrive = async (accessToken) => {
             tripLabels = data.tripLabels || {};
         }
 
-        return { tickets, tripLabels };
+        return { success: true, tickets, tripLabels, foundFilesLog: allFoundFiles };
     } catch (e) {
         console.error(e);
-        return null;
+        return { success: false, error: e.message };
     }
 };
 
@@ -101,17 +126,24 @@ export const syncToCalendar = async (tickets, accessToken) => {
         });
 
         const calendarId = 'primary';
+        let errorLog = '';
         
         for (const seg of allSegments) {
             const eventSummary = `[航班] ${seg.airline} ${seg.from}✈️${seg.to}`;
             
             // 嘗試搜尋這天是否已經有這個事件了 (粗略比對 summary)
-            const minTime = new Date(`${seg.date}T00:00:00Z`).toISOString();
-            const maxTime = new Date(`${seg.date}T23:59:59Z`).toISOString();
+            const minTime = encodeURIComponent(new Date(`${seg.date}T00:00:00Z`).toISOString());
+            const maxTime = encodeURIComponent(new Date(`${seg.date}T23:59:59Z`).toISOString());
             
             const checkRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?timeMin=${minTime}&timeMax=${maxTime}&singleEvents=true`, {
                 headers: { Authorization: `Bearer ${accessToken}` }
             });
+            
+            if (!checkRes.ok) {
+                errorLog += `搜尋事件失敗 [${checkRes.status}] ${await checkRes.text()}\n`;
+                continue;
+            }
+
             const checkData = await checkRes.json();
             
             const exists = checkData.items && checkData.items.some(item => item.summary === eventSummary);
@@ -145,11 +177,17 @@ export const syncToCalendar = async (tickets, accessToken) => {
             if (insertRes.ok) {
                 addedCount++;
             } else {
-                console.error('Insert Event Failed:', await insertRes.text());
+                const errText = await insertRes.text();
+                console.error('Insert Event Failed:', errText);
+                errorLog += `新增事件失敗 (${seg.date} ${seg.airline}): ${errText}\n`;
             }
         }
         
-        return { success: true, count: addedCount };
+        if (allSegments.length === 0) {
+            return { success: true, count: 0, error: '您尚未新增任何機票，或者機票沒有填寫日期。' };
+        }
+
+        return { success: addedCount > 0 || errorLog === '', count: addedCount, error: errorLog };
     } catch (e) {
         console.error(e);
         return { success: false, count: 0, error: e.message };
