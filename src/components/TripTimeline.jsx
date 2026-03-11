@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AlertTriangle, ArrowRight, Edit3, Check, X, PlaneTakeoff, PlaneLanding, Clock, CheckCircle2 } from 'lucide-react';
+import { formatDateWithDay, calculateTripDays } from '../utils/dateHelpers';
 
 export default function TripTimeline({ trips, tripLabels, onUpdateLabel }) {
     const [editingLabelId, setEditingLabelId] = useState(null);
@@ -50,11 +51,17 @@ export default function TripTimeline({ trips, tripLabels, onUpdateLabel }) {
                     if (outCode !== inCode) isOpenJaw = true;
                 }
 
+                let tripDays = null;
+                if (trip.isComplete && trip.outbound && trip.inbound) {
+                    tripDays = calculateTripDays(trip.outbound.date, trip.inbound.date);
+                }
+
                 return (
                     <div key={comboKey} className={`relative flex flex-col md:flex-row items-stretch bg-white border ${!trip.isComplete ? 'border-amber-300' : isOpenJaw ? 'border-yellow-300' : 'border-emerald-300'} rounded-xl shadow-sm hover:shadow-md transition-shadow mt-4`}>
                         <div className={`absolute -top-3 -right-2 px-3 py-1 text-xs font-bold text-white rounded-full shadow-sm flex items-center z-20 ${!trip.isComplete ? 'bg-amber-500' : isOpenJaw ? 'bg-yellow-500' : 'bg-emerald-500'}`}>
                             {!trip.isComplete ? <AlertTriangle className="w-3 h-3 mr-1" /> : isOpenJaw ? <AlertTriangle className="w-3 h-3 mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
                             {!trip.isComplete ? '未完結行程' : isOpenJaw ? '不同點進出' : '配對成功'}
+                            {tripDays && <span className="ml-2 pl-2 border-l border-white/30">共 {tripDays} 天</span>}
                         </div>
                         <div className="bg-slate-50 border-r border-slate-200 p-5 flex flex-col justify-center items-center rounded-l-xl w-full md:w-56 shrink-0 relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-slate-200/50 to-transparent rounded-bl-full pointer-events-none"></div>
@@ -103,9 +110,9 @@ export default function TripTimeline({ trips, tripLabels, onUpdateLabel }) {
                                         </div>
                                     </div>
                                     <div className="flex flex-col sm:items-end gap-1.5 pt-3 sm:pt-0 border-t border-dashed sm:border-0 border-slate-200">
-                                        <div className="text-sm font-bold text-slate-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-200 flex items-center">
-                                            <span>{seg.date}</span>
-                                            {seg.time && <span className="ml-2 pl-2 border-l border-slate-200 text-indigo-600 flex items-center"><Clock className="w-3.5 h-3.5 mr-1 text-indigo-400"/>{seg.time}</span>}
+                                        <div className="text-sm font-extrabold text-slate-700 bg-white px-3 py-2 rounded-lg shadow-sm border border-slate-200 flex items-center mb-1 ring-1 ring-slate-100">
+                                            <span>{formatDateWithDay(seg.date)}</span>
+                                            {seg.time && <span className="ml-3 pl-3 border-l-2 border-slate-100 text-indigo-600 flex items-center text-base"><Clock className="w-4 h-4 mr-1.5 text-indigo-400"/>{seg.time}</span>}
                                         </div>
                                         <div className="text-[11px] text-slate-400 font-medium px-1 uppercase tracking-wider">
                                             系統單段成本: NT$ {Math.round(seg.ticket.type === 'oneway' ? seg.ticket.priceTWD : seg.ticket.priceTWD/2).toLocaleString()}
