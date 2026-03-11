@@ -6,7 +6,7 @@
 export const syncToDrive = async (tickets, tripLabels, accessToken) => {
     try {
         // 1. 尋找是否存在該檔案
-        const searchRes = await fetch('https://www.googleapis.com/drive/v3/files?q=name="reverse-tickets.json" and trashed=false', {
+        const searchRes = await fetch('https://www.googleapis.com/drive/v3/files?q=name="reverse-tickets.json" and trashed=false&spaces=appDataFolder,drive', {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
         const searchData = await searchRes.json();
@@ -47,7 +47,7 @@ export const syncToDrive = async (tickets, tripLabels, accessToken) => {
  */
 export const loadFromDrive = async (accessToken) => {
     try {
-        const searchRes = await fetch('https://www.googleapis.com/drive/v3/files?q=name="reverse-tickets.json" and trashed=false', {
+        const searchRes = await fetch('https://www.googleapis.com/drive/v3/files?q=name="reverse-tickets.json" and trashed=false&spaces=appDataFolder,drive', {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
         const searchData = await searchRes.json();
@@ -88,16 +88,15 @@ export const syncToCalendar = async (tickets, accessToken) => {
         let addedCount = 0;
         const allSegments = [];
         
-        // 將票券拆成出發與回程段
         tickets.forEach(t => {
             if (t.type === 'normal') {
-                if(t.outboundDate) allSegments.push({ date: t.outboundDate, from: t.departRegion, to: t.returnRegion, airline: t.airline, id: `${t.id}-1` });
-                if(t.inboundDate) allSegments.push({ date: t.inboundDate, from: t.returnRegion, to: t.departRegion, airline: t.airline, id: `${t.id}-2` });
+                if(t.outboundDate) allSegments.push({ date: t.outboundDate, from: t.departRegion, to: t.returnRegion, airline: t.airline });
+                if(t.inboundDate) allSegments.push({ date: t.inboundDate, from: t.returnRegion, to: t.departRegion, airline: t.airline });
             } else if (t.type === 'reverse') {
-                if(t.outboundDate) allSegments.push({ date: t.outboundDate, from: t.returnRegion, to: t.departRegion, airline: t.airline, id: `${t.id}-1` });
-                if(t.inboundDate) allSegments.push({ date: t.inboundDate, from: t.departRegion, to: t.returnRegion, airline: t.airline, id: `${t.id}-2` });
+                if(t.outboundDate) allSegments.push({ date: t.outboundDate, from: t.returnRegion, to: t.departRegion, airline: t.airline });
+                if(t.inboundDate) allSegments.push({ date: t.inboundDate, from: t.departRegion, to: t.returnRegion, airline: t.airline });
             } else {
-                if(t.outboundDate) allSegments.push({ date: t.outboundDate, from: t.departRegion, to: t.returnRegion, airline: t.airline, id: `${t.id}-1` });
+                if(t.outboundDate) allSegments.push({ date: t.outboundDate, from: t.departRegion, to: t.returnRegion, airline: t.airline });
             }
         });
 
@@ -110,7 +109,7 @@ export const syncToCalendar = async (tickets, accessToken) => {
             const minTime = new Date(`${seg.date}T00:00:00Z`).toISOString();
             const maxTime = new Date(`${seg.date}T23:59:59Z`).toISOString();
             
-            const checkRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?timeMin=${minTime}&timeMax=${maxTime}&q=${encodeURIComponent(eventSummary)}`, {
+            const checkRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?timeMin=${minTime}&timeMax=${maxTime}&singleEvents=true`, {
                 headers: { Authorization: `Bearer ${accessToken}` }
             });
             const checkData = await checkRes.json();
@@ -121,12 +120,17 @@ export const syncToCalendar = async (tickets, accessToken) => {
                 continue;
             }
 
-            // 新增事件 (整天事件)
+            // 新增事件
+            // Google Calendar 全天事件的 end date 必須是「開始日期的隔天」
+            const dt = new Date(seg.date);
+            dt.setDate(dt.getDate() + 1);
+            const nextDayStr = dt.toISOString().split('T')[0];
+
             const body = {
                 summary: eventSummary,
                 description: `由航班反向票管理系統自動建立。\n航線：${seg.from} 到 ${seg.to}\n航班號碼：${seg.airline}`,
                 start: { date: seg.date },
-                end: { date: seg.date }
+                end: { date: nextDayStr }
             };
 
             const insertRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`, {
@@ -138,7 +142,11 @@ export const syncToCalendar = async (tickets, accessToken) => {
                 body: JSON.stringify(body)
             });
 
-            if (insertRes.ok) addedCount++;
+            if (insertRes.ok) {
+                addedCount++;
+            } else {
+                console.error('Insert Event Failed:', await insertRes.text());
+            }
         }
         
         return { success: true, count: addedCount };
