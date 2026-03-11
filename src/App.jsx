@@ -664,24 +664,28 @@ function App() {
     const handleSyncToDrive = async () => {
         if (!accessToken) return alert('請先登入 Google');
         setIsSyncing(true);
-        const success = await syncToDrive(tickets, tripLabels, accessToken);
+        const res = await syncToDrive(tickets, tripLabels, accessToken);
         setIsSyncing(false);
-        if (success) alert('雲端同步成功！資料已備份至 Google Drive。');
+        if (res.success) {
+            alert(`雲端同步成功！資料已備份至 Google Drive。\n(雲端檔案 ID: ${res.fileId})`);
+        } else {
+            alert(`雲端同步失敗 ❌\n錯誤訊息：\n${res.error}\n\n可能原因：您的權限不足或者 API 呼叫格式錯誤。`);
+        }
     };
 
     const handleLoadFromDrive = async () => {
         if (!accessToken) return alert('請先登入 Google');
         setIsSyncing(true);
-        const data = await loadFromDrive(accessToken);
+        const res = await loadFromDrive(accessToken);
         setIsSyncing(false);
-        if (data && data.tickets) {
-            if (window.confirm(`找到雲端資料 (${data.tickets.length} 筆趟次)，確定要覆寫目前的訂單嗎？`)) {
-                setTickets(data.tickets);
-                setTripLabels(data.tripLabels || {});
-                alert('已成功從雲端載入最新資料！');
+        
+        if (res.success) {
+            if (window.confirm(`【雲端讀取成功】\n共找到 ${res.tickets.length} 筆趟次。\n(找到的檔案：\n${res.foundFilesLog})\n\n確定要覆寫您目前的訂單表嗎？`)) {
+                setTickets(res.tickets);
+                setTripLabels(res.tripLabels || {});
             }
         } else {
-            alert('找不到雲端備份的資料，請確認是否曾經同步過。');
+            alert(`雲端載入失敗 ❌\n錯誤訊息：\n${res.error}`);
         }
     };
 
@@ -691,9 +695,9 @@ function App() {
         const res = await syncToCalendar(tickets, accessToken);
         setIsSyncing(false);
         if (res.success) {
-            alert(`日曆同步成功！\n共新增了 ${res.count} 個航班事件。`);
+            alert(`日曆同步成功！\n共新增了 ${res.count} 個航班事件。\n\n${res.error ? `部分警告：\n${res.error}` : ''}`);
         } else {
-            alert(`日曆同步失敗：${res.error}\n可能 Access Token 已過期，請嘗試重新登入。`);
+            alert(`日曆同步失敗 ❌\n錯誤訊息：\n${res.error}\n可能 Access Token 已過期或是這本行事曆設定有誤，請嘗試重新登入。`);
             logout();
         }
     };
