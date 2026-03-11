@@ -38,20 +38,30 @@
 
 ## 🛠️ 安裝與部署指南
 
-如果您想自己建置 (Self-host) 或測試這套雲端系統，請參考以下步驟：
+如果您想自己建置 (Self-host) 或測試這套雲端系統，請參考以下詳細步驟。整個架構分為「前端授權」與「後端排程」，皆不需自建伺服器。
 
-### 1. 前端環境變數與啟動 (.env)
+### 第一步：申請 Google OAuth Client ID (.env)
 
-系統使用 Vite 框架。請在專案根目錄建立一個 `.env.local` 檔案。
-```bash
-VITE_GOOGLE_CLIENT_ID=你的_Google_OAuth_Client_ID
-```
-*(如何取得: 請至 [Google Cloud Console](https://console.cloud.google.com/) 建立專案，選擇「API 和服務」>「憑證」，建立一個 OAuth 2.0 用戶端 ID)*
-
-**⚠️ 重要必做步驟 (啟用 API)：**
-建立專案後，您必須在 Google Cloud Console 左側的「資料庫與服務 (Library)」中，手動搜尋並**啟用 (Enable)** 以下兩個服務，否則登入後會報錯 403：
-1. `Google Drive API`
-2. `Google Calendar API`
+因為系統需要連接個人的 Google Drive 與 Calendar，您必須自行去 Google Cloud 申請一把專屬鑰匙：
+1. 進入 [Google Cloud Console](https://console.cloud.google.com/)。
+2. 點擊頂部建立一個全新的專案 (例如：`Reverse Ticket App`)。
+3. **⚠️ 啟用 API (關鍵！不然會報錯 403)**：
+   在左側選單的「API 和服務」>「啟用 API 和服務」，搜尋並點擊「**啟用 (Enable)**」以下兩個服務：
+   * `Google Drive API`
+   * `Google Calendar API`
+4. **設定 OAuth 同意畫面**：
+   在「API 和服務」>「OAuth 同意畫面」，選擇「外部 (External)」。
+   填妥必填的 App 名稱與信箱。在 **「測試使用者 (Test users)」** 區塊，**務必加入您自己平常使用的 Google 信箱！**
+5. **建立憑證**：
+   在左側點擊「憑證 (Credentials)」，選擇「建立憑證」>「OAuth 用戶端 ID」。
+   應用程式類型選「網頁應用程式 (Web application)」。
+   在 **「已授權的 JavaScript 來源」** 加入：
+   * `http://localhost:5173` (本地測試用)
+   * `https://您的GitHub帳號.github.io` (部署後用)
+6. 建立後，您會獲得一串 Client ID。請在專案根目錄建立 `.env.local` 檔案填入：
+   ```bash
+   VITE_GOOGLE_CLIENT_ID=你的_Google_OAuth_Client_ID
+   ```
 
 啟動本地開發環境：
 ```bash
@@ -59,21 +69,28 @@ npm install
 npm run dev
 ```
 
-### 2. GitHub Pages 前端部署 (含 Client ID 注入)
+### 第二步：部署到 GitHub Pages
 
-系統內附了 `.github/workflows/deploy.yml`。
-1. 進入您 GitHub Repository 的 `Settings` > `Secrets and variables` > `Actions`。
-2. 點擊 `New repository secret`，名稱填寫 `GOOGLE_CLIENT_ID`，數值填入您的 Google Client ID。
-3. 每次推送 `main` 分支時，GitHub Actions 會自動將此 Secret 注入靜態網頁中。
+此專案已內建自動部署的工作流程 (`.github/workflows/deploy.yml`)，您只需要安全地注入 Client ID：
+1. 將專案 Push 到您自己的 GitHub 儲存庫。
+2. 進入 Repository 的 `Settings` > `Secrets and variables` > `Actions`。
+3. 點擊 `New repository secret`，名稱填寫 `GOOGLE_CLIENT_ID`，數值填入第一步獲得的 Client ID。
+4. 未來只要 Push 到 `main` 分支，系統便會自動將網站與金鑰打包部署！
 
-### 3. 設定每日 LINE 推播 (GitHub Actions)
+### 第三步：設定每日 LINE 推播機器人 (GitHub Actions)
 
-每天特定時段 (依 `cron` 設定)，系統內附的 `.github/workflows/line-bot-cron.yml` 會自動運行。這支腳本需要您的授權去讀取 Google Drive 並發送 LINE。
+每天特定時段 (依 `cron` 設定，預設為每早 8 點)，`.github/workflows/line-bot-cron.yml` 會被喚醒去檢查航班。這支腳本需要您的授權去讀取機票並發送 LINE。
 
-請至 GitHub Repository `Settings` > `Secrets` 加入以下三把金鑰：
-1. `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS`: 在 Google Cloud 建立「服務帳戶」並產生 JSON 金鑰。將內容貼入此處。並且記得至 Google Drive 將 `reverse-tickets.json` 的讀取權限分享給該服務帳戶的信箱！
-2. `LINE_CHANNEL_ACCESS_TOKEN`: 至 LINE Developers 建立 Messaging API Channel 產生的長效 Token。
-3. `LINE_USER_ID`: 您的個人 LINE User ID (以 U 開頭)。
+請依照以下清單，到 GitHub Repository `Settings` > `Secrets` 加入三把金鑰：
+1. `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS` (重要)：
+   * 在 Google Cloud 的「憑證」中建立一個「服務帳戶 (Service Account)」。
+   * 為該帳戶建立並下載 JSON 格式的金鑰，將檔案內的「全部 JSON 字串」完整貼入此 Secret。
+   * **(💡 核心步驟)**：到您個人的 Google Drive，找到系統幫您備份的 `reverse-tickets.json` 檔案。對它點擊共用，將該「服務帳戶的 Email (結尾是 `iam.gserviceaccount.com`)」加入，並給予**檢視者 (Viewer)** 權限！沒有這步後端排程會讀不到檔案！
+2. `LINE_CHANNEL_ACCESS_TOKEN`：
+   * 前往 [LINE Developers](https://developers.line.biz/)，建立一個 Messaging API Channel。
+   * 在 Messaging API 分頁最下方發行一組長時間有效的 `Channel access token`。
+3. `LINE_USER_ID`：
+   * 在同一個 LINE Channel 設定頁面的 Basic Settings 最底部，可找到您的個人 User ID (必定以 `U` 開頭)，將其填入，讓機器人知道要把訊息傳給誰。
 
 ## 授權條款
 

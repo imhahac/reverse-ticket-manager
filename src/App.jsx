@@ -38,9 +38,9 @@ function Instructions() {
                             <ul className="list-decimal list-inside text-sm space-y-2 leading-relaxed">
                                 <li>於下方表單輸入機票資訊，支援 <strong>單程票 (One-way)</strong> 與 <strong>多幣別換算 (TWD/JPY/USD)</strong>。</li>
                                 <li>切換 <strong>「實際飛行配對」</strong>，系統為你拼湊真正的趟次並精算成本。點擊趟次標題旁的 ✏️ 即可<strong>自訂行程命名</strong>。</li>
-                                <li>系統支援寬鬆配對，若去回程為「不同點進出 (Open-Jaw)」，系統將自動標上黃色警示。</li>
-                                <li>切換 <strong>「月曆視角」</strong> 頁籤，將密集的航段以時間軸羅列，方便一眼看出各個月份的動態。</li>
-                                <li>點擊右上角的 <strong>「備份成 JSON / 匯入資料」</strong> 來將輸入好的機票資料與標籤跨電腦搬移！</li>
+                                <li><strong>【雲端跨裝置同步】</strong>點擊右上角「登入 Google」，授權後即可一鍵 <strong>雲端備份/載入</strong> 到你私人的 Google Drive。</li>
+                                <li><strong>【行事曆與推播】</strong>登入後點擊「同步日曆」，航班將自動排入你的 Google 行事曆；若有設定 GitHub Actions，系統還會每日透過 LINE 推播提醒！</li>
+                                <li>或者，你也可以點擊右上角使用傳統的 <strong>「本地匯出 / 匯入 JSON」</strong> 來搬移資料。</li>
                             </ul>
                         </div>
                     </div>
