@@ -80,8 +80,8 @@ export default function TripCalendar({ segments }) {
                                 {flights.map((flight, i) => {
                                     return (
                                         <div key={i} className={`p-1.5 rounded-md border text-xs shadow-sm ${flight.ticket.type === 'normal' ? 'bg-indigo-50 border-indigo-200 text-indigo-800' : flight.ticket.type === 'reverse' ? 'bg-purple-50 border-purple-200 text-purple-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`}>
-                                            <div className="font-bold flex items-center justify-between mb-0.5 opacity-80">
-                                                {flight.ticket.airline}
+                                            <div className="font-bold flex flex-wrap items-center justify-between mb-0.5 opacity-80 gap-1">
+                                                <span>{flight.ticket.airline} {flight.flightNo && <span className="font-mono text-[9px] bg-white/50 px-1 rounded">{flight.flightNo}</span>}</span>
                                                 {flight.time && <span className="font-mono">{flight.time}</span>}
                                             </div>
                                             <div className="flex items-center gap-1 font-bold">

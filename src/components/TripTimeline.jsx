@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, ArrowRight, Edit3, Check, X, PlaneTakeoff, PlaneLanding, Clock } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Edit3, Check, X, PlaneTakeoff, PlaneLanding, Clock, CheckCircle2 } from 'lucide-react';
 
 export default function TripTimeline({ trips, tripLabels, onUpdateLabel }) {
     const [editingLabelId, setEditingLabelId] = useState(null);
@@ -51,13 +51,11 @@ export default function TripTimeline({ trips, tripLabels, onUpdateLabel }) {
                 }
 
                 return (
-                    <div key={comboKey} className={`relative flex flex-col md:flex-row items-stretch bg-white border ${!trip.isComplete ? 'border-amber-300' : isOpenJaw ? 'border-yellow-300' : 'border-slate-200'} rounded-xl shadow-sm hover:shadow-md transition-shadow`}>
-                        {(!trip.isComplete || isOpenJaw) && (
-                            <div className={`absolute -top-3 -right-3 px-3 py-1 text-xs font-bold text-white rounded-full shadow-sm flex items-center ${!trip.isComplete ? 'bg-amber-500' : 'bg-yellow-500'}`}>
-                                <AlertTriangle className="w-3 h-3 mr-1" />
-                                {!trip.isComplete ? '未完結行程' : '不同點進出'}
-                            </div>
-                        )}
+                    <div key={comboKey} className={`relative flex flex-col md:flex-row items-stretch bg-white border ${!trip.isComplete ? 'border-amber-300' : isOpenJaw ? 'border-yellow-300' : 'border-emerald-300'} rounded-xl shadow-sm hover:shadow-md transition-shadow mt-4`}>
+                        <div className={`absolute -top-3 -right-2 px-3 py-1 text-xs font-bold text-white rounded-full shadow-sm flex items-center z-20 ${!trip.isComplete ? 'bg-amber-500' : isOpenJaw ? 'bg-yellow-500' : 'bg-emerald-500'}`}>
+                            {!trip.isComplete ? <AlertTriangle className="w-3 h-3 mr-1" /> : isOpenJaw ? <AlertTriangle className="w-3 h-3 mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+                            {!trip.isComplete ? '未完結行程' : isOpenJaw ? '不同點進出' : '配對成功'}
+                        </div>
                         <div className="bg-slate-50 border-r border-slate-200 p-5 flex flex-col justify-center items-center rounded-l-xl w-full md:w-56 shrink-0 relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-slate-200/50 to-transparent rounded-bl-full pointer-events-none"></div>
                             {editingLabelId === comboKey ? (
@@ -91,7 +89,14 @@ export default function TripTimeline({ trips, tripLabels, onUpdateLabel }) {
                                              <ArrowRight className="w-5 h-5 text-slate-600 group-hover:text-indigo-600" />}
                                         </div>
                                         <div>
-                                            <div className="text-xs font-bold text-indigo-500 mb-1 tracking-wide uppercase">{seg.ticket.airline}</div>
+                                            <div className="text-xs font-bold text-indigo-500 mb-1 tracking-wide flex items-center gap-2 flex-wrap">
+                                                <span>{seg.ticket.airline}</span>
+                                                {seg.flightNo && (
+                                                    <a href={`https://flightaware.com/live/flight/${seg.flightNo}`} target="_blank" rel="noreferrer" className="inline-flex items-center text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-mono px-1.5 py-0.5 rounded border border-indigo-200 transition-colors shadow-sm" title="前往 FlightAware 觀看航班動態" onClick={(e) => e.stopPropagation()}>
+                                                        {seg.flightNo} ↗
+                                                    </a>
+                                                )}
+                                            </div>
                                             <div className="text-base font-bold text-slate-700 flex items-center flex-wrap gap-2">
                                                 {seg.from} <ArrowRight className="w-3 h-3 text-slate-400" /> {seg.to}
                                             </div>

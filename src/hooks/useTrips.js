@@ -16,13 +16,13 @@ export const useTrips = (tickets) => {
             const inDateTime = new Date(`${t.inboundDate}${inTime}`);
 
             if (t.type === 'normal') {
-                if (t.outboundDate) segments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', dateTime: outDateTime, from: t.departRegion, to: t.returnRegion });
-                if (t.inboundDate) segments.push({ id: t.id + '-2', ticket: t, date: t.inboundDate, time: t.inboundTime || '', dateTime: inDateTime, from: t.returnRegion, to: t.departRegion });
+                if (t.outboundDate) segments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', flightNo: t.outboundFlightNo || '', dateTime: outDateTime, from: t.departRegion, to: t.returnRegion });
+                if (t.inboundDate) segments.push({ id: t.id + '-2', ticket: t, date: t.inboundDate, time: t.inboundTime || '', flightNo: t.inboundFlightNo || '', dateTime: inDateTime, from: t.returnRegion, to: t.departRegion });
             } else if (t.type === 'reverse') {
-                if (t.outboundDate) segments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', dateTime: outDateTime, from: t.returnRegion, to: t.departRegion });
-                if (t.inboundDate) segments.push({ id: t.id + '-2', ticket: t, date: t.inboundDate, time: t.inboundTime || '', dateTime: inDateTime, from: t.departRegion, to: t.returnRegion });
+                if (t.outboundDate) segments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', flightNo: t.outboundFlightNo || '', dateTime: outDateTime, from: t.returnRegion, to: t.departRegion });
+                if (t.inboundDate) segments.push({ id: t.id + '-2', ticket: t, date: t.inboundDate, time: t.inboundTime || '', flightNo: t.inboundFlightNo || '', dateTime: inDateTime, from: t.departRegion, to: t.returnRegion });
             } else {
-                if (t.outboundDate) segments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', dateTime: outDateTime, from: t.departRegion, to: t.returnRegion });
+                if (t.outboundDate) segments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', flightNo: t.outboundFlightNo || '', dateTime: outDateTime, from: t.departRegion, to: t.returnRegion });
             }
         });
 

@@ -19,14 +19,23 @@ export default function TicketForm({ onAddTicket }) {
         outboundTime: '',
         inboundDate: '',
         inboundTime: '',
+        outboundFlightNo: '',
+        inboundFlightNo: '',
         type: 'normal',
     });
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (!formData.airline || !formData.price || !formData.outboundDate || (formData.type !== 'oneway' && !formData.inboundDate)) {
-            alert('請填寫完整資訊 (起碼需要日期)');
+        if (!formData.airline || !formData.price || !formData.outboundDate) {
+            alert('請填寫完整資訊 (航空公司、價格、去程日期)');
             return;
+        }
+
+        if (formData.type !== 'oneway') {
+            if (!formData.inboundDate) {
+                alert('請填寫第 2 段日期');
+                return;
+            }
         }
 
         const outDateTimeStr = formData.outboundTime ? `${formData.outboundDate}T${formData.outboundTime}` : `${formData.outboundDate}T00:00:00`;
@@ -37,17 +46,18 @@ export default function TicketForm({ onAddTicket }) {
             return;
         }
 
-        const basePrice = Number(formData.price);
-        const rate = Number(formData.exchangeRate) || 1;
-        const priceInTWD = Math.round(basePrice * rate);
-
-        onAddTicket({
+        const newTicket = {
             ...formData,
             id: Date.now().toString(),
-            price: basePrice,
-            priceTWD: priceInTWD,
-        });
-        setFormData({ ...formData, airline: '', price: '', outboundDate: '', outboundTime: '', inboundDate: '', inboundTime: '' });
+            price: Number(formData.price),
+            exchangeRate: Number(formData.exchangeRate),
+            priceTWD: Math.round(Number(formData.price) * Number(formData.exchangeRate)),
+            outboundFlightNo: formData.outboundFlightNo.toUpperCase(),
+            inboundFlightNo: formData.inboundFlightNo.toUpperCase()
+        };
+
+        onAddTicket(newTicket);
+        setFormData({ ...formData, airline: '', price: '', outboundDate: '', outboundTime: '', inboundDate: '', inboundTime: '', outboundFlightNo: '', inboundFlightNo: '' });
     };
 
     const isReverse = formData.type === 'reverse';
@@ -170,52 +180,82 @@ export default function TicketForm({ onAddTicket }) {
                     </div>
                 </div>
 
-                <div className="bg-indigo-50/50 p-3 rounded-lg border border-indigo-100 flex flex-col gap-2">
-                    <label className="block text-sm font-bold text-indigo-900 leading-tight">
-                        {formData.type === 'oneway' ? '出發日期與時間' : '第 1 段航班'}
-                        <span className="block text-xs text-indigo-600 font-normal mt-0.5">
-                            ({isReverse ? formData.returnRegion : formData.departRegion} ✈️ {isReverse ? formData.departRegion : formData.returnRegion})
-                        </span>
-                    </label>
-                    <div className="flex gap-2">
-                        <input
-                            type="date"
-                            className="flex-[2] p-2 text-sm border border-indigo-200 rounded-md focus:ring-indigo-500"
-                            value={formData.outboundDate}
-                            onChange={e => setFormData({ ...formData, outboundDate: e.target.value })}
-                        />
-                        <input
-                            type="time"
-                            className="flex-[1] p-2 text-sm border border-indigo-200 rounded-md focus:ring-indigo-500"
-                            value={formData.outboundTime}
-                            onChange={e => setFormData({ ...formData, outboundTime: e.target.value })}
-                        />
-                    </div>
-                </div>
-                {formData.type !== 'oneway' && (
-                    <div className="bg-indigo-50/50 p-3 rounded-lg border border-indigo-100 flex flex-col gap-2">
-                        <label className="block text-sm font-bold text-indigo-900 leading-tight">
-                            第 2 段航班
-                            <span className="block text-xs text-indigo-600 font-normal mt-0.5">
-                                ({isReverse ? formData.departRegion : formData.returnRegion} ✈️ {isReverse ? formData.returnRegion : formData.departRegion})
-                            </span>
-                        </label>
-                        <div className="flex gap-2">
+                {/* Row 3: Segment Dates & Times with adaptive labels based on type */}
+                <div className="col-span-1 md:col-span-2 lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                    <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 flex flex-col gap-3">
+                        <div>
+                            <label className="block text-sm font-bold text-indigo-900 mb-1">
+                                {formData.type === 'oneway' ? '出發日期與時間' : '第 1 段航班出發時間'}
+                                <span className="block text-xs text-indigo-600 font-normal mt-0.5">
+                                    ({isReverse ? formData.returnRegion : formData.departRegion} ✈️ {isReverse ? formData.departRegion : formData.returnRegion})
+                                </span>
+                            </label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <input
+                                    type="date"
+                                    className="flex-1 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
+                                    value={formData.outboundDate}
+                                    onChange={e => setFormData({ ...formData, outboundDate: e.target.value })}
+                                />
+                                <input
+                                    type="time"
+                                    step="600"
+                                    className="w-full sm:w-32 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
+                                    value={formData.outboundTime}
+                                    onChange={e => setFormData({ ...formData, outboundTime: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-indigo-800 mb-1">航班編號 (選填)</label>
                             <input
-                                type="date"
-                                className="flex-[2] p-2 text-sm border border-indigo-200 rounded-md focus:ring-indigo-500"
-                                value={formData.inboundDate}
-                                onChange={e => setFormData({ ...formData, inboundDate: e.target.value })}
-                            />
-                            <input
-                                type="time"
-                                className="flex-[1] p-2 text-sm border border-indigo-200 rounded-md focus:ring-indigo-500"
-                                value={formData.inboundTime}
-                                onChange={e => setFormData({ ...formData, inboundTime: e.target.value })}
+                                placeholder="例: BR192"
+                                type="text"
+                                className="w-full p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow uppercase"
+                                value={formData.outboundFlightNo}
+                                onChange={e => setFormData({ ...formData, outboundFlightNo: e.target.value })}
                             />
                         </div>
                     </div>
-                )}
+
+                    {formData.type !== 'oneway' && (
+                        <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 flex flex-col gap-3">
+                            <div>
+                                <label className="block text-sm font-bold text-indigo-900 mb-1">
+                                    第 2 段航班出發時間
+                                    <span className="block text-xs text-indigo-600 font-normal mt-0.5">
+                                        ({isReverse ? formData.departRegion : formData.returnRegion} ✈️ {isReverse ? formData.returnRegion : formData.departRegion})
+                                    </span>
+                                </label>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <input
+                                        type="date"
+                                        className="flex-1 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
+                                        value={formData.inboundDate}
+                                        onChange={e => setFormData({ ...formData, inboundDate: e.target.value })}
+                                    />
+                                    <input
+                                        type="time"
+                                        step="600"
+                                        className="w-full sm:w-32 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
+                                        value={formData.inboundTime}
+                                        onChange={e => setFormData({ ...formData, inboundTime: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-indigo-800 mb-1">航班編號 (選填)</label>
+                                <input
+                                    placeholder="例: JX801"
+                                    type="text"
+                                    className="w-full p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow uppercase"
+                                    value={formData.inboundFlightNo}
+                                    onChange={e => setFormData({ ...formData, inboundFlightNo: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
 
                 <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-2">
                     <button type="submit" className="w-full sm:w-auto px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition duration-200 shadow hover:shadow-lg flex items-center justify-center">

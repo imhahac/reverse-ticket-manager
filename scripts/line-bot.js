@@ -59,13 +59,13 @@ const run = async () => {
         const allSegments = [];
         tickets.forEach(t => {
             if (t.type === 'normal') {
-                if(t.outboundDate) allSegments.push({ date: t.outboundDate, time: t.outboundTime, from: t.departRegion, to: t.returnRegion, airline: t.airline });
-                if(t.inboundDate) allSegments.push({ date: t.inboundDate, time: t.inboundTime, from: t.returnRegion, to: t.departRegion, airline: t.airline });
+                if(t.outboundDate) allSegments.push({ date: t.outboundDate, time: t.outboundTime, from: t.departRegion, to: t.returnRegion, airline: t.airline, flightNo: t.outboundFlightNo });
+                if(t.inboundDate) allSegments.push({ date: t.inboundDate, time: t.inboundTime, from: t.returnRegion, to: t.departRegion, airline: t.airline, flightNo: t.inboundFlightNo });
             } else if (t.type === 'reverse') {
-                if(t.outboundDate) allSegments.push({ date: t.outboundDate, time: t.outboundTime, from: t.returnRegion, to: t.departRegion, airline: t.airline });
-                if(t.inboundDate) allSegments.push({ date: t.inboundDate, time: t.inboundTime, from: t.departRegion, to: t.returnRegion, airline: t.airline });
+                if(t.outboundDate) allSegments.push({ date: t.outboundDate, time: t.outboundTime, from: t.returnRegion, to: t.departRegion, airline: t.airline, flightNo: t.outboundFlightNo });
+                if(t.inboundDate) allSegments.push({ date: t.inboundDate, time: t.inboundTime, from: t.departRegion, to: t.returnRegion, airline: t.airline, flightNo: t.inboundFlightNo });
             } else {
-                if(t.outboundDate) allSegments.push({ date: t.outboundDate, time: t.outboundTime, from: t.departRegion, to: t.returnRegion, airline: t.airline });
+                if(t.outboundDate) allSegments.push({ date: t.outboundDate, time: t.outboundTime, from: t.departRegion, to: t.returnRegion, airline: t.airline, flightNo: t.outboundFlightNo });
             }
         });
 
@@ -78,12 +78,14 @@ const run = async () => {
 
         allSegments.forEach(seg => {
             const timeStr = seg.time ? ` ${seg.time}` : '';
+            const flightLabel = seg.flightNo ? `${seg.airline} (${seg.flightNo})` : seg.airline;
+            
             if (seg.date === in3DaysStr) {
-                messages.push(`【行前準備提醒】\n三天後即將出發！\n✈️ 航班: ${seg.airline}\n📍 路線: ${seg.from} ➔ ${seg.to}\n📅 日期: ${seg.date}${timeStr}\n記得再次確認行李與相關證件喔！`);
+                messages.push(`【行前準備提醒】\n三天後即將出發！\n✈️ 航班: ${flightLabel}\n📍 路線: ${seg.from} ➔ ${seg.to}\n📅 日期: ${seg.date}${timeStr}\n記得再次確認行李與相關證件喔！`);
             } else if (seg.date === tmrStr) {
-                messages.push(`【即將啟程】\n明天就要飛囉！\n✈️ 航班: ${seg.airline}\n📍 路線: ${seg.from} ➔ ${seg.to}\n📅 日期: ${seg.date}${timeStr}\n祝您旅途愉快、平安順心！`);
+                messages.push(`【即將啟程】\n明天就要飛囉！\n✈️ 航班: ${flightLabel}\n📍 路線: ${seg.from} ➔ ${seg.to}\n📅 日期: ${seg.date}${timeStr}\n祝您旅途愉快、平安順心！`);
             } else if (seg.date === todayStr) {
-                messages.push(`【今日出發】\n就是今天！\n✈️ 航班: ${seg.airline}\n📍 路線: ${seg.from} ➔ ${seg.to}\n📅 日期: ${seg.date}${timeStr}\n準備好報到手續了嗎？出發吧！`);
+                messages.push(`【今日出發】\n就是今天！\n✈️ 航班: ${flightLabel}\n📍 路線: ${seg.from} ➔ ${seg.to}\n📅 日期: ${seg.date}${timeStr}\n準備好報到手續了嗎？出發吧！`);
             }
         });
 

@@ -125,13 +125,13 @@ export const syncToCalendar = async (tickets, accessToken) => {
         
         tickets.forEach(t => {
             if (t.type === 'normal') {
-                if(t.outboundDate) allSegments.push({ date: t.outboundDate, from: t.departRegion, to: t.returnRegion, airline: t.airline });
-                if(t.inboundDate) allSegments.push({ date: t.inboundDate, from: t.returnRegion, to: t.departRegion, airline: t.airline });
+                if(t.outboundDate) allSegments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', flightNo: t.outboundFlightNo || '', from: t.departRegion, to: t.returnRegion, airline: t.airline });
+                if(t.inboundDate) allSegments.push({ id: t.id + '-2', ticket: t, date: t.inboundDate, time: t.inboundTime || '', flightNo: t.inboundFlightNo || '', from: t.returnRegion, to: t.departRegion, airline: t.airline });
             } else if (t.type === 'reverse') {
-                if(t.outboundDate) allSegments.push({ date: t.outboundDate, from: t.returnRegion, to: t.departRegion, airline: t.airline });
-                if(t.inboundDate) allSegments.push({ date: t.inboundDate, from: t.departRegion, to: t.returnRegion, airline: t.airline });
+                if(t.outboundDate) allSegments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', flightNo: t.outboundFlightNo || '', from: t.returnRegion, to: t.departRegion, airline: t.airline });
+                if(t.inboundDate) allSegments.push({ id: t.id + '-2', ticket: t, date: t.inboundDate, time: t.inboundTime || '', flightNo: t.inboundFlightNo || '', from: t.departRegion, to: t.returnRegion, airline: t.airline });
             } else {
-                if(t.outboundDate) allSegments.push({ date: t.outboundDate, from: t.departRegion, to: t.returnRegion, airline: t.airline });
+                if(t.outboundDate) allSegments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', flightNo: t.outboundFlightNo || '', from: t.departRegion, to: t.returnRegion, airline: t.airline });
             }
         });
 
@@ -140,14 +140,12 @@ export const syncToCalendar = async (tickets, accessToken) => {
         const updatedCalendarIds = {};
         
         for (const seg of allSegments) {
-            const eventSummary = `[航班] ${seg.airline} ${seg.from}✈️${seg.to}`;
+            const flightLabel = seg.flightNo ? `${seg.airline} (${seg.flightNo})` : seg.airline;
+            const eventSummary = `[航班] ${flightLabel} ${seg.from}✈️${seg.to}`;
             
             // Generate full ISO string based on exact time or all-day.
             let startObj, endObj;
             if (seg.time) {
-                const sDt = new Date(seg.dateTime.getTime() - (8 * 3600000)); // Remove manual UTC offset for naive date formatting logic...
-                // Actually Calendar API accepts pure ISO string `2024-05-01T15:30:00+08:00`
-                // Let's use standard ISO 8601 formatting
                 const dtStr = `${seg.date}T${seg.time}:00+08:00`;
                 const eDt = new Date(new Date(dtStr).getTime() + 2 * 3600000); // Add 2 hours for duration mapping
                 const eDtStr = `${eDt.getFullYear()}-${String(eDt.getMonth()+1).padStart(2,'0')}-${String(eDt.getDate()).padStart(2,'0')}T${String(eDt.getHours()).padStart(2,'0')}:${String(eDt.getMinutes()).padStart(2,'0')}:00+08:00`;
@@ -194,7 +192,7 @@ export const syncToCalendar = async (tickets, accessToken) => {
 
             const body = {
                 summary: eventSummary,
-                description: `由航班反向票管理系統自動建立。\n航線：${seg.from} 到 ${seg.to}\n航班號碼：${seg.airline}`,
+                description: `由航班反向票管理系統自動建立。\n航線：${seg.from} 到 ${seg.to}\n航空公司：${seg.airline}${seg.flightNo ? `\n航班編號：${seg.flightNo}\n追蹤航班: https://flightaware.com/live/flight/${seg.flightNo}` : ''}`,
                 start: startObj,
                 end: endObj
             };

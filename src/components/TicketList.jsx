@@ -49,7 +49,8 @@ export default function TicketList({ tickets, onDelete }) {
                                         <div className="text-sm text-gray-900 font-medium">{Segment1}</div>
                                         <div className="text-sm text-gray-500 mt-1 flex items-center">
                                             <Calendar className="w-3 h-3 mr-1" /> {ticket.outboundDate}
-                                            {ticket.outboundTime && <><Clock className="w-3 h-3 ml-2 mr-1" /> {ticket.outboundTime}</>}
+                                            {ticket.outboundTime && <><Clock className="w-3 h-3 ml-2 mr-1 text-slate-400" /> {ticket.outboundTime}</>}
+                                            {ticket.outboundFlightNo && <span className="ml-2 font-mono text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm">{ticket.outboundFlightNo}</span>}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
@@ -57,7 +58,8 @@ export default function TicketList({ tickets, onDelete }) {
                                         {ticket.type !== 'oneway' && (
                                             <div className="text-sm text-gray-500 mt-1 flex items-center">
                                                 <Calendar className="w-3 h-3 mr-1" /> {ticket.inboundDate}
-                                                {ticket.inboundTime && <><Clock className="w-3 h-3 ml-2 mr-1" /> {ticket.inboundTime}</>}
+                                                {ticket.inboundTime && <><Clock className="w-3 h-3 ml-2 mr-1 text-slate-400" /> {ticket.inboundTime}</>}
+                                                {ticket.inboundFlightNo && <span className="ml-2 font-mono text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm">{ticket.inboundFlightNo}</span>}
                                             </div>
                                         )}
                                     </td>
