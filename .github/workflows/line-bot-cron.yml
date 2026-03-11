@@ -12,12 +12,16 @@ jobs:
     
     steps:
     - name: Checkout Repository
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       uses: actions/checkout@v4
 
     - name: Setup Node.js
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '24'
         cache: 'npm'
 
     - name: Install Dependencies
