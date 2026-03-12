@@ -135,6 +135,39 @@ function addHoursToLocalStr(localStr, hours) {
 }
 
 /**
+ * 依據航段推導對應的 IANA 時區
+ * - 優先使用起飛地 IATA code，其次降落地，最後 fallback Asia/Taipei
+ */
+function getIanaTimeZone(seg) {
+    const codeFrom = (seg.from || '').split(' ')[0]; 
+    const codeTo   = (seg.to || '').split(' ')[0];
+
+    const table = {
+        // 台灣
+        TPE: 'Asia/Taipei',
+        TSA: 'Asia/Taipei',
+        KHH: 'Asia/Taipei',
+        RMQ: 'Asia/Taipei',
+        // 日本
+        NRT: 'Asia/Tokyo',
+        HND: 'Asia/Tokyo',
+        KIX: 'Asia/Tokyo',
+        CTS: 'Asia/Tokyo',
+        FUK: 'Asia/Tokyo',
+        OKA: 'Asia/Tokyo',
+        // 泰國
+        BKK: 'Asia/Bangkok',
+        DMK: 'Asia/Bangkok',
+        // 新加坡
+        SIN: 'Asia/Singapore',
+        // 香港
+        HKG: 'Asia/Hong_Kong',
+    };
+
+    return table[codeFrom] || table[codeTo] || 'Asia/Taipei';
+}
+
+/**
  * 同步航班時間至 Google Calendar
  * - 修正時區：不再硬寫 +08:00，改用純本地時間字串 + timeZone 欄位
  * - 孤兒事件清理：標記 extendedProperties，同步前先刪除本地已不存在的舊事件
@@ -197,6 +230,7 @@ export const syncToCalendar = async (tickets, accessToken) => {
         }
 
         for (const seg of allSegments) {
+            const tz = getIanaTimeZone(seg);
             const flightLabel = seg.flightNo ? `${seg.airline} (${seg.flightNo})` : seg.airline;
             const eventSummary = `[航班] ${flightLabel} ${seg.from}✈️${seg.to}`;
             
@@ -205,8 +239,8 @@ export const syncToCalendar = async (tickets, accessToken) => {
             if (seg.time) {
                 const dtStr  = `${seg.date}T${seg.time}:00`;
                 const eDtStr = addHoursToLocalStr(dtStr, 2);
-                startObj = { dateTime: dtStr,   timeZone: 'Asia/Taipei' };
-                endObj   = { dateTime: eDtStr,  timeZone: 'Asia/Taipei' };
+                startObj = { dateTime: dtStr,   timeZone: tz };
+                endObj   = { dateTime: eDtStr,  timeZone: tz };
             } else {
                 const dt = new Date(seg.date + 'T00:00:00');
                 dt.setDate(dt.getDate() + 1);

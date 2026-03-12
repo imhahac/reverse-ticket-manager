@@ -56,11 +56,34 @@ export default function TripTimeline({ trips, tripLabels, onUpdateLabel }) {
                     tripDays = calculateTripDays(trip.outbound.date, trip.inbound.date);
                 }
 
+                const isExternalOnly = trip.isExternalOnly;
+
                 return (
                     <div key={comboKey} className={`relative flex flex-col md:flex-row items-stretch bg-white border ${!trip.isComplete ? 'border-amber-300' : isOpenJaw ? 'border-yellow-300' : 'border-emerald-300'} rounded-xl shadow-sm hover:shadow-md transition-shadow mt-4`}>
-                        <div className={`absolute -top-3 -right-2 px-3 py-1 text-xs font-bold text-white rounded-full shadow-sm flex items-center z-20 ${!trip.isComplete ? 'bg-amber-500' : isOpenJaw ? 'bg-yellow-500' : 'bg-emerald-500'}`}>
-                            {!trip.isComplete ? <AlertTriangle className="w-3 h-3 mr-1" /> : isOpenJaw ? <AlertTriangle className="w-3 h-3 mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
-                            {!trip.isComplete ? '未完結行程' : isOpenJaw ? '不同點進出' : '配對成功'}
+                        <div className={`absolute -top-3 -right-2 px-3 py-1 text-xs font-bold text-white rounded-full shadow-sm flex items-center z-20 ${
+                            isExternalOnly
+                                ? 'bg-blue-500'
+                                : !trip.isComplete
+                                ? 'bg-amber-500'
+                                : isOpenJaw
+                                ? 'bg-yellow-500'
+                                : 'bg-emerald-500'
+                        }`}>
+                            {isExternalOnly
+                                ? <CheckCircle2 className="w-3 h-3 mr-1" />
+                                : !trip.isComplete
+                                ? <AlertTriangle className="w-3 h-3 mr-1" />
+                                : isOpenJaw
+                                ? <AlertTriangle className="w-3 h-3 mr-1" />
+                                : <CheckCircle2 className="w-3 h-3 mr-1" />
+                            }
+                            {isExternalOnly
+                                ? '外站獨立行程'
+                                : !trip.isComplete
+                                ? '未完結行程'
+                                : isOpenJaw
+                                ? '不同點進出'
+                                : '配對成功'}
                             {tripDays && <span className="ml-2 pl-2 border-l border-white/30">共 {tripDays} 天</span>}
                         </div>
                         <div className="bg-slate-50 border-r border-slate-200 p-5 flex flex-col justify-center items-center rounded-l-xl w-full md:w-56 shrink-0 relative overflow-hidden">

@@ -2,6 +2,36 @@ import { google } from 'googleapis';
 import axios from 'axios';
 import { format, addDays } from 'date-fns';
 
+// 簡易 IATA → IANA 時區 mapping，供推播顯示用
+function getIanaTimeZoneForSegment(seg) {
+    const codeFrom = (seg.from || '').split(' ')[0];
+    const codeTo   = (seg.to || '').split(' ')[0];
+
+    const table = {
+        // 台灣
+        TPE: 'Asia/Taipei',
+        TSA: 'Asia/Taipei',
+        KHH: 'Asia/Taipei',
+        RMQ: 'Asia/Taipei',
+        // 日本
+        NRT: 'Asia/Tokyo',
+        HND: 'Asia/Tokyo',
+        KIX: 'Asia/Tokyo',
+        CTS: 'Asia/Tokyo',
+        FUK: 'Asia/Tokyo',
+        OKA: 'Asia/Tokyo',
+        // 泰國
+        BKK: 'Asia/Bangkok',
+        DMK: 'Asia/Bangkok',
+        // 新加坡
+        SIN: 'Asia/Singapore',
+        // 香港
+        HKG: 'Asia/Hong_Kong',
+    };
+
+    return table[codeFrom] || table[codeTo] || 'Asia/Taipei';
+}
+
 const run = async () => {
     console.log("Starting LINE Bot Cron Job...");
     try {
@@ -77,7 +107,8 @@ const run = async () => {
         let messages = [];
 
         allSegments.forEach(seg => {
-            const timeStr = seg.time ? ` ${seg.time}` : '';
+            const tz = getIanaTimeZoneForSegment(seg);
+            const timeStr = seg.time ? ` ${seg.time}（${tz}）` : '';
             const flightLabel = seg.flightNo ? `${seg.airline} (${seg.flightNo})` : seg.airline;
             
             if (seg.date === in3DaysStr) {

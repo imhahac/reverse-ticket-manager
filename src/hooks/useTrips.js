@@ -75,6 +75,17 @@ export const useTrips = (tickets) => {
             trips.push(currentTrip);
         }
 
+        // 標記「純外站行程」（完全不含台灣）
+        trips = trips.map(trip => {
+            const segs = [
+                ...(trip.outbound ? [trip.outbound] : []),
+                ...trip.connections,
+                ...(trip.inbound ? [trip.inbound] : []),
+            ];
+            const hasTW = segs.some(s => isTaiwan(s.from) || isTaiwan(s.to));
+            return { ...trip, isExternalOnly: !hasTW };
+        });
+
         return { segments, trips };
     }, [tickets]);
 };
