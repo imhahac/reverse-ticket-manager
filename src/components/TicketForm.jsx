@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { toast } from 'sonner';
 import { Plane } from 'lucide-react';
 
 const AIRPORTS = [
@@ -7,7 +8,7 @@ const AIRPORTS = [
     'CTS (札幌新千歲)', 'OKA (沖繩那霸)', 'FUK (福岡)', 'SDJ (仙台)', 'HKD (函館)'
 ];
 
-export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit }) {
+export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, exchangeRates = { JPY: 0.21, USD: 32.5 } }) {
     const defaultFormData = {
         airline: '',
         price: '',
@@ -37,13 +38,13 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit })
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!formData.airline || !formData.price || !formData.outboundDate) {
-            alert('請填寫完整資訊 (航空公司、價格、去程日期)');
+            toast.error('請填寫完整資訊 (航空公司、價格、去程日期)');
             return;
         }
 
         if (formData.type !== 'oneway') {
             if (!formData.inboundDate) {
-                alert('請填寫第 2 段日期');
+                toast.error('請填寫第 2 段日期');
                 return;
             }
         }
@@ -52,7 +53,7 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit })
         const inDateTimeStr = formData.inboundTime ? `${formData.inboundDate}T${formData.inboundTime}` : `${formData.inboundDate}T00:00:00`;
 
         if (formData.type !== 'oneway' && new Date(inDateTimeStr) < new Date(outDateTimeStr)) {
-            alert('同一張發票中，回程段的日期時間不能早於去程段喔！');
+            toast.error('同一張發票中，回程段的日期時間不能早於去程段喔！');
             return;
         }
 
@@ -132,7 +133,10 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit })
                                 setFormData({
                                     ...formData,
                                     currency: newCurrency,
-                                    exchangeRate: newCurrency === 'TWD' ? '1' : newCurrency === 'JPY' ? '0.21' : newCurrency === 'USD' ? '32.5' : formData.exchangeRate
+                                    exchangeRate: newCurrency === 'TWD' ? '1'
+                                        : newCurrency === 'JPY' ? String(exchangeRates.JPY)
+                                        : newCurrency === 'USD' ? String(exchangeRates.USD)
+                                        : formData.exchangeRate
                                 });
                             }}
                         >
@@ -142,7 +146,12 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit })
                         </select>
                     </div>
                     <div className="col-span-1">
-                        <label className="block text-sm font-bold text-gray-700 mb-1">匯率(對台幣)</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">
+                            匯率(對台幣)
+                            {formData.currency !== 'TWD' && (
+                                <span className="text-xs font-normal text-emerald-600 ml-1">即時</span>
+                            )}
+                        </label>
                         <input
                             type="number" step="0.001"
                             disabled={formData.currency === 'TWD'}

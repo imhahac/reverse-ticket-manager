@@ -65,7 +65,6 @@ export const syncToDrive = async (tickets, tripLabels, accessToken) => {
  */
 export const loadFromDrive = async (accessToken) => {
     try {
-        // 先列出所有看起來相符的檔案，協助 Debug
         const query = encodeURIComponent(`name="reverse-tickets.json" and trashed=false`);
         const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive`, {
             headers: { Authorization: `Bearer ${accessToken}` }
@@ -83,8 +82,6 @@ export const loadFromDrive = async (accessToken) => {
         }
 
         const existingFile = searchData.files[0];
-        
-        // 將所有找到的檔名收集起來傳回前端顯示
         const allFoundFiles = searchData.files.map(f => `${f.name} (ID: ${f.id})`).join('\n');
 
         const downloadRes = await fetch(`https://www.googleapis.com/drive/v3/files/${existingFile.id}?alt=media`, {
@@ -116,11 +113,34 @@ export const loadFromDrive = async (accessToken) => {
 };
 
 /**
+ * 將 "YYYY-MM-DDTHH:MM:SS" 字串加上 N 小時，回傳相同格式
+ * （不含 offset/timezone，讓 Google Calendar 用 timeZone 欄位解析）
+ */
+function addHoursToLocalStr(localStr, hours) {
+    // localStr: "2025-06-15T13:40:00"
+    const [datePart, timePart] = localStr.split('T');
+    const [h, m, s] = timePart.split(':').map(Number);
+    let totalMinutes = h * 60 + m + hours * 60;
+    const newH = Math.floor(totalMinutes / 60) % 24;
+    const newM = totalMinutes % 60;
+    // If hours overflow to next day, adjust date
+    const overflowDays = Math.floor((h * 60 + m + hours * 60) / (24 * 60));
+    let endDatePart = datePart;
+    if (overflowDays > 0) {
+        const d = new Date(datePart + 'T00:00:00');
+        d.setDate(d.getDate() + overflowDays);
+        endDatePart = d.toISOString().split('T')[0];
+    }
+    return `${endDatePart}T${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/**
  * 同步航班時間至 Google Calendar
+ * - 修正時區：不再硬寫 +08:00，改用純本地時間字串 + timeZone 欄位
+ * - 孤兒事件清理：標記 extendedProperties，同步前先刪除本地已不存在的舊事件
  */
 export const syncToCalendar = async (tickets, accessToken) => {
     try {
-        let addedCount = 0;
         const allSegments = [];
         
         tickets.forEach(t => {
@@ -137,40 +157,75 @@ export const syncToCalendar = async (tickets, accessToken) => {
 
         const calendarId = 'primary';
         let errorLog = '';
+        let addedCount = 0;
+        let deletedCount = 0;
         const updatedCalendarIds = {};
-        
+
+        // ── 孤兒事件清理 ──────────────────────────────────────────────
+        // 1. 撈出所有帶有 reverseTicketApp=true 的事件
+        const orphanCheckRes = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?privateExtendedProperty=reverseTicketApp%3Dtrue&maxResults=500&singleEvents=true`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        if (orphanCheckRes.status === 401) return { success: false, expired: true };
+
+        if (orphanCheckRes.ok) {
+            const orphanData = await orphanCheckRes.json();
+            const calendarEvents = orphanData.items || [];
+            const activeSegIds = new Set(allSegments.map(s => s.id));
+
+            for (const ev of calendarEvents) {
+                const segId = ev.extendedProperties?.private?.reverseTicketSegId;
+                if (segId && !activeSegIds.has(segId)) {
+                    // 孤兒事件：本地已不存在，刪除之
+                    const delRes = await fetch(
+                        `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${ev.id}`,
+                        { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } }
+                    );
+                    if (delRes.ok || delRes.status === 204 || delRes.status === 410) {
+                        deletedCount++;
+                    } else {
+                        errorLog += `刪除孤兒事件失敗 (${ev.summary}): [${delRes.status}]\n`;
+                    }
+                }
+            }
+        }
+        // ──────────────────────────────────────────────────────────────
+
+        if (allSegments.length === 0) {
+            return { success: true, count: 0, deletedCount, error: '您尚未新增任何機票，或者機票沒有填寫日期。' };
+        }
+
         for (const seg of allSegments) {
             const flightLabel = seg.flightNo ? `${seg.airline} (${seg.flightNo})` : seg.airline;
             const eventSummary = `[航班] ${flightLabel} ${seg.from}✈️${seg.to}`;
             
-            // Generate full ISO string based on exact time or all-day.
+            // 🔧 時區修正：純本地時間字串 + timeZone，不手動拼 +08:00
             let startObj, endObj;
             if (seg.time) {
-                const dtStr = `${seg.date}T${seg.time}:00+08:00`;
-                const eDt = new Date(new Date(dtStr).getTime() + 2 * 3600000); // Add 2 hours for duration mapping
-                const eDtStr = `${eDt.getFullYear()}-${String(eDt.getMonth()+1).padStart(2,'0')}-${String(eDt.getDate()).padStart(2,'0')}T${String(eDt.getHours()).padStart(2,'0')}:${String(eDt.getMinutes()).padStart(2,'0')}:00+08:00`;
-                
-                startObj = { dateTime: dtStr, timeZone: 'Asia/Taipei' };
-                endObj = { dateTime: eDtStr, timeZone: 'Asia/Taipei' };
+                const dtStr  = `${seg.date}T${seg.time}:00`;
+                const eDtStr = addHoursToLocalStr(dtStr, 2);
+                startObj = { dateTime: dtStr,   timeZone: 'Asia/Taipei' };
+                endObj   = { dateTime: eDtStr,  timeZone: 'Asia/Taipei' };
             } else {
-                const dt = new Date(seg.date);
+                const dt = new Date(seg.date + 'T00:00:00');
                 dt.setDate(dt.getDate() + 1);
                 const nextDayStr = dt.toISOString().split('T')[0];
                 startObj = { date: seg.date };
-                endObj = { date: nextDayStr };
+                endObj   = { date: nextDayStr };
             }
 
             // check if eventId already stored on ticket
             let existingEventId = seg.ticket.calendarIds ? seg.ticket.calendarIds[seg.id] : null;
 
             if (existingEventId) {
-                 const verifyRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${existingEventId}`, {
-                     headers: { Authorization: `Bearer ${accessToken}` }
-                 });
-                 if (!verifyRes.ok) existingEventId = null;
+                const verifyRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${existingEventId}`, {
+                    headers: { Authorization: `Bearer ${accessToken}` }
+                });
+                if (!verifyRes.ok) existingEventId = null;
             }
 
-            // Fallback to text searching if no direct match
+            // Fallback: text searching
             if (!existingEventId) {
                 const minTime = encodeURIComponent(new Date(`${seg.date}T00:00:00Z`).toISOString());
                 const maxTime = encodeURIComponent(new Date(`${seg.date}T23:59:59Z`).toISOString());
@@ -194,7 +249,14 @@ export const syncToCalendar = async (tickets, accessToken) => {
                 summary: eventSummary,
                 description: `由航班反向票管理系統自動建立。\n航線：${seg.from} 到 ${seg.to}\n航空公司：${seg.airline}${seg.flightNo ? `\n航班編號：${seg.flightNo}\n追蹤航班: https://flightaware.com/live/flight/${seg.flightNo}` : ''}`,
                 start: startObj,
-                end: endObj
+                end: endObj,
+                // 🔧 孤兒清理標記
+                extendedProperties: {
+                    private: {
+                        reverseTicketApp: 'true',
+                        reverseTicketSegId: seg.id
+                    }
+                }
             };
 
             const method = existingEventId ? 'PUT' : 'POST';
@@ -220,14 +282,10 @@ export const syncToCalendar = async (tickets, accessToken) => {
                 errorLog += `同步事件失敗 (${seg.date} ${seg.airline}): ${errText}\n`;
             }
         }
-        
-        if (allSegments.length === 0) {
-            return { success: true, count: 0, error: '您尚未新增任何機票，或者機票沒有填寫日期。' };
-        }
 
-        return { success: addedCount > 0 || errorLog === '', count: addedCount, error: errorLog, updatedCalendarIds };
+        return { success: addedCount > 0 || errorLog === '', count: addedCount, deletedCount, error: errorLog, updatedCalendarIds };
     } catch (e) {
         console.error(e);
-        return { success: false, count: 0, error: e.message };
+        return { success: false, count: 0, deletedCount: 0, error: e.message };
     }
 };

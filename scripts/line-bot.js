@@ -81,11 +81,11 @@ const run = async () => {
             const flightLabel = seg.flightNo ? `${seg.airline} (${seg.flightNo})` : seg.airline;
             
             if (seg.date === in3DaysStr) {
-                messages.push(`【行前準備提醒】\n三天後即將出發！\n✈️ 航班: ${flightLabel}\n📍 路線: ${seg.from} ➔ ${seg.to}\n📅 日期: ${seg.date}${timeStr}\n記得再次確認行李與相關證件喔！`);
+                messages.push(`【行前準備提醒】\n三天後即將出發！\n✈️ 航班: ${flightLabel}\n📍 路線: ${seg.from} ➔ ${seg.to}\n📅 日期: ${seg.date}${timeStr}\n記得再次確認行李與相關證件喔！\n🔗 查看訂單: https://imhahac.github.io/reverse-ticket-manager/`);
             } else if (seg.date === tmrStr) {
-                messages.push(`【即將啟程】\n明天就要飛囉！\n✈️ 航班: ${flightLabel}\n📍 路線: ${seg.from} ➔ ${seg.to}\n📅 日期: ${seg.date}${timeStr}\n祝您旅途愉快、平安順心！`);
+                messages.push(`【即將啟程】\n明天就要飛囉！\n✈️ 航班: ${flightLabel}\n📍 路線: ${seg.from} ➔ ${seg.to}\n📅 日期: ${seg.date}${timeStr}\n祝您旅途愉快、平安順心！\n🔗 查看訂單: https://imhahac.github.io/reverse-ticket-manager/`);
             } else if (seg.date === todayStr) {
-                messages.push(`【今日出發】\n就是今天！\n✈️ 航班: ${flightLabel}\n📍 路線: ${seg.from} ➔ ${seg.to}\n📅 日期: ${seg.date}${timeStr}\n準備好報到手續了嗎？出發吧！`);
+                messages.push(`【今日出發】\n就是今天！\n✈️ 航班: ${flightLabel}\n📍 路線: ${seg.from} ➔ ${seg.to}\n📅 日期: ${seg.date}${timeStr}\n準備好報到手續了嗎？出發吧！\n🔗 查看訂單: https://imhahac.github.io/reverse-ticket-manager/`);
             }
         });
 

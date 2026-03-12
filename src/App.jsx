@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { toast } from 'sonner';
 import { Plane, Calendar, Trash2, ArrowRight, BookOpen, AlertCircle, CheckCircle2, ListFilter, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn } from 'lucide-react';
 import { useGoogleLogin, googleLogout } from '@react-oauth/google';
 import { syncToDrive, loadFromDrive, syncToCalendar } from './utils/googleSync';
@@ -11,18 +12,41 @@ import TicketList from './components/TicketList';
 import TripTimeline from './components/TripTimeline';
 import TripCalendar from './components/TripCalendar';
 
+// 匯率 fallback（當 API 無法取用時使用）
+const DEFAULT_RATES = { JPY: 0.21, USD: 32.5 };
+
 function App() {
     const [tickets, setTickets] = useLocalStorage('reverse-tickets', []);
     const [tripLabels, setTripLabels] = useLocalStorage('reverse-trip-labels', {});
     const [accessToken, setAccessToken] = useLocalStorage('google-access-token', null);
     const [activeTab, setActiveTab] = useState('timeline');
     const [isSyncing, setIsSyncing] = useState(false);
+    const [exchangeRates, setExchangeRates] = useState(DEFAULT_RATES);
     const fileInputRef = useRef(null);
 
     const [editingTicket, setEditingTicket] = useState(null);
 
     // Calculate smart groupings via custom hook
     const { segments, trips } = useTrips(tickets);
+
+    // ── 動態即時匯率 ──────────────────────────────────────────────────
+    useEffect(() => {
+        fetch('https://api.exchangerate-api.com/v4/latest/TWD')
+            .then(r => r.json())
+            .then(data => {
+                if (data?.rates) {
+                    // data.rates.JPY = 幾 JPY 換 1 TWD → 1 JPY = 1/rates.JPY TWD
+                    const jpyRate = data.rates.JPY ? parseFloat((1 / data.rates.JPY).toFixed(4)) : DEFAULT_RATES.JPY;
+                    // data.rates.USD = 幾 USD 換 1 TWD → 1 USD = 1/rates.USD TWD
+                    const usdRate = data.rates.USD ? parseFloat((1 / data.rates.USD).toFixed(2)) : DEFAULT_RATES.USD;
+                    setExchangeRates({ JPY: jpyRate, USD: usdRate });
+                }
+            })
+            .catch(() => {
+                // silently fallback to defaults
+            });
+    }, []);
+    // ──────────────────────────────────────────────────────────────────
 
     const handleSaveTicket = (ticket) => {
         if (editingTicket) {
@@ -41,10 +65,20 @@ function App() {
     const handleCancelEdit = () => {
         setEditingTicket(null);
     };
+
     const deleteTicket = (id) => {
-        if (window.confirm('確定要刪除這筆機票訂單嗎？相關的趟次配對將會被移除。')) {
-            setTickets(tickets.filter(t => t.id !== id));
-        }
+        toast('確定要刪除這筆機票訂單嗎？', {
+            description: '相關的趟次配對將會被移除。',
+            action: {
+                label: '確認刪除',
+                onClick: () => setTickets(tickets.filter(t => t.id !== id)),
+            },
+            cancel: {
+                label: '取消',
+                onClick: () => {},
+            },
+            duration: 8000,
+        });
     };
 
     const updateLabel = (comboKey, name) => {
@@ -79,7 +113,6 @@ function App() {
         reader.onload = (event) => {
             try {
                 const importedData = JSON.parse(event.target.result);
-                // Backward compatibility: imported data might be just an array of tickets
                 let newTickets = [];
                 let newLabels = {};
 
@@ -96,16 +129,26 @@ function App() {
                     throw new Error('Invalid format');
                 }
 
-                if (window.confirm(`成功讀取 ${newTickets.length} 筆機票資料，要覆寫目前所有訂單嗎？`)) {
-                    setTickets(newTickets);
-                    setTripLabels(newLabels);
-                    alert('匯入成功！');
-                }
+                toast(`成功讀取 ${newTickets.length} 筆機票資料`, {
+                    description: '確認後將覆寫目前所有訂單。',
+                    action: {
+                        label: '確認覆寫',
+                        onClick: () => {
+                            setTickets(newTickets);
+                            setTripLabels(newLabels);
+                            toast.success('匯入成功！');
+                        },
+                    },
+                    cancel: {
+                        label: '取消',
+                        onClick: () => {},
+                    },
+                    duration: 10000,
+                });
             } catch (err) {
-                alert('檔案格式錯誤或損毀，匯入失敗。');
+                toast.error('匯入失敗', { description: '檔案格式錯誤或損毀，請確認 JSON 結構正確。' });
                 console.error(err);
             }
-            // reset input
             e.target.value = '';
         };
         reader.readAsText(file);
@@ -114,11 +157,14 @@ function App() {
     const login = useGoogleLogin({
         onSuccess: (codeResponse) => {
             setAccessToken(codeResponse.access_token);
-            alert('Google 登入成功！');
+            toast.success('Google 登入成功！');
         },
         onError: (error) => {
             console.error('Login Failed:', error);
-            alert(`Google 登入失敗\n錯誤訊息: ${error?.error_description || error?.error || '未知錯誤'}\n請確認您的 Client ID 是否正確，以及是否將目前網址加入 GCP Console 的「已授權的 JavaScript 來源」。`);
+            toast.error('Google 登入失敗', {
+                description: `錯誤訊息: ${error?.error_description || error?.error || '未知錯誤'}。請確認 Client ID 與已授權的 JavaScript 來源。`,
+                duration: 8000,
+            });
         },
         scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events'
     });
@@ -129,36 +175,65 @@ function App() {
     };
 
     const handleSyncToDrive = async () => {
-        if (!accessToken) return alert('請先登入 Google');
+        if (!accessToken) return toast.error('請先登入 Google');
         setIsSyncing(true);
+        const toastId = toast.loading('正在備份至 Google Drive…');
         const res = await syncToDrive(tickets, tripLabels, accessToken);
         setIsSyncing(false);
         if (res.success) {
-            alert(`雲端同步成功！資料已備份至 Google Drive。\n(雲端檔案 ID: ${res.fileId})`);
+            toast.success('雲端備份成功！', {
+                id: toastId,
+                description: `資料已備份至 Google Drive。(檔案 ID: ${res.fileId})`,
+            });
         } else {
-            alert(`雲端同步失敗 ❌\n錯誤訊息：\n${res.error}\n\n可能原因：您的權限不足或者 API 呼叫格式錯誤。`);
+            if (res.expired) {
+                toast.error('登入已過期，請重新登入 Google', { id: toastId });
+                logout();
+            } else {
+                toast.error('雲端備份失敗', { id: toastId, description: res.error });
+            }
         }
     };
 
     const handleLoadFromDrive = async () => {
-        if (!accessToken) return alert('請先登入 Google');
+        if (!accessToken) return toast.error('請先登入 Google');
         setIsSyncing(true);
+        const toastId = toast.loading('正在從 Google Drive 載入…');
         const res = await loadFromDrive(accessToken);
         setIsSyncing(false);
         
         if (res.success) {
-            if (window.confirm(`【雲端讀取成功】\n共找到 ${res.tickets.length} 筆趟次。\n(找到的檔案：\n${res.foundFilesLog})\n\n確定要覆寫您目前的訂單表嗎？`)) {
-                setTickets(res.tickets);
-                setTripLabels(res.tripLabels || {});
-            }
+            toast.dismiss(toastId);
+            toast(`雲端讀取成功，共 ${res.tickets.length} 筆趟次`, {
+                description: `找到的檔案：${res.foundFilesLog}`,
+                action: {
+                    label: '確認覆寫',
+                    onClick: () => {
+                        setTickets(res.tickets);
+                        setTripLabels(res.tripLabels || {});
+                        toast.success('雲端資料載入成功！');
+                    },
+                },
+                cancel: {
+                    label: '取消',
+                    onClick: () => {},
+                },
+                duration: 12000,
+            });
         } else {
-            alert(`雲端載入失敗 ❌\n錯誤訊息：\n${res.error}`);
+            if (res.expired) {
+                toast.error('登入已過期，請重新登入 Google', { id: toastId });
+                logout();
+            } else {
+                toast.error('雲端載入失敗', { id: toastId, description: res.error });
+            }
         }
     };
 
     const handleSyncToCalendar = async () => {
-        if (!accessToken) return alert('請先登入 Google');
+        if (!accessToken) return toast.error('請先登入 Google');
         setIsSyncing(true);
+        const toastId = toast.loading('正在同步至 Google Calendar…');
         const res = await syncToCalendar(tickets, accessToken);
         setIsSyncing(false);
         if (res.success) {
@@ -171,9 +246,17 @@ function App() {
                 });
                 setTickets(newTickets);
             }
-            alert(`日曆同步成功！\n共新增了 ${res.count} 個航班事件。\n\n${res.error ? `部分警告：\n${res.error}` : ''}`);
+            const deletedNote = res.deletedCount > 0 ? `，已自動清除 ${res.deletedCount} 個廢棄事件` : '';
+            toast.success('日曆同步成功！', {
+                id: toastId,
+                description: `共同步 ${res.count} 個航班事件${deletedNote}。${res.error ? `\n⚠️ 部分警告：${res.error}` : ''}`,
+                duration: 6000,
+            });
         } else {
-            alert(`日曆同步失敗 ❌\n錯誤訊息：\n${res.error}\n可能 Access Token 已過期或是這本行事曆設定有誤，請嘗試重新登入。`);
+            toast.error('日曆同步失敗', {
+                id: toastId,
+                description: res.error || 'Access Token 可能已過期，請重新登入。',
+            });
             logout();
         }
     };
@@ -284,7 +367,8 @@ function App() {
                 <TicketForm 
                     onAddTicket={handleSaveTicket} 
                     editingTicket={editingTicket} 
-                    onCancelEdit={handleCancelEdit} 
+                    onCancelEdit={handleCancelEdit}
+                    exchangeRates={exchangeRates}
                 />
 
                 {/* 主視覺 Tab 切換區 */}
