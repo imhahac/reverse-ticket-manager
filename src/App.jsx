@@ -5,6 +5,8 @@ import { useGoogleLogin, googleLogout } from '@react-oauth/google';
 import { syncToDrive, loadFromDrive, syncToCalendar } from './utils/googleSync';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useTrips } from './hooks/useTrips';
+import { useTripOverrides } from './hooks/useTripOverrides';
+import { applyTripOverrides } from './utils/tripOverrides';
 
 import Instructions from './components/Instructions';
 import TicketForm from './components/TicketForm';
@@ -18,7 +20,12 @@ const DEFAULT_RATES = { JPY: 0.21, USD: 32.5 };
 function App() {
     const [tickets, setTickets] = useLocalStorage('reverse-tickets', []);
     const [tripLabels, setTripLabels] = useLocalStorage('reverse-trip-labels', {});
-    const [accessToken, setAccessToken] = useLocalStorage('google-access-token', null);
+    // Backward compatible:
+    // - 舊版存 string accessToken
+    // - 新版存 { token, expiresAt }
+    const [accessTokenState, setAccessTokenState] = useLocalStorage('google-access-token', null);
+    const accessToken = typeof accessTokenState === 'string' ? accessTokenState : accessTokenState?.token || null;
+    const accessTokenExpiresAt = typeof accessTokenState === 'object' ? accessTokenState?.expiresAt || null : null;
     const [activeTab, setActiveTab] = useState('timeline');
     const [isSyncing, setIsSyncing] = useState(false);
     const [exchangeRates, setExchangeRates] = useState(DEFAULT_RATES);
@@ -28,6 +35,17 @@ function App() {
 
     // Calculate smart groupings via custom hook
     const { segments, trips } = useTrips(tickets);
+
+    // Manual override layer (persisted)
+    const {
+        overrides: tripOverrides,
+        removeSegment,
+        restoreSegment,
+        moveSegmentToTrip,
+        clearAllOverrides,
+    } = useTripOverrides();
+
+    const displayTrips = useMemo(() => applyTripOverrides(trips, tripOverrides), [trips, tripOverrides]);
 
     // ── 動態即時匯率 ──────────────────────────────────────────────────
     useEffect(() => {
@@ -154,9 +172,13 @@ function App() {
         reader.readAsText(file);
     };
 
+    const refreshResolverRef = useRef(null);
+
     const login = useGoogleLogin({
         onSuccess: (codeResponse) => {
-            setAccessToken(codeResponse.access_token);
+            const expiresIn = Number(codeResponse.expires_in || 3600);
+            const expiresAt = Date.now() + expiresIn * 1000;
+            setAccessTokenState({ token: codeResponse.access_token, expiresAt });
             toast.success('Google 登入成功！');
         },
         onError: (error) => {
@@ -169,16 +191,66 @@ function App() {
         scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events'
     });
 
+    const silentLogin = useGoogleLogin({
+        onSuccess: (codeResponse) => {
+            const expiresIn = Number(codeResponse.expires_in || 3600);
+            const expiresAt = Date.now() + expiresIn * 1000;
+            setAccessTokenState({ token: codeResponse.access_token, expiresAt });
+            if (refreshResolverRef.current) {
+                refreshResolverRef.current(true);
+                refreshResolverRef.current = null;
+            }
+        },
+        onError: (error) => {
+            console.warn('Silent refresh failed:', error);
+            if (refreshResolverRef.current) {
+                refreshResolverRef.current(false);
+                refreshResolverRef.current = null;
+            }
+        },
+        // best-effort: some browsers will still show a prompt or block
+        prompt: 'none',
+        scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events'
+    });
+
     const logout = () => {
         googleLogout();
-        setAccessToken(null);
+        setAccessTokenState(null);
     };
+
+    const trySilentRefresh = async () => {
+        // no expiresAt => can't pre-judge; still can try when 401 happens
+        return await new Promise((resolve) => {
+            refreshResolverRef.current = resolve;
+            silentLogin();
+            // safety timeout (avoid hanging forever)
+            setTimeout(() => {
+                if (refreshResolverRef.current) {
+                    refreshResolverRef.current(false);
+                    refreshResolverRef.current = null;
+                }
+            }, 8000);
+        });
+    };
+
+    // Background refresh when close to expiry (best-effort)
+    useEffect(() => {
+        if (!accessToken || !accessTokenExpiresAt) return;
+        const interval = setInterval(() => {
+            const remaining = accessTokenExpiresAt - Date.now();
+            if (remaining < 10 * 60 * 1000) {
+                trySilentRefresh();
+            }
+        }, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [accessToken, accessTokenExpiresAt]);
 
     const handleSyncToDrive = async () => {
         if (!accessToken) return toast.error('請先登入 Google');
         setIsSyncing(true);
         const toastId = toast.loading('正在備份至 Google Drive…');
-        const res = await syncToDrive(tickets, tripLabels, accessToken);
+        let res = await syncToDrive(tickets, tripLabels, accessToken);
         setIsSyncing(false);
         if (res.success) {
             toast.success('雲端備份成功！', {
@@ -187,6 +259,16 @@ function App() {
             });
         } else {
             if (res.expired) {
+                // try once silently
+                const ok = await trySilentRefresh();
+                if (ok) {
+                    setIsSyncing(true);
+                    res = await syncToDrive(tickets, tripLabels, typeof accessTokenState === 'string' ? accessTokenState : (accessTokenState?.token || accessToken));
+                    setIsSyncing(false);
+                    if (res.success) {
+                        return toast.success('雲端備份成功！', { id: toastId, description: `資料已備份至 Google Drive。(檔案 ID: ${res.fileId})` });
+                    }
+                }
                 toast.error('登入已過期，請重新登入 Google', { id: toastId });
                 logout();
             } else {
@@ -199,7 +281,7 @@ function App() {
         if (!accessToken) return toast.error('請先登入 Google');
         setIsSyncing(true);
         const toastId = toast.loading('正在從 Google Drive 載入…');
-        const res = await loadFromDrive(accessToken);
+        let res = await loadFromDrive(accessToken);
         setIsSyncing(false);
         
         if (res.success) {
@@ -222,6 +304,28 @@ function App() {
             });
         } else {
             if (res.expired) {
+                const ok = await trySilentRefresh();
+                if (ok) {
+                    setIsSyncing(true);
+                    res = await loadFromDrive(typeof accessTokenState === 'string' ? accessTokenState : (accessTokenState?.token || accessToken));
+                    setIsSyncing(false);
+                    if (res.success) {
+                        toast.dismiss(toastId);
+                        return toast(`雲端讀取成功，共 ${res.tickets.length} 筆趟次`, {
+                            description: `找到的檔案：${res.foundFilesLog}`,
+                            action: {
+                                label: '確認覆寫',
+                                onClick: () => {
+                                    setTickets(res.tickets);
+                                    setTripLabels(res.tripLabels || {});
+                                    toast.success('雲端資料載入成功！');
+                                },
+                            },
+                            cancel: { label: '取消', onClick: () => {} },
+                            duration: 12000,
+                        });
+                    }
+                }
                 toast.error('登入已過期，請重新登入 Google', { id: toastId });
                 logout();
             } else {
@@ -234,7 +338,7 @@ function App() {
         if (!accessToken) return toast.error('請先登入 Google');
         setIsSyncing(true);
         const toastId = toast.loading('正在同步至 Google Calendar…');
-        const res = await syncToCalendar(tickets, accessToken);
+        let res = await syncToCalendar(tickets, accessToken);
         setIsSyncing(false);
         if (res.success) {
             if (res.updatedCalendarIds && Object.keys(res.updatedCalendarIds).length > 0) {
@@ -253,6 +357,23 @@ function App() {
                 duration: 6000,
             });
         } else {
+            if (res.expired) {
+                const ok = await trySilentRefresh();
+                if (ok) {
+                    setIsSyncing(true);
+                    res = await syncToCalendar(tickets, typeof accessTokenState === 'string' ? accessTokenState : (accessTokenState?.token || accessToken));
+                    setIsSyncing(false);
+                    if (res.success) {
+                        toast.dismiss(toastId);
+                        const deletedNote = res.deletedCount > 0 ? `，已自動清除 ${res.deletedCount} 個廢棄事件` : '';
+                        return toast.success('日曆同步成功！', {
+                            id: toastId,
+                            description: `共同步 ${res.count} 個航班事件${deletedNote}。${res.error ? `\n⚠️ 部分警告：${res.error}` : ''}`,
+                            duration: 6000,
+                        });
+                    }
+                }
+            }
             toast.error('日曆同步失敗', {
                 id: toastId,
                 description: res.error || 'Access Token 可能已過期，請重新登入。',
@@ -404,7 +525,18 @@ function App() {
                     </div>
 
                     <div className="p-4 md:p-6 bg-white min-h-[400px]">
-                        {activeTab === 'timeline' && <TripTimeline trips={trips} tripLabels={tripLabels} onUpdateLabel={(id, val) => setTripLabels(p => ({ ...p, [id]: val }))} />}
+                        {activeTab === 'timeline' && (
+                            <TripTimeline
+                                trips={displayTrips}
+                                tripLabels={tripLabels}
+                                onUpdateLabel={(id, val) => setTripLabels(p => ({ ...p, [id]: val }))}
+                                overrideState={tripOverrides}
+                                onRemoveSegment={removeSegment}
+                                onRestoreSegment={restoreSegment}
+                                onMoveSegmentToTrip={moveSegmentToTrip}
+                                onClearAllOverrides={clearAllOverrides}
+                            />
+                        )}
                         {activeTab === 'list' && <TicketList tickets={tickets} onDelete={deleteTicket} onEdit={handleEditTicket} />}
                         {activeTab === 'calendar' && <TripCalendar segments={segments} />}
                     </div>

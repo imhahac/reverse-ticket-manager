@@ -127,9 +127,13 @@ function addHoursToLocalStr(localStr, hours) {
     const overflowDays = Math.floor((h * 60 + m + hours * 60) / (24 * 60));
     let endDatePart = datePart;
     if (overflowDays > 0) {
-        const d = new Date(datePart + 'T00:00:00');
+        const [yy, mm, dd] = datePart.split('-').map(Number);
+        const d = new Date(yy, mm - 1, dd);
         d.setDate(d.getDate() + overflowDays);
-        endDatePart = d.toISOString().split('T')[0];
+        const y = d.getFullYear();
+        const m2 = String(d.getMonth() + 1).padStart(2, '0');
+        const d2 = String(d.getDate()).padStart(2, '0');
+        endDatePart = `${y}-${m2}-${d2}`;
     }
     return `${endDatePart}T${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
@@ -178,13 +182,13 @@ export const syncToCalendar = async (tickets, accessToken) => {
         
         tickets.forEach(t => {
             if (t.type === 'normal') {
-                if(t.outboundDate) allSegments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', flightNo: t.outboundFlightNo || '', from: t.departRegion, to: t.returnRegion, airline: t.airline });
-                if(t.inboundDate) allSegments.push({ id: t.id + '-2', ticket: t, date: t.inboundDate, time: t.inboundTime || '', flightNo: t.inboundFlightNo || '', from: t.returnRegion, to: t.departRegion, airline: t.airline });
+                if(t.outboundDate) allSegments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', arrivalDate: t.outboundArrivalDate || '', arrivalTime: t.outboundArrivalTime || '', flightNo: t.outboundFlightNo || '', from: t.departRegion, to: t.returnRegion, airline: t.airline });
+                if(t.inboundDate) allSegments.push({ id: t.id + '-2', ticket: t, date: t.inboundDate, time: t.inboundTime || '', arrivalDate: t.inboundArrivalDate || '', arrivalTime: t.inboundArrivalTime || '', flightNo: t.inboundFlightNo || '', from: t.returnRegion, to: t.departRegion, airline: t.airline });
             } else if (t.type === 'reverse') {
-                if(t.outboundDate) allSegments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', flightNo: t.outboundFlightNo || '', from: t.returnRegion, to: t.departRegion, airline: t.airline });
-                if(t.inboundDate) allSegments.push({ id: t.id + '-2', ticket: t, date: t.inboundDate, time: t.inboundTime || '', flightNo: t.inboundFlightNo || '', from: t.departRegion, to: t.returnRegion, airline: t.airline });
+                if(t.outboundDate) allSegments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', arrivalDate: t.outboundArrivalDate || '', arrivalTime: t.outboundArrivalTime || '', flightNo: t.outboundFlightNo || '', from: t.returnRegion, to: t.departRegion, airline: t.airline });
+                if(t.inboundDate) allSegments.push({ id: t.id + '-2', ticket: t, date: t.inboundDate, time: t.inboundTime || '', arrivalDate: t.inboundArrivalDate || '', arrivalTime: t.inboundArrivalTime || '', flightNo: t.inboundFlightNo || '', from: t.departRegion, to: t.returnRegion, airline: t.airline });
             } else {
-                if(t.outboundDate) allSegments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', flightNo: t.outboundFlightNo || '', from: t.departRegion, to: t.returnRegion, airline: t.airline });
+                if(t.outboundDate) allSegments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', arrivalDate: t.outboundArrivalDate || '', arrivalTime: t.outboundArrivalTime || '', flightNo: t.outboundFlightNo || '', from: t.departRegion, to: t.returnRegion, airline: t.airline });
             }
         });
 
@@ -238,13 +242,18 @@ export const syncToCalendar = async (tickets, accessToken) => {
             let startObj, endObj;
             if (seg.time) {
                 const dtStr  = `${seg.date}T${seg.time}:00`;
-                const eDtStr = addHoursToLocalStr(dtStr, 2);
+                const eDtStr = (seg.arrivalDate && seg.arrivalTime)
+                    ? `${seg.arrivalDate}T${seg.arrivalTime}:00`
+                    : addHoursToLocalStr(dtStr, 2);
                 startObj = { dateTime: dtStr,   timeZone: tz };
                 endObj   = { dateTime: eDtStr,  timeZone: tz };
             } else {
                 const dt = new Date(seg.date + 'T00:00:00');
                 dt.setDate(dt.getDate() + 1);
-                const nextDayStr = dt.toISOString().split('T')[0];
+                const y = dt.getFullYear();
+                const m2 = String(dt.getMonth() + 1).padStart(2, '0');
+                const d2 = String(dt.getDate()).padStart(2, '0');
+                const nextDayStr = `${y}-${m2}-${d2}`;
                 startObj = { date: seg.date };
                 endObj   = { date: nextDayStr };
             }

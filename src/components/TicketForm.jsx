@@ -18,8 +18,12 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
         returnRegion: 'NRT (東京成田)',
         outboundDate: '',
         outboundTime: '',
+        outboundArrivalDate: '',
+        outboundArrivalTime: '',
         inboundDate: '',
         inboundTime: '',
+        inboundArrivalDate: '',
+        inboundArrivalTime: '',
         outboundFlightNo: '',
         inboundFlightNo: '',
         type: 'normal',
@@ -29,7 +33,8 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
 
     React.useEffect(() => {
         if (editingTicket) {
-            setFormData(editingTicket);
+            // 舊資料可能缺少新欄位，這裡用 default 補齊避免 controlled input 警告
+            setFormData({ ...defaultFormData, ...editingTicket });
         } else {
             setFormData(defaultFormData);
         }
@@ -49,12 +54,46 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
             }
         }
 
-        const outDateTimeStr = formData.outboundTime ? `${formData.outboundDate}T${formData.outboundTime}` : `${formData.outboundDate}T00:00:00`;
-        const inDateTimeStr = formData.inboundTime ? `${formData.inboundDate}T${formData.inboundTime}` : `${formData.inboundDate}T00:00:00`;
+        const buildLocalDateTimeStr = (date, time) => {
+            if (!date) return '';
+            if (!time) return `${date}T00:00:00`;
+            // time input is "HH:mm"
+            return `${date}T${time}:00`;
+        };
+
+        const outDateTimeStr = buildLocalDateTimeStr(formData.outboundDate, formData.outboundTime);
+        const inDateTimeStr = buildLocalDateTimeStr(formData.inboundDate, formData.inboundTime);
+
+        const validateArrivalPair = (label, departDate, departTime, arrivalDate, arrivalTime) => {
+            const hasArrDate = Boolean(arrivalDate);
+            const hasArrTime = Boolean(arrivalTime);
+            if (hasArrDate !== hasArrTime) {
+                toast.error(`${label}：抵達日期/時間需同時填寫或同時留空`);
+                return false;
+            }
+            if (hasArrDate && hasArrTime) {
+                const departStr = buildLocalDateTimeStr(departDate, departTime);
+                const arriveStr = buildLocalDateTimeStr(arrivalDate, arrivalTime);
+                if (departStr && new Date(arriveStr) < new Date(departStr)) {
+                    toast.error(`${label}：抵達時間不能早於出發時間`);
+                    return false;
+                }
+            }
+            return true;
+        };
 
         if (formData.type !== 'oneway' && new Date(inDateTimeStr) < new Date(outDateTimeStr)) {
             toast.error('同一張發票中，回程段的日期時間不能早於去程段喔！');
             return;
+        }
+
+        if (!validateArrivalPair('第 1 段航班', formData.outboundDate, formData.outboundTime, formData.outboundArrivalDate, formData.outboundArrivalTime)) {
+            return;
+        }
+        if (formData.type !== 'oneway') {
+            if (!validateArrivalPair('第 2 段航班', formData.inboundDate, formData.inboundTime, formData.inboundArrivalDate, formData.inboundArrivalTime)) {
+                return;
+            }
         }
 
         const newTicket = {
@@ -227,6 +266,26 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
                             </div>
                         </div>
                         <div>
+                            <label className="block text-xs font-bold text-indigo-800 mb-1">
+                                抵達日期與時間 (選填)
+                            </label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <input
+                                    type="date"
+                                    className="flex-1 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
+                                    value={formData.outboundArrivalDate || ''}
+                                    onChange={e => setFormData({ ...formData, outboundArrivalDate: e.target.value })}
+                                />
+                                <input
+                                    type="time"
+                                    step="600"
+                                    className="w-full sm:w-32 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
+                                    value={formData.outboundArrivalTime || ''}
+                                    onChange={e => setFormData({ ...formData, outboundArrivalTime: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <div>
                             <label className="block text-xs font-bold text-indigo-800 mb-1">航班編號 (選填)</label>
                             <input
                                 placeholder="例: BR192"
@@ -260,6 +319,26 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
                                         className="w-full sm:w-32 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
                                         value={formData.inboundTime}
                                         onChange={e => setFormData({ ...formData, inboundTime: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-indigo-800 mb-1">
+                                    抵達日期與時間 (選填)
+                                </label>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <input
+                                        type="date"
+                                        className="flex-1 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
+                                        value={formData.inboundArrivalDate || ''}
+                                        onChange={e => setFormData({ ...formData, inboundArrivalDate: e.target.value })}
+                                    />
+                                    <input
+                                        type="time"
+                                        step="600"
+                                        className="w-full sm:w-32 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
+                                        value={formData.inboundArrivalTime || ''}
+                                        onChange={e => setFormData({ ...formData, inboundArrivalTime: e.target.value })}
                                     />
                                 </div>
                             </div>
