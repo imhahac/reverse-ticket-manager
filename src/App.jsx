@@ -47,6 +47,66 @@ function App() {
 
     const displayTrips = useMemo(() => applyTripOverrides(trips, tripOverrides), [trips, tripOverrides]);
 
+    const decoratedTrips = useMemo(() => {
+        const now = Date.now();
+
+        const getSegments = (trip) => {
+            if (Array.isArray(trip.segments) && trip.segments.length > 0) return trip.segments;
+            const segs = [];
+            if (trip.outbound) segs.push(trip.outbound);
+            if (Array.isArray(trip.connections)) segs.push(...trip.connections);
+            if (trip.inbound) segs.push(trip.inbound);
+            return segs;
+        };
+
+        const buildDateTime = (date, time, fallbackTime) => {
+            if (!date) return null;
+            const t = time || fallbackTime;
+            if (!t) return null;
+            const d = new Date(`${date}T${t}:00`);
+            return isNaN(d.getTime()) ? null : d;
+        };
+
+        return displayTrips.map(trip => {
+            const segs = getSegments(trip);
+            if (!segs.length) return { ...trip, segments: [], tripStartAt: null, tripEndAt: null, isPast: false, totalCostTWD: 0 };
+
+            const firstSeg = segs[0];
+            const lastSeg = segs[segs.length - 1];
+
+            const tripStartAt = buildDateTime(firstSeg.date, firstSeg.time, '00:00');
+
+            let tripEndAt = null;
+            if (lastSeg.arrivalDate && lastSeg.arrivalTime) {
+                tripEndAt = buildDateTime(lastSeg.arrivalDate, lastSeg.arrivalTime, null);
+            }
+            if (!tripEndAt && lastSeg.date && lastSeg.time) {
+                const dep = buildDateTime(lastSeg.date, lastSeg.time, null);
+                if (dep) tripEndAt = new Date(dep.getTime() + 2 * 60 * 60 * 1000);
+            }
+            if (!tripEndAt && lastSeg.date) {
+                tripEndAt = buildDateTime(lastSeg.date, '23:59', '23:59');
+            }
+
+            const totalCostTWD = segs.reduce((sum, seg) => {
+                const base = seg.ticket?.priceTWD ?? seg.ticket?.price ?? 0;
+                const cost = seg.ticket?.type === 'oneway' ? base : base / 2;
+                return sum + cost;
+            }, 0);
+
+            const isPast = tripEndAt ? tripEndAt.getTime() < now : false;
+
+            return {
+                ...trip,
+                segments: segs,
+                tripStartAt,
+                tripEndAt,
+                isPast,
+                totalCostTWD,
+            };
+        });
+    }, [displayTrips]);
+
     // ── 動態即時匯率 ──────────────────────────────────────────────────
     useEffect(() => {
         fetch('https://api.exchangerate-api.com/v4/latest/TWD')
@@ -384,6 +444,15 @@ function App() {
 
     const totalPriceTWD = tickets.reduce((sum, t) => sum + (t.priceTWD || t.price), 0);
 
+    const pastCostTWD = useMemo(
+        () => decoratedTrips.reduce((sum, trip) => sum + (trip.isPast ? (trip.totalCostTWD || 0) : 0), 0),
+        [decoratedTrips]
+    );
+    const futureCostTWD = useMemo(
+        () => decoratedTrips.reduce((sum, trip) => sum + (!trip.isPast ? (trip.totalCostTWD || 0) : 0), 0),
+        [decoratedTrips]
+    );
+
     return (
         <div className="min-h-screen p-4 md:p-8 bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900">
             <div className="max-w-5xl mx-auto">
@@ -480,6 +549,10 @@ function App() {
                         <div className="relative z-10">
                             <p className="text-slate-300 font-medium mb-1">總預算支出 (TWD)</p>
                             <p className="text-3xl font-extrabold">${totalPriceTWD.toLocaleString()}</p>
+                            <div className="mt-2 text-xs text-slate-200 space-y-0.5">
+                                <p>歷史行程：${pastCostTWD.toLocaleString()}</p>
+                                <p>未來行程：${futureCostTWD.toLocaleString()}</p>
+                            </div>
                         </div>
                         <div className="text-6xl font-black absolute -right-2 -bottom-6 text-white opacity-[0.03]">$</div>
                     </div>
