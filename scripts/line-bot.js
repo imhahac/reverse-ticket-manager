@@ -40,9 +40,32 @@ const run = async () => {
         
         let credentials;
         try {
-            credentials = JSON.parse(credentialsJson);
+            // 先 trim，去除 Secret 前後可能多出的空白/換行
+            const raw = credentialsJson.trim();
+            credentials = JSON.parse(raw);
         } catch (e) {
-            throw new Error("Invalid format for GOOGLE_SERVICE_ACCOUNT_CREDENTIALS (must be JSON)");
+            // 常見問題：GitHub Secret 貼入時 private_key 裡的 \n 被展開成真正換行
+            // 嘗試修復：把真正的換行還原成 \n 再 parse
+            try {
+                const fixed = credentialsJson
+                    .trim()
+                    // 把 JSON 字串值內的實際換行（key 欄位內）還原為 \n 跳脫字元
+                    // 策略：只處理 "-----BEGIN ... KEY-----" 區塊內的換行
+                    .replace(/("private_key"\s*:\s*")([\s\S]*?)(")/g, (_, pre, key, post) =>
+                        pre + key.replace(/\n/g, '\\n') + post
+                    );
+                credentials = JSON.parse(fixed);
+                console.log('GOOGLE_SERVICE_ACCOUNT_CREDENTIALS: 已自動修復 private_key 換行問題');
+            } catch (e2) {
+                // 印出前 120 字元協助 Debug
+                const preview = credentialsJson.slice(0, 120).replace(/\n/g, '↵');
+                throw new Error(
+                    `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS 無法解析為 JSON。\n` +
+                    `原始錯誤: ${e.message}\n` +
+                    `內容預覽（前120字）: ${preview}\n\n` +
+                    `請確認 GitHub Secret 貼入的是完整的服務帳戶 JSON 金鑰檔內容。`
+                );
+            }
         }
 
         const auth = new google.auth.GoogleAuth({
