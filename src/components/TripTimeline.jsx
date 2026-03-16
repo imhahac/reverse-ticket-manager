@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowRight, Edit3, Check, X, PlaneTakeoff, PlaneLanding, Clock, CheckCircle2 } from 'lucide-react';
-import { formatDateWithDay, calculateTripDays } from '../utils/dateHelpers';
+import { AlertTriangle, ArrowRight, Edit3, Check, X, PlaneTakeoff, PlaneLanding, Clock, CheckCircle2, Plane } from 'lucide-react';
+import { formatDateWithDay } from '../utils/dateHelpers';
 
 export default function TripTimeline({
     trips,
@@ -94,11 +94,11 @@ export default function TripTimeline({
         </div>
     );
 
-    const futureTrips = trips.filter(t => !t.isPast);
-    const pastTrips = trips.filter(t => t.isPast);
-
     const [showFuture, setShowFuture] = useState(true);
     const [showPast, setShowPast] = useState(true);
+
+    const futureTrips = trips.filter(t => !t.isPast);
+    const pastTrips = trips.filter(t => t.isPast);
 
     return (
         <div className="space-y-6">
@@ -130,7 +130,8 @@ export default function TripTimeline({
                 </div>
                 {showFuture && futureTrips.map((trip, index) => {
                 const comboKey = trip.id;
-                
+
+                // 直接讀取 decoratedTrips 已計算的欄位
                 const segments = Array.isArray(trip.segments) && trip.segments.length > 0
                     ? trip.segments
                     : (() => {
@@ -141,27 +142,12 @@ export default function TripTimeline({
                         return segs;
                     })();
 
-                const totalCostTWD = segments.reduce((sum, seg) => {
-                    const cost = seg.ticket.type === 'oneway' ? seg.ticket.priceTWD : seg.ticket.priceTWD / 2;
-                    return sum + cost;
-                }, 0);
-
-                const customLabel = tripLabels[comboKey] || `Trip ${index + 1}`;
-
-                let isOpenJaw = false;
-                if (segments.length >= 2) {
-                    const outCode = (segments[0]?.to || '').split(' ')[0];
-                    const inCode = (segments[segments.length - 1]?.from || '').split(' ')[0];
-                    if (outCode && inCode && outCode !== inCode) isOpenJaw = true;
-                }
-
-                let tripDays = null;
-                if (trip.isComplete && segments.length >= 2) {
-                    tripDays = calculateTripDays(segments[0]?.date, segments[segments.length - 1]?.date);
-                }
-                const costPerDay = tripDays && tripDays > 0 ? Math.round(totalCostTWD / tripDays) : null;
-
+                const totalCostTWD = trip.totalCostTWD ?? 0;
+                const isOpenJaw = trip.isOpenJaw ?? false;
+                const tripDays = trip.tripDays ?? null;
+                const costPerDay = trip.costPerDay ?? null;
                 const isExternalOnly = trip.isExternalOnly;
+                const customLabel = tripLabels[comboKey] || `Trip ${index + 1}`;
 
                 return (
                     <div
@@ -302,8 +288,9 @@ export default function TripTimeline({
                                         </div>
 
                                         {layoverText && (
-                                            <div className="px-4 py-2 -mt-1 text-[12px] font-bold text-slate-600 bg-white border border-dashed border-slate-200 rounded-xl">
-                                                ⏳ {layoverCode || '轉機'} 停留 {layoverText}
+                                            <div className="flex items-center justify-center gap-2 py-1.5 px-4 -mt-1 bg-amber-50 border border-dashed border-amber-300 rounded-xl text-amber-700 text-[12px] font-bold">
+                                                <Plane className="w-3.5 h-3.5 rotate-90 shrink-0" />
+                                                {layoverCode || '転機'} 轉機 {layoverText}
                                             </div>
                                         )}
                                     </React.Fragment>
@@ -331,7 +318,8 @@ export default function TripTimeline({
                 </div>
                 {showPast && pastTrips.map((trip, index) => {
                 const comboKey = trip.id;
-                
+
+                // 直接讀取 decoratedTrips 已計算的欄位
                 const segments = Array.isArray(trip.segments) && trip.segments.length > 0
                     ? trip.segments
                     : (() => {
@@ -342,26 +330,11 @@ export default function TripTimeline({
                         return segs;
                     })();
 
-                const totalCostTWD = segments.reduce((sum, seg) => {
-                    const cost = seg.ticket.type === 'oneway' ? seg.ticket.priceTWD : seg.ticket.priceTWD / 2;
-                    return sum + cost;
-                }, 0);
-
-                const customLabel = tripLabels[comboKey] || `Trip ${index + 1}`;
-
-                let isOpenJaw = false;
-                if (segments.length >= 2) {
-                    const outCode = (segments[0]?.to || '').split(' ')[0];
-                    const inCode = (segments[segments.length - 1]?.from || '').split(' ')[0];
-                    if (outCode && inCode && outCode !== inCode) isOpenJaw = true;
-                }
-
-                let tripDays = null;
-                if (trip.isComplete && segments.length >= 2) {
-                    tripDays = calculateTripDays(segments[0]?.date, segments[segments.length - 1]?.date);
-                }
-
+                const totalCostTWD = trip.totalCostTWD ?? 0;
+                const isOpenJaw = trip.isOpenJaw ?? false;
+                const tripDays = trip.tripDays ?? null;
                 const isExternalOnly = trip.isExternalOnly;
+                const customLabel = tripLabels[comboKey] || `Trip ${index + 1}`;
 
                 return (
                     <div
@@ -497,8 +470,9 @@ export default function TripTimeline({
                                         </div>
 
                                         {layoverText && (
-                                            <div className="px-4 py-2 -mt-1 text-[12px] font-bold text-slate-600 bg-white border border-dashed border-slate-200 rounded-xl">
-                                                ⏳ {layoverCode || '轉機'} 停留 {layoverText}
+                                            <div className="flex items-center justify-center gap-2 py-1.5 px-4 -mt-1 bg-amber-50 border border-dashed border-amber-300 rounded-xl text-amber-700 text-[12px] font-bold">
+                                                <Plane className="w-3.5 h-3.5 rotate-90 shrink-0" />
+                                                {layoverCode || '転機'} 轉機 {layoverText}
                                             </div>
                                         )}
                                     </React.Fragment>

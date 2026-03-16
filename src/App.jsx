@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Plane, Calendar, Trash2, ArrowRight, BookOpen, AlertCircle, CheckCircle2, ListFilter, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn } from 'lucide-react';
+import { calculateTripDays } from './utils/dateHelpers';
 import { useGoogleLogin, googleLogout } from '@react-oauth/google';
 import { syncToDrive, loadFromDrive, syncToCalendar } from './utils/googleSync';
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -69,7 +70,7 @@ function App() {
 
         return displayTrips.map(trip => {
             const segs = getSegments(trip);
-            if (!segs.length) return { ...trip, segments: [], tripStartAt: null, tripEndAt: null, isPast: false, totalCostTWD: 0 };
+            if (!segs.length) return { ...trip, segments: [], tripStartAt: null, tripEndAt: null, isPast: false, totalCostTWD: 0, isOpenJaw: false, tripDays: null, costPerDay: null };
 
             const firstSeg = segs[0];
             const lastSeg = segs[segs.length - 1];
@@ -96,6 +97,21 @@ function App() {
 
             const isPast = tripEndAt ? tripEndAt.getTime() < now : false;
 
+            // 邏輯層集中：isOpenJaw / tripDays / costPerDay
+            const isOpenJaw = segs.length >= 2
+                ? (() => {
+                    const outCode = (firstSeg.to || '').split(' ')[0];
+                    const inCode = (lastSeg.from || '').split(' ')[0];
+                    return Boolean(outCode && inCode && outCode !== inCode);
+                })()
+                : false;
+
+            const tripDays = (trip.isComplete && segs.length >= 2)
+                ? calculateTripDays(firstSeg.date, lastSeg.date)
+                : null;
+
+            const costPerDay = (tripDays && tripDays > 0) ? Math.round(totalCostTWD / tripDays) : null;
+
             return {
                 ...trip,
                 segments: segs,
@@ -103,6 +119,9 @@ function App() {
                 tripEndAt,
                 isPast,
                 totalCostTWD,
+                isOpenJaw,
+                tripDays,
+                costPerDay,
             };
         });
     }, [displayTrips]);
@@ -452,6 +471,7 @@ function App() {
         () => decoratedTrips.reduce((sum, trip) => sum + (!trip.isPast ? (trip.totalCostTWD || 0) : 0), 0),
         [decoratedTrips]
     );
+    const sunkCostTWD = Math.max(0, totalPriceTWD - futureCostTWD - pastCostTWD);
 
     return (
         <div className="min-h-screen p-4 md:p-8 bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900">
@@ -530,28 +550,38 @@ function App() {
                 <Instructions />
 
                 {/* Dashboard 統計 */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
                         <div className="relative z-10">
-                            <p className="text-indigo-100 font-medium mb-1">購入機票總數</p>
+                            <p className="text-indigo-100 font-medium mb-1 text-sm">購入機票總數</p>
                             <p className="text-3xl font-extrabold">{tickets.length} 套</p>
                         </div>
-                        <ListFilter className="w-24 h-24 absolute -right-4 -bottom-4 text-white opacity-10" />
+                        <ListFilter className="w-20 h-20 absolute -right-3 -bottom-3 text-white opacity-10" />
                     </div>
                     <div className="bg-gradient-to-br from-emerald-400 to-emerald-500 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
                         <div className="relative z-10">
-                            <p className="text-emerald-50 font-medium mb-1">精算預測趟次</p>
-                            <p className="text-3xl font-extrabold">{trips.length} 趟次</p>
+                            <p className="text-emerald-50 font-medium mb-1 text-sm">精算趟次</p>
+                            <p className="text-3xl font-extrabold">{trips.length} 趟</p>
                         </div>
-                        <Plane className="w-24 h-24 absolute -right-4 -bottom-4 text-white opacity-10" />
+                        <Plane className="w-20 h-20 absolute -right-3 -bottom-3 text-white opacity-10" />
                     </div>
-                    <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
+                    <div className="col-span-2 bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
                         <div className="relative z-10">
-                            <p className="text-slate-300 font-medium mb-1">總預算支出 (TWD)</p>
-                            <p className="text-3xl font-extrabold">${totalPriceTWD.toLocaleString()}</p>
-                            <div className="mt-2 text-xs text-slate-200 space-y-0.5">
-                                <p>歷史行程：${pastCostTWD.toLocaleString()}</p>
-                                <p>未來行程：${futureCostTWD.toLocaleString()}</p>
+                            <p className="text-slate-300 font-medium mb-2 text-sm">🧾 入帳總計 (TWD)</p>
+                            <p className="text-3xl font-extrabold mb-3">${totalPriceTWD.toLocaleString()}</p>
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                                <div className="bg-white/10 rounded-lg px-2 py-1.5">
+                                    <p className="text-slate-400 mb-0.5">🗓️ 未來待出行</p>
+                                    <p className="font-bold text-emerald-300">${futureCostTWD.toLocaleString()}</p>
+                                </div>
+                                <div className="bg-white/10 rounded-lg px-2 py-1.5">
+                                    <p className="text-slate-400 mb-0.5">✅ 歷史已實現</p>
+                                    <p className="font-bold text-slate-200">${pastCostTWD.toLocaleString()}</p>
+                                </div>
+                                <div className={`rounded-lg px-2 py-1.5 ${sunkCostTWD > 0 ? 'bg-amber-500/20' : 'bg-white/10'}`}>
+                                    <p className={`mb-0.5 ${sunkCostTWD > 0 ? 'text-amber-300' : 'text-slate-400'}`}>⚠️ 未配對成本</p>
+                                    <p className={`font-bold ${sunkCostTWD > 0 ? 'text-amber-300' : 'text-slate-200'}`}>${sunkCostTWD.toLocaleString()}</p>
+                                </div>
                             </div>
                         </div>
                         <div className="text-6xl font-black absolute -right-2 -bottom-6 text-white opacity-[0.03]">$</div>
@@ -600,7 +630,7 @@ function App() {
                     <div className="p-4 md:p-6 bg-white min-h-[400px]">
                         {activeTab === 'timeline' && (
                             <TripTimeline
-                                trips={displayTrips}
+                                trips={decoratedTrips}
                                 tripLabels={tripLabels}
                                 onUpdateLabel={(id, val) => setTripLabels(p => ({ ...p, [id]: val }))}
                                 overrideState={tripOverrides}

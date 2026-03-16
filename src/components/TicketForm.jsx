@@ -57,47 +57,65 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
         const buildLocalDateTimeStr = (date, time) => {
             if (!date) return '';
             if (!time) return `${date}T00:00:00`;
-            // time input is "HH:mm"
             return `${date}T${time}:00`;
         };
 
-        const outDateTimeStr = buildLocalDateTimeStr(formData.outboundDate, formData.outboundTime);
-        const inDateTimeStr = buildLocalDateTimeStr(formData.inboundDate, formData.inboundTime);
+        const addOneDay = (dateStr) => {
+            const d = new Date(`${dateStr}T00:00:00`);
+            d.setDate(d.getDate() + 1);
+            return d.toISOString().split('T')[0];
+        };
 
-        const validateArrivalPair = (label, departDate, departTime, arrivalDate, arrivalTime) => {
+        // Smart Cross-Day Fix：若抵達時間早於出發時間，自動 +1 天（紅眼航班）
+        // 回傳修正後的 { arrivalDate, arrivalTime }，或 null 代表驗證失敗
+        const autoFixArrival = (label, departDate, departTime, arrivalDate, arrivalTime) => {
             const hasArrDate = Boolean(arrivalDate);
             const hasArrTime = Boolean(arrivalTime);
             if (hasArrDate !== hasArrTime) {
                 toast.error(`${label}：抵達日期/時間需同時填寫或同時留空`);
-                return false;
+                return null;
             }
-            if (hasArrDate && hasArrTime) {
-                const departStr = buildLocalDateTimeStr(departDate, departTime);
-                const arriveStr = buildLocalDateTimeStr(arrivalDate, arrivalTime);
-                if (departStr && new Date(arriveStr) < new Date(departStr)) {
-                    toast.error(`${label}：抵達時間不能早於出發時間`);
-                    return false;
+            if (!hasArrDate && !hasArrTime) return { arrivalDate, arrivalTime, fixed: false };
+
+            const departStr = buildLocalDateTimeStr(departDate, departTime);
+            const arriveStr = buildLocalDateTimeStr(arrivalDate, arrivalTime);
+            if (departStr && new Date(arriveStr) < new Date(departStr)) {
+                // 只有「同日填錯」才自動修正；若跨日後還是早於出發，才報錯
+                const fixedDate = addOneDay(arrivalDate);
+                const fixedStr = buildLocalDateTimeStr(fixedDate, arrivalTime);
+                if (new Date(fixedStr) < new Date(departStr)) {
+                    toast.error(`${label}：抵達時間早於出發時間，且無法以 +1 天修正`);
+                    return null;
                 }
+                toast.info(`✈️ ${label}：已自動修正抵達日期 +1 天（紅眼航班跨日）`);
+                return { arrivalDate: fixedDate, arrivalTime, fixed: true };
             }
-            return true;
+            return { arrivalDate, arrivalTime, fixed: false };
         };
+
+        const outDateTimeStr = buildLocalDateTimeStr(formData.outboundDate, formData.outboundTime);
+        const inDateTimeStr = buildLocalDateTimeStr(formData.inboundDate, formData.inboundTime);
 
         if (formData.type !== 'oneway' && new Date(inDateTimeStr) < new Date(outDateTimeStr)) {
             toast.error('同一張發票中，回程段的日期時間不能早於去程段喔！');
             return;
         }
 
-        if (!validateArrivalPair('第 1 段航班', formData.outboundDate, formData.outboundTime, formData.outboundArrivalDate, formData.outboundArrivalTime)) {
-            return;
-        }
+        const seg1Fix = autoFixArrival('第 1 段航班', formData.outboundDate, formData.outboundTime, formData.outboundArrivalDate, formData.outboundArrivalTime);
+        if (seg1Fix === null) return;
+
+        let seg2Fix = { arrivalDate: formData.inboundArrivalDate, arrivalTime: formData.inboundArrivalTime, fixed: false };
         if (formData.type !== 'oneway') {
-            if (!validateArrivalPair('第 2 段航班', formData.inboundDate, formData.inboundTime, formData.inboundArrivalDate, formData.inboundArrivalTime)) {
-                return;
-            }
+            seg2Fix = autoFixArrival('第 2 段航班', formData.inboundDate, formData.inboundTime, formData.inboundArrivalDate, formData.inboundArrivalTime);
+            if (seg2Fix === null) return;
         }
 
         const newTicket = {
             ...formData,
+            outboundArrivalDate: seg1Fix.arrivalDate,
+            outboundArrivalTime: seg1Fix.arrivalTime,
+            inboundArrivalDate: seg2Fix.arrivalDate,
+            inboundArrivalTime: seg2Fix.arrivalTime,
             id: editingTicket ? editingTicket.id : Date.now().toString(),
             calendarIds: editingTicket ? editingTicket.calendarIds : undefined,
             price: Number(formData.price),
