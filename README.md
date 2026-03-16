@@ -5,93 +5,141 @@
 系統能將多張不同方向的來回機票（正向票與反向票）自動解構，並依照時間軸重新配對成你實際出發的飛行「趟次」，清楚顯示每一趟的去程與回程，避免行程日期混淆。
 
 ## 線上 Demo
+
 [https://imhahac.github.io/reverse-ticket-manager/](https://imhahac.github.io/reverse-ticket-manager/)
 
-## 🌟 核心功能 (v5.0 智慧配對與精確同步版)
+---
 
-*   🎟️ **機票訂單管理**：手動輸入機票價格、航班日期與 **精確時間 (HH:mm)**，並高度彈性指定為「正向票」(台灣出發)、「反向票」(外站出發)，或是「單程票 (One-way)」。支援外幣並自動帶入基準匯率換算。
-*   ✏️ **訂單修改與管理**：支援隨時修改已購買的機票訂單。填錯日期、票價或航班編號都能無縫更新，系統會自動重新精算與配對您的趟次！
-*   ✈️ **智慧航班配對**：系統自動將所有機票拆分成單程航段，按照時間先後順序排列，並以「台灣」為起終點進行 **智慧趟次配對 (Smart Grouping)**，清楚顯示真正的出國趟次。
-*   🔀 **不同點進出 (Open-Jaw)**：支援寬鬆比對。即使去回程不同點（例如飛東京、從大阪回），系統只要認得是「出台灣 ➜ 回台灣」就會配對，並聰明標記出這是一趟「不同點進出」行程。
-*   ☁️ **雲端跨裝置同步**：無須建置後端伺服器！前端透過 Google OAuth 直接將您的機票資料 (`reverse-tickets.json`) 安全儲存於您個人的 Google Drive 中，並可隨時載入覆寫。
-*   📅 **智慧同步 Google 日曆 (升級)**：支援精準時分寫入日曆。系統會記住建立過的事件 ID，若修改航班再次同步，會 **自動覆寫更新現有事件**，不再產生重複的日曆行程！
-*   🔔 **LINE Bot 自動推播 (升級)**：結合 GitHub Actions 每日定時檢查機票表，只要是「3天後」或「明天」出發的航班，您的 LINE 就會收到包含 **航點、精準時間** 的貼心行前提醒！
+## 🌟 核心功能 (v6.0)
 
-## 🏗️ 系統架構理念 (Serverless)
+| 功能 | 說明 |
+|---|---|
+| 🎟️ **機票訂單管理** | 支援正向票、反向票、單程票；輸入精確時間 (HH:mm)；多幣別 (TWD/JPY/USD) + 即時匯率 |
+| ✏️ **訂單修改** | 隨時修改日期、票價、航班編號，系統自動重新精算配對 |
+| ✈️ **智慧趟次配對** | 以台灣機場為邊界，自動配對出國趟次；支援外站轉機、不同點進出 (Open-Jaw) |
+| 🌙 **紅眼航班自動校正** | 填入抵達時間早於出發時間時，系統自動 **+1 天**，不報錯，直接修正 |
+| ⏳ **轉機時間視覺化** | 中轉航段自動計算停留時間，顯示「✈ NRT 轉機 3h15m」標籤 |
+| 💰 **費用三分類統計** | 入帳總計 / 未來待出行 / 歷史已實現 / 未配對成本（孤兒票警示） |
+| 🔀 **手動重組航段** | 可拖曳航段跨趟次調整，或點擊「從趟次移除」重組配對 |
+| ☁️ **Google Drive 同步** | 無後端伺服器，前端直接授權備份至個人 Google Drive |
+| 📅 **Google 日曆同步** | 精準時分寫入日曆；重複同步自動更新，不產生重複事件 |
+| 🔔 **LINE Bot 行前提醒** | GitHub Actions 每日定時檢查，提前 3 天與前 1 天自動推播 |
 
-全系統採用 **無伺服器 (Serverless)** 方案降低維運成本，並且強調 **隱私至上**。您的資料只存在於您的瀏覽器、以及您個人的 Google 帳號與 GitHub 儲存庫內。
+---
 
-*   **前端介面**: React (Vite) + Tailwind CSS + `@react-oauth/google`
-*   **資料儲存**: LocalStorage (未登入狀態) / Google Drive API (登入狀態)
-*   **日曆同步**: Google Calendar API
-*   **自動推播**: GitHub Actions (Cron) + Node.js Script + LINE Messaging API
+## 🏗️ 系統架構
+
+```
+前端（React + Vite + Tailwind CSS）
+├── useTrips          核心配對引擎（拆票 → 排序 → 台灣邊界配對）
+├── useTripOverrides  手動重組的持久化層（LocalStorage）
+├── decoratedTrips    衍生資料層（isPast / totalCostTWD / isOpenJaw / ...）
+└── UI Components
+    ├── TripTimeline  趟次時間軸（純渲染，不做計算）
+    ├── TicketList    購買清單管理
+    └── TripCalendar  月曆視角
+
+後端排程（GitHub Actions）
+└── scripts/line-bot.js  Node.js → 讀 Drive → 推播 LINE
+```
+
+**資料流向**：LocalStorage ↔ 前端 ↔ (可選) Google Drive / Calendar / LINE
+
+---
 
 ## 什麼是「反向票」？
 
 反向票的核心邏輯是將兩張不同方向的來回票串接，在特定節慶或連假期間，外站出發的價格通常遠低於台灣出發。
-*   **第 1 套票 (反向)**：日本 ➜ 台灣（今年 5 月）+ 台灣 ➜ 日本（今年 9 月）
-*   **第 2 套票 (正向)**：台灣 ➜ 日本（今年 5 月）+ 日本 ➜ 台灣（今年 9 月）
-**組合後的實際行程**：
-*   趟次 1：台灣 (5月去, 正向) ➜ 日本 ➜ 台灣 (5月回, 反向)
-*   趟次 2：台灣 (9月去, 反向) ➜ 日本 ➜ 台灣 (9月回, 正向)
 
-這套系統就是用來幫你清楚釐清這多段交錯的航程，並精算平均成本。
+- **第 1 套票（反向）**：日本 ➜ 台灣（今年 5 月）+ 台灣 ➜ 日本（今年 9 月）
+- **第 2 套票（正向）**：台灣 ➜ 日本（今年 5 月）+ 日本 ➜ 台灣（今年 9 月）
+
+**組合後的實際行程**：
+- 趟次 1：台灣（5月去，正向）➜ 日本 ➜ 台灣（5月回，反向）
+- 趟次 2：台灣（9月去，反向）➜ 日本 ➜ 台灣（9月回，正向）
+
+本系統幫你清楚釐清這多段交錯的航程，並精算平均成本。
+
+---
 
 ## 🛠️ 安裝與部署指南
 
-如果您想自己建置 (Self-host) 或測試這套雲端系統，請參考以下詳細步驟。整個架構分為「前端授權」與「後端排程」，皆不需自建伺服器。
+全系統採用 **Serverless** 方案，不需自建伺服器。分為「前端授權」與「後端排程」兩部分。
 
-### 第一步：申請 Google OAuth Client ID (.env)
+### 第一步：申請 Google OAuth Client ID
 
-因為系統需要連接個人的 Google Drive 與 Calendar，您必須自行去 Google Cloud 申請一把專屬鑰匙：
-1. 進入 [Google Cloud Console](https://console.cloud.google.com/)。
-2. 點擊頂部建立一個全新的專案 (例如：`Reverse Ticket App`)。
-3. **⚠️ 啟用 API (關鍵！不然會報錯 403)**：
-   在左側選單的「API 和服務」>「啟用 API 和服務」，搜尋並點擊「**啟用 (Enable)**」以下兩個服務：
-   * `Google Drive API`
-   * `Google Calendar API`
-4. **設定 OAuth 同意畫面**：
-   在「API 和服務」>「OAuth 同意畫面」，選擇「外部 (External)」。
-   填妥必填的 App 名稱與信箱。在 **「測試使用者 (Test users)」** 區塊，**務必加入您自己平常使用的 Google 信箱！**
-5. **建立憑證**：
-   在左側點擊「憑證 (Credentials)」，選擇「建立憑證」>「OAuth 用戶端 ID」。
-   應用程式類型選「網頁應用程式 (Web application)」。
-   在 **「已授權的 JavaScript 來源」** 加入：
-   * `http://localhost:5173` (本地測試用)
-   * `https://您的GitHub帳號.github.io` (部署後用)
-6. 建立後，您會獲得一串 Client ID。請在專案根目錄建立 `.env.local` 檔案填入：
+前端需要 Google OAuth 金鑰來存取個人的 Drive 與 Calendar：
+
+1. 進入 [Google Cloud Console](https://console.cloud.google.com/)，建立新專案。
+2. **啟用 API（重要！）**：到「API 和服務 > 啟用 API」，啟用 **Google Drive API** 與 **Google Calendar API**。
+3. **設定 OAuth 同意畫面**：類型選「外部 (External)」；在「測試使用者」加入你自己的 Google 信箱。
+4. **建立憑證**：「憑證 > 建立憑證 > OAuth 用戶端 ID」，類型選「網頁應用程式」。
+   在「已授權的 JavaScript 來源」加入：
+   - `http://localhost:5173`（本地測試）
+   - `https://你的GitHub帳號.github.io`（部署後）
+5. 在專案根目錄建立 `.env.local`：
    ```bash
    VITE_GOOGLE_CLIENT_ID=你的_Google_OAuth_Client_ID
    ```
 
-啟動本地開發環境：
+本地啟動：
 ```bash
 npm install
 npm run dev
 ```
 
+---
+
 ### 第二步：部署到 GitHub Pages
 
-此專案已內建自動部署的工作流程 (`.github/workflows/deploy.yml`)，您只需要安全地注入 Client ID：
-1. 將專案 Push 到您自己的 GitHub 儲存庫。
-2. 進入 Repository 的 `Settings` > `Secrets and variables` > `Actions`。
-3. 點擊 `New repository secret`，名稱填寫 `GOOGLE_CLIENT_ID`，數值填入第一步獲得的 Client ID。
-4. 未來只要 Push 到 `main` 分支，系統便會自動將網站與金鑰打包部署！
+此專案已內建自動部署流程（`.github/workflows/deploy.yml`）：
 
-### 第三步：設定每日 LINE 推播機器人 (GitHub Actions)
+1. Push 到你自己的 GitHub 儲存庫。
+2. 進入 `Settings > Secrets and variables > Actions`，點擊 `New repository secret`：
+   - 名稱：`GOOGLE_CLIENT_ID`，值：第一步的 Client ID。
+3. 未來 Push 到 `main` 分支即自動部署。
 
-每天特定時段 (依 `cron` 設定，預設為每早 8 點)，`.github/workflows/line-bot-cron.yml` 會被喚醒去檢查航班。這支腳本需要您的授權去讀取機票並發送 LINE。
+---
 
-請依照以下清單，到 GitHub Repository `Settings` > `Secrets` 加入三把金鑰：
-1. `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS` (重要)：
-   * 在 Google Cloud 的「憑證」中建立一個「服務帳戶 (Service Account)」。
-   * 為該帳戶建立並下載 JSON 格式的金鑰，將檔案內的「全部 JSON 字串」完整貼入此 Secret。
-   * **(💡 核心步驟)**：到您個人的 Google Drive，找到系統幫您備份的 `reverse-tickets.json` 檔案。對它點擊共用，將該「服務帳戶的 Email (結尾是 `iam.gserviceaccount.com`)」加入，並給予**檢視者 (Viewer)** 權限！沒有這步後端排程會讀不到檔案！
-2. `LINE_CHANNEL_ACCESS_TOKEN`：
-   * 前往 [LINE Developers](https://developers.line.biz/)，建立一個 Messaging API Channel。
-   * 在 Messaging API 分頁最下方發行一組長時間有效的 `Channel access token`。
-3. `LINE_USER_ID`：
-   * 在同一個 LINE Channel 設定頁面的 Basic Settings 最底部，可找到您的個人 User ID (必定以 `U` 開頭)，將其填入，讓機器人知道要把訊息傳給誰。
+### 第三步：設定每日 LINE 推播機器人
+
+`.github/workflows/line-bot-cron.yml` 每日定時執行（預設每早 8 點 UTC+8）。
+
+在 `Settings > Secrets` 加入三個 Secret：
+
+| Secret 名稱 | 說明 |
+|---|---|
+| `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS` | Google 服務帳戶的 JSON 金鑰（完整 JSON 字串）。建立後需將 `reverse-tickets.json` 的 Drive 共用權限給該帳戶信箱（Viewer 即可）。 |
+| `LINE_CHANNEL_ACCESS_TOKEN` | 到 [LINE Developers](https://developers.line.biz/) 建立 Messaging API Channel，發行長期 access token。 |
+| `LINE_USER_ID` | 在同一 Channel 的 Basic Settings 底部找到，以 `U` 開頭的個人 User ID。 |
+
+---
+
+## 📁 專案結構
+
+```
+src/
+├── App.jsx                  根元件；Google OAuth；資料層整合
+├── components/
+│   ├── Instructions.jsx     可折疊的操作說明面板
+│   ├── TicketForm.jsx       新增/修改機票表單（含紅眼自動校正）
+│   ├── TicketList.jsx       購買清單管理
+│   ├── TripTimeline.jsx     趟次時間軸（純渲染）
+│   └── TripCalendar.jsx     月曆視角
+├── hooks/
+│   ├── useTrips.js          核心配對引擎（Smart Grouping）
+│   ├── useTripOverrides.js  手動重組持久化
+│   └── useLocalStorage.js   型別安全的 localStorage Hook
+└── utils/
+    ├── dateHelpers.js       日期格式化與天數計算
+    ├── googleSync.js        Drive / Calendar API 整合
+    └── tripOverrides.js     手動 override 邏輯
+
+scripts/
+└── line-bot.js              GitHub Actions 排程腳本
+```
+
+---
 
 ## 授權條款
 

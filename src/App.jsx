@@ -1,3 +1,26 @@
+/**
+ * App.jsx ── 應用程式根元件
+ *
+ * 架構層次：
+ *   LocalStorage (useLocalStorage)
+ *     └─ tickets / tripLabels / accessTokenState
+ *
+ *   資料層 (Data Layer)
+ *     useTrips(tickets)              ← 拆票＋配對，產出 segments / trips
+ *     applyTripOverrides(trips, ...)  ← 套用使用者手動調整，產出 displayTrips
+ *     decoratedTrips (useMemo)        ← 為每個 trip 計算 isPast / totalCostTWD /
+ *                                       isOpenJaw / tripDays / costPerDay
+ *
+ *   UI 層 (Presentation Layer)
+ *     TripTimeline  ← 接收 decoratedTrips，純渲染，不做計算
+ *     TicketList    ← 接收 tickets，純渲染
+ *     TripCalendar  ← 接收 segments，月曆視角
+ *
+ * Google 整合：
+ *   Drive: syncToDrive / loadFromDrive
+ *   Calendar: syncToCalendar
+ *   OAuth: useGoogleLogin（含 silent refresh 機制）
+ */
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Plane, Calendar, Trash2, ArrowRight, BookOpen, AlertCircle, CheckCircle2, ListFilter, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn } from 'lucide-react';
@@ -15,7 +38,8 @@ import TicketList from './components/TicketList';
 import TripTimeline from './components/TripTimeline';
 import TripCalendar from './components/TripCalendar';
 
-// 匯率 fallback（當 API 無法取用時使用）
+// ── 匯率 fallback（當 exchangerate-api 無法存取時使用）────────────────────
+// 實際匯率由 useEffect 動態取得並更新 exchangeRates state
 const DEFAULT_RATES = { JPY: 0.21, USD: 32.5 };
 
 function App() {
@@ -48,6 +72,16 @@ function App() {
 
     const displayTrips = useMemo(() => applyTripOverrides(trips, tripOverrides), [trips, tripOverrides]);
 
+    // ── 資料層：decoratedTrips ─────────────────────────────────────────────────
+    // displayTrips（已套用手動 override）再加工，計算每個 trip 的衍生欄位：
+    //   tripStartAt / tripEndAt  → 用於判斷行程是否已結束
+    //   isPast                   → tripEndAt < now
+    //   totalCostTWD             → 各航段分攤成本加總
+    //   isOpenJaw                → 去回程機場不同
+    //   tripDays                 → 含頭含尾天數
+    //   costPerDay               → totalCostTWD / tripDays
+    //
+    // TripTimeline 直接讀取這些欄位，不再自行計算，保持 UI 層乾淨。
     const decoratedTrips = useMemo(() => {
         const now = Date.now();
 
@@ -461,6 +495,13 @@ function App() {
         }
     };
 
+    // ── 費用三分類 ───────────────────────────────────────────────────────────
+    // totalPriceTWD：所有票券的實際入帳金額（不分攤）
+    // pastCostTWD：已完成趟次分攤成本
+    // futureCostTWD：未來趟次分攤成本
+    // sunkCostTWD：入帳中未被任何趟次涵蓋的「孤兒票」費用
+    //   計算原理：某張票若完全沒有航段被配對到任何 trip，其費用不會進入 past/future，
+    //             因此差值即為未配對部分。Math.max(0,...) 防止浮點誤差出現負數。
     const totalPriceTWD = tickets.reduce((sum, t) => sum + (t.priceTWD || t.price), 0);
 
     const pastCostTWD = useMemo(
