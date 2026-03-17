@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
-import { Plane } from 'lucide-react';
+import { Plane, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 
 const AIRPORTS = [
     'TPE (台北桃園)', 'TSA (台北松山)', 'KHH (高雄小港)', 'RMQ (台中清泉崗)',
@@ -30,15 +30,86 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
     };
 
     const [formData, setFormData] = useState(defaultFormData);
+    const [isFormExpanded, setIsFormExpanded] = useState(false);
+    const [isFetchingFlight, setIsFetchingFlight] = useState(false);
 
     React.useEffect(() => {
         if (editingTicket) {
-            // 舊資料可能缺少新欄位，這裡用 default 補齊避免 controlled input 警告
             setFormData({ ...defaultFormData, ...editingTicket });
+            setIsFormExpanded(true);
         } else {
             setFormData(defaultFormData);
         }
     }, [editingTicket]);
+
+    const handleAutofill = async (segment) => {
+        const flightNo = segment === 'outbound' ? formData.outboundFlightNo : formData.inboundFlightNo;
+        const flightDate = segment === 'outbound' ? formData.outboundDate : formData.inboundDate;
+        
+        if (!flightNo || !flightDate) {
+            toast.error('請先填寫航班編號與對應的日期');
+            return;
+        }
+
+        const apiKey = import.meta.env.VITE_AVIATIONSTACK_API_KEY;
+        if (!apiKey) {
+            toast.error('尚未設定 VITE_AVIATIONSTACK_API_KEY 環境變數', {
+                description: '請在開發環境 .env 或 GitHub Actions Secrets 中加入金鑰。'
+            });
+            return;
+        }
+
+        setIsFetchingFlight(true);
+        const toastId = toast.loading('正在查詢航班資訊...');
+        try {
+            // AviationStack free tier only supports HTTP. We use a CORS proxy to avoid Mixed Content errors on HTTPS deployments like GitHub Pages.
+            const targetUrl = `http://api.aviationstack.com/v1/flights?access_key=${apiKey}&flight_iata=${flightNo}`;
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+            
+            const res = await fetch(proxyUrl);
+            const wrappedData = await res.json();
+            
+            if (!wrappedData.contents) throw new Error('Proxy returned empty contents');
+            const data = JSON.parse(wrappedData.contents);
+
+            if (data.error) throw new Error(data.error.message || 'API 錯誤');
+            if (!data.data || data.data.length === 0) throw new Error(`找不到航班 ${flightNo} 的相關資訊`);
+
+            // Sort by recent scheduled date
+            const scheduledFlights = data.data.filter(f => f.flight_date >= flightDate);
+            const flight = scheduledFlights.length > 0 ? scheduledFlights[0] : data.data[0];
+
+            if (!flight.departure || !flight.arrival) throw new Error('回傳的航班資訊不齊全');
+
+            const depTime = flight.departure.scheduled ? flight.departure.scheduled.split('T')[1].substring(0, 5) : '';
+            const arrDate = flight.arrival.scheduled ? flight.arrival.scheduled.split('T')[0] : '';
+            const arrTime = flight.arrival.scheduled ? flight.arrival.scheduled.split('T')[1].substring(0, 5) : '';
+
+            setFormData(prev => ({
+                ...prev,
+                ...(segment === 'outbound' ? {
+                    outboundTime: depTime,
+                    outboundArrivalDate: arrDate,
+                    outboundArrivalTime: arrTime,
+                    departRegion: `${flight.departure.iata || ''} (${flight.departure.airport || prev.departRegion})`,
+                    returnRegion: `${flight.arrival.iata || ''} (${flight.arrival.airport || prev.returnRegion})`
+                } : {
+                    inboundTime: depTime,
+                    inboundArrivalDate: arrDate,
+                    inboundArrivalTime: arrTime,
+                    returnRegion: `${flight.departure.iata || ''} (${flight.departure.airport || prev.returnRegion})`,
+                    departRegion: `${flight.arrival.iata || ''} (${flight.arrival.airport || prev.departRegion})`
+                }),
+                airline: flight.airline ? flight.airline.name : prev.airline
+            }));
+
+            toast.success(`已成功帶入航班 ${flightNo} 的時刻表！`, { id: toastId });
+        } catch (err) {
+            toast.error(`航班查詢失敗：${err.message}`, { id: toastId });
+        } finally {
+            setIsFetchingFlight(false);
+        }
+    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -127,16 +198,34 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
 
         onAddTicket(newTicket);
         setFormData(defaultFormData);
+        setIsFormExpanded(false);
     };
 
     const isReverse = formData.type === 'reverse';
 
     return (
-        <div className={`bg-white p-6 rounded-xl shadow-md border ${editingTicket ? 'border-amber-400' : 'border-gray-100'} mb-8 mt-4 transition-colors duration-300`}>
-            <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center border-b pb-3">
-                <Plane className={`mr-2 ${editingTicket ? 'text-amber-500' : 'text-indigo-500'}`} /> {editingTicket ? '✏️ 修改機票訂單' : '新增購買機票訂單'}
-            </h2>
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className={`bg-white rounded-xl shadow-md border ${editingTicket ? 'border-amber-400' : 'border-gray-100'} mb-8 mt-4 transition-all duration-300 overflow-hidden`}>
+            {/* Header / Toggle Button */}
+            <button 
+                type="button"
+                onClick={() => setIsFormExpanded(!isFormExpanded)}
+                className="w-full p-4 sm:p-6 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors focus:outline-none"
+            >
+                <div className="flex items-center">
+                    <Plane className={`mr-3 w-6 h-6 ${editingTicket ? 'text-amber-500' : 'text-indigo-500'}`} />
+                    <h2 className="text-lg md:text-xl font-bold text-gray-800">
+                        {editingTicket ? '✏️ 修改機票訂單' : '新增購買機票訂單'}
+                    </h2>
+                </div>
+                <div className={`p-2 rounded-full ${isFormExpanded ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
+                    {isFormExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                </div>
+            </button>
+
+            {/* Collapsible Form Area */}
+            {isFormExpanded && (
+                <div className="p-4 sm:p-6 pt-0 border-t border-slate-100 bg-slate-50/50">
+                    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mt-4">
 
                 <div className="col-span-1 md:col-span-2 lg:col-span-1">
                     <label className="block text-sm font-bold text-gray-700 mb-1">票種設定</label>
@@ -304,14 +393,25 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
                             </div>
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-indigo-800 mb-1">航班編號 (選填)</label>
-                            <input
-                                placeholder="例: BR192"
-                                type="text"
-                                className="w-full p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow uppercase"
-                                value={formData.outboundFlightNo}
-                                onChange={e => setFormData({ ...formData, outboundFlightNo: e.target.value })}
-                            />
+                            <label className="block text-xs font-bold text-indigo-800 mb-1">航班編號 (支援自動帶入時間)</label>
+                            <div className="flex gap-2">
+                                <input
+                                    placeholder="例: BR192"
+                                    type="text"
+                                    className="flex-1 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow uppercase"
+                                    value={formData.outboundFlightNo}
+                                    onChange={e => setFormData({ ...formData, outboundFlightNo: e.target.value })}
+                                />
+                                <button
+                                    type="button"
+                                    disabled={isFetchingFlight}
+                                    onClick={() => handleAutofill('outbound')}
+                                    className="px-3 py-2 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded-lg font-bold text-xs transition-colors flex items-center shrink-0 disabled:opacity-50"
+                                    title="自動從 API 帶入時程"
+                                >
+                                    <Zap className="w-4 h-4 mr-1" /> 自動帶入
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -361,30 +461,43 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-indigo-800 mb-1">航班編號 (選填)</label>
-                                <input
-                                    placeholder="例: JX801"
-                                    type="text"
-                                    className="w-full p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow uppercase"
-                                    value={formData.inboundFlightNo}
-                                    onChange={e => setFormData({ ...formData, inboundFlightNo: e.target.value })}
-                                />
+                                <label className="block text-xs font-bold text-indigo-800 mb-1">航班編號 (支援自動帶入時間)</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        placeholder="例: JX801"
+                                        type="text"
+                                        className="flex-1 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow uppercase"
+                                        value={formData.inboundFlightNo}
+                                        onChange={e => setFormData({ ...formData, inboundFlightNo: e.target.value })}
+                                    />
+                                    <button
+                                        type="button"
+                                        disabled={isFetchingFlight}
+                                        onClick={() => handleAutofill('inbound')}
+                                        className="px-3 py-2 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded-lg font-bold text-xs transition-colors flex items-center shrink-0 disabled:opacity-50"
+                                        title="自動從 API 帶入時程"
+                                    >
+                                        <Zap className="w-4 h-4 mr-1" /> 自動帶入
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
                 </div>
 
-                <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-2 flex flex-col sm:flex-row gap-3">
-                    <button type="submit" className={`w-full sm:w-auto px-8 py-3 text-white font-bold rounded-lg transition duration-200 shadow hover:shadow-lg flex items-center justify-center ${editingTicket ? 'bg-amber-500 hover:bg-amber-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-                        {editingTicket ? '💾 儲存修改' : '＋ 將此訂單加入系統'}
-                    </button>
-                    {editingTicket && (
-                        <button type="button" onClick={onCancelEdit} className="w-full sm:w-auto px-8 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition duration-200 shadow-sm flex items-center justify-center border border-gray-300">
-                            取消修改
+                    <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-2 flex flex-col sm:flex-row gap-3">
+                        <button type="submit" className={`w-full sm:w-auto px-8 py-3 text-white font-bold rounded-lg transition duration-200 shadow hover:shadow-lg flex items-center justify-center ${editingTicket ? 'bg-amber-500 hover:bg-amber-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                            {editingTicket ? '💾 儲存修改' : '＋ 將此訂單加入系統'}
                         </button>
-                    )}
+                        {editingTicket && (
+                            <button type="button" onClick={onCancelEdit} className="w-full sm:w-auto px-8 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition duration-200 shadow-sm flex items-center justify-center border border-gray-300">
+                                取消修改
+                            </button>
+                        )}
+                    </div>
+                </form>
                 </div>
-            </form>
+            )}
         </div>
     );
 }

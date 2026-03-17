@@ -1,3 +1,14 @@
+/**
+ * TripCalendar.jsx ── 系統月曆檢視元件
+ *
+ * 職責：
+ *   1. 渲染日曆網格，顯示每日的航班與住宿。
+ *   2. 智慧偵測並提示「行程級別」的住宿缺口與重疊 (hotelWarnings)。
+ *   3. 將 trips 打平為 allSegments 和 allHotels 進行日曆位置映射。
+ *
+ * 注意事項：
+ *   - 這裡的告警邏輯是 per-trip 檢查，避免不同跨月行程間被誤判為住宿缺口。
+ */
 import React, { useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 

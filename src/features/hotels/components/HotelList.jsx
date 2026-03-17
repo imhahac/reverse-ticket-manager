@@ -17,12 +17,12 @@ function HotelListItem({ hotel, onEdit, onDelete }) {
             ${isPast ? 'bg-slate-50 border-slate-200' : 'bg-white border-teal-200'}`}>
 
             {/* 左側：圖示 + 基本資訊 */}
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border
+            <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border mt-0.5 sm:mt-0
                     ${isPast ? 'bg-slate-100 border-slate-300' : 'bg-teal-100 border-teal-300'}`}>
                     <Building2 className={`w-5 h-5 ${isPast ? 'text-slate-500' : 'text-teal-600'}`} />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 w-full">
                     <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-slate-800 text-sm">{name}</span>
                         {isPast && (
@@ -58,7 +58,7 @@ function HotelListItem({ hotel, onEdit, onDelete }) {
             </div>
 
             {/* 右側：費用 + 操作按鈕 */}
-            <div className="flex items-center gap-3 justify-end sm:justify-normal shrink-0">
+            <div className="flex items-center gap-3 justify-end sm:justify-normal shrink-0 mt-2 sm:mt-0 pt-3 border-t sm:border-t-0 sm:pt-0 border-slate-100">
                 {priceTWD > 0 && (
                     <div className="text-right">
                         <div className="text-base font-extrabold text-teal-700">

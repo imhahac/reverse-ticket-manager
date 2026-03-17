@@ -13,7 +13,7 @@
  *   exchangeRates   {Object}    { JPY, USD } → TWD 換算率
  */
 import React, { useState, useEffect } from 'react';
-import { Building2, CalendarDays, Banknote, Hash, MapPin, FileText, X, Check } from 'lucide-react';
+import { Building2, CalendarDays, Banknote, Hash, MapPin, FileText, X, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { convertToTWD } from '../../../utils/currency';
 
 const EMPTY = {
@@ -32,6 +32,7 @@ function calcNights(checkIn, checkOut) {
 
 export default function HotelForm({ onSaveHotel, editingHotel, onCancelEdit, exchangeRates }) {
     const [form, setForm] = useState(EMPTY);
+    const [isFormExpanded, setIsFormExpanded] = useState(false);
 
     useEffect(() => {
         if (editingHotel) {
@@ -40,6 +41,7 @@ export default function HotelForm({ onSaveHotel, editingHotel, onCancelEdit, exc
                 ...editingHotel,
                 priceTotal: editingHotel.priceTotal ?? '',
             });
+            setIsFormExpanded(true);
         } else {
             setForm(EMPTY);
         }
@@ -80,28 +82,43 @@ export default function HotelForm({ onSaveHotel, editingHotel, onCancelEdit, exc
         };
         onSaveHotel(hotel);
         setForm(EMPTY);
+        setIsFormExpanded(false);
     };
 
     const isEditing = Boolean(editingHotel);
 
     return (
-        <form onSubmit={handleSubmit}
-            className={`bg-white rounded-2xl shadow-md border p-6 mb-8 transition-all duration-300
-                ${isEditing ? 'border-teal-400 ring-2 ring-teal-200' : 'border-teal-200'}`}>
-
-            {/* 標題 */}
-            <div className="flex items-center justify-between mb-5">
-                <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+        <div className={`bg-white rounded-2xl shadow-md border mb-8 transition-all duration-300 overflow-hidden
+            ${isEditing ? 'border-teal-400 ring-2 ring-teal-200' : 'border-teal-200'}`}>
+            
+            {/* Header / Toggle Button */}
+            <button 
+                type="button"
+                onClick={() => setIsFormExpanded(!isFormExpanded)}
+                className="w-full p-4 sm:p-6 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors focus:outline-none"
+            >
+                <div className="flex items-center gap-2">
                     <Building2 className="w-6 h-6 text-teal-500" />
-                    {isEditing ? '✏️ 修改住宿資訊' : '🏨 新增住宿'}
-                </h2>
-                {isEditing && (
-                    <button type="button" onClick={onCancelEdit}
-                        className="flex items-center gap-1 text-sm text-gray-500 hover:text-red-500 transition-colors px-2 py-1 rounded border border-gray-200 hover:border-red-200">
-                        <X className="w-4 h-4" /> 取消修改
-                    </button>
-                )}
-            </div>
+                    <h2 className="text-xl font-extrabold text-slate-800">
+                        {isEditing ? '✏️ 修改住宿資訊' : '🏨 新增住宿'}
+                    </h2>
+                </div>
+                <div className="flex items-center gap-3">
+                    {isEditing && (
+                        <div onClick={(e) => { e.stopPropagation(); onCancelEdit(); }}
+                            className="flex items-center gap-1 text-sm text-gray-500 hover:text-red-500 transition-colors px-2 py-1 rounded border border-gray-200 hover:border-red-200 cursor-pointer">
+                            <X className="w-4 h-4" /> 取消修改
+                        </div>
+                    )}
+                    <div className={`p-2 rounded-full ${isFormExpanded ? 'bg-teal-100 text-teal-600' : 'bg-slate-100 text-slate-500'}`}>
+                        {isFormExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </div>
+                </div>
+            </button>
+
+            {/* Collapsible Form Area */}
+            {isFormExpanded && (
+                <form onSubmit={handleSubmit} className="p-4 sm:p-6 pt-0 border-t border-slate-100 bg-slate-50/30">
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 飯店名稱 */}
@@ -202,11 +219,13 @@ export default function HotelForm({ onSaveHotel, editingHotel, onCancelEdit, exc
             {/* 送出 */}
             <div className="flex justify-end mt-5">
                 <button type="submit"
-                    className="flex items-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl shadow-md transition-colors">
+                    className="flex items-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl shadow-md transition-colors w-full sm:w-auto justify-center">
                     <Check className="w-4 h-4" />
                     {isEditing ? '儲存修改' : '新增住宿'}
                 </button>
             </div>
-        </form>
+            </form>
+            )}
+        </div>
     );
 }
