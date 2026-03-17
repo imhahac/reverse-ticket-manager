@@ -1,28 +1,218 @@
 /**
- * HotelForm.jsx ── 新增/修改飯店住宿表單（骨架）
+ * HotelForm.jsx ── 新增/修改飯店住宿表單
  *
- * TODO：實作飯店功能時，此表單需支援：
- *   - 飯店名稱、地址
- *   - 入住日期 (checkIn) / 退房日期 (checkOut)
- *   - 房型 (roomType)
- *   - 每晚費用 (pricePerNight) + 幣別 + 匯率換算
- *   - 確認碼 (confirmationNo)
- *   - 備註 (notes)
+ * 設計語彙仿照 TicketForm，支援：
+ *   - TWD / JPY / USD 多幣別 + 自動換算
+ *   - 自動計算晚數
+ *   - 編輯模式（editingHotel 不為 null 時）
  *
- * Props（預期）：
- *   onAddHotel    {Function}
- *   editingHotel  {Object|null}
- *   onCancelEdit  {Function}
- *   exchangeRates {Object}
+ * Props:
+ *   onSaveHotel     {Function}  (hotel) => void
+ *   editingHotel    {Object|null}
+ *   onCancelEdit    {Function}
+ *   exchangeRates   {Object}    { JPY, USD } → TWD 換算率
  */
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { Building2, CalendarDays, Banknote, Hash, MapPin, FileText, X, Check } from 'lucide-react';
 
-export default function HotelForm({ onAddHotel, editingHotel, onCancelEdit, exchangeRates }) {
-    // TODO: 實作飯店住宿新增/修改表單
+const EMPTY = {
+    name: '', address: '', checkIn: '', checkOut: '',
+    currency: 'TWD', priceTotal: '', priceTWD: 0,
+    confirmationNo: '', notes: '',
+};
+
+function calcTWD(priceTotal, currency, rates) {
+    const v = parseFloat(priceTotal);
+    if (!v || isNaN(v)) return 0;
+    if (currency === 'TWD') return Math.round(v);
+    if (currency === 'JPY') return Math.round(v * (rates?.JPY ?? 0.21));
+    if (currency === 'USD') return Math.round(v * (rates?.USD ?? 32.5));
+    return 0;
+}
+
+function calcNights(checkIn, checkOut) {
+    if (!checkIn || !checkOut) return null;
+    const diff = new Date(checkOut) - new Date(checkIn);
+    return diff > 0 ? Math.round(diff / 86400000) : null;
+}
+
+export default function HotelForm({ onSaveHotel, editingHotel, onCancelEdit, exchangeRates }) {
+    const [form, setForm] = useState(EMPTY);
+
+    useEffect(() => {
+        if (editingHotel) {
+            setForm({
+                ...EMPTY,
+                ...editingHotel,
+                priceTotal: editingHotel.priceTotal ?? '',
+            });
+        } else {
+            setForm(EMPTY);
+        }
+    }, [editingHotel]);
+
+    const set = (key, val) => setForm(f => {
+        const next = { ...f, [key]: val };
+        // 幣別或金額改變時自動重算 priceTWD
+        if (key === 'priceTotal' || key === 'currency') {
+            next.priceTWD = calcTWD(
+                key === 'priceTotal' ? val : f.priceTotal,
+                key === 'currency'   ? val : f.currency,
+                exchangeRates
+            );
+        }
+        return next;
+    });
+
+    const nights = calcNights(form.checkIn, form.checkOut);
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!form.name || !form.checkIn || !form.checkOut) {
+            import('sonner').then(({ toast }) =>
+                toast.error('請填寫飯店名稱、入住日期與退房日期'));
+            return;
+        }
+        if (nights === null || nights <= 0) {
+            import('sonner').then(({ toast }) =>
+                toast.error('退房日期必須晚於入住日期'));
+            return;
+        }
+        const hotel = {
+            ...form,
+            priceTotal: parseFloat(form.priceTotal) || 0,
+            priceTWD: form.priceTWD || 0,
+            id: editingHotel?.id ?? `hotel-${Date.now()}`,
+        };
+        onSaveHotel(hotel);
+        setForm(EMPTY);
+    };
+
+    const isEditing = Boolean(editingHotel);
+
     return (
-        <div className="bg-white p-6 rounded-xl shadow-md border border-dashed border-gray-300 mb-8 text-center text-gray-400">
-            <p className="text-lg font-bold mb-1">🏨 飯店住宿管理</p>
-            <p className="text-sm">即將推出 — 此功能正在開發中</p>
-        </div>
+        <form onSubmit={handleSubmit}
+            className={`bg-white rounded-2xl shadow-md border p-6 mb-8 transition-all duration-300
+                ${isEditing ? 'border-teal-400 ring-2 ring-teal-200' : 'border-teal-200'}`}>
+
+            {/* 標題 */}
+            <div className="flex items-center justify-between mb-5">
+                <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+                    <Building2 className="w-6 h-6 text-teal-500" />
+                    {isEditing ? '✏️ 修改住宿資訊' : '🏨 新增住宿'}
+                </h2>
+                {isEditing && (
+                    <button type="button" onClick={onCancelEdit}
+                        className="flex items-center gap-1 text-sm text-gray-500 hover:text-red-500 transition-colors px-2 py-1 rounded border border-gray-200 hover:border-red-200">
+                        <X className="w-4 h-4" /> 取消修改
+                    </button>
+                )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 飯店名稱 */}
+                <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                        飯店 / 旅宿名稱 *
+                    </label>
+                    <input type="text" value={form.name} onChange={e => set('name', e.target.value)}
+                        placeholder="例：Conrad Tokyo / 東橫イン新宿歌舞伎町"
+                        className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    />
+                </div>
+
+                {/* 入住 / 退房 */}
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                        <CalendarDays className="w-3 h-3 inline mr-1" />入住日期 (Check-in) *
+                    </label>
+                    <input type="date" value={form.checkIn} onChange={e => set('checkIn', e.target.value)}
+                        className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                        <CalendarDays className="w-3 h-3 inline mr-1" />退房日期 (Check-out) *
+                        {nights !== null && nights > 0 && (
+                            <span className="ml-2 text-teal-600 normal-case font-bold">▸ {nights} 晚</span>
+                        )}
+                    </label>
+                    <input type="date" value={form.checkOut} onChange={e => set('checkOut', e.target.value)}
+                        className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    />
+                </div>
+
+                {/* 幣別 + 總金額 */}
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                        <Banknote className="w-3 h-3 inline mr-1" />幣別
+                    </label>
+                    <select value={form.currency} onChange={e => set('currency', e.target.value)}
+                        className="w-full p-3 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400">
+                        <option value="TWD">TWD 新台幣</option>
+                        <option value="JPY">JPY 日圓</option>
+                        <option value="USD">USD 美金</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                        住宿總金額（{form.currency}）
+                        {form.currency !== 'TWD' && form.priceTWD > 0 && (
+                            <span className="ml-2 text-teal-600 normal-case font-bold">
+                                ≈ NT$ {form.priceTWD.toLocaleString()}
+                            </span>
+                        )}
+                    </label>
+                    <input type="number" min="0" step="1"
+                        value={form.priceTotal}
+                        onChange={e => set('priceTotal', e.target.value)}
+                        placeholder="0"
+                        className="w-full p-3 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    />
+                </div>
+
+                {/* 地址 */}
+                <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                        <MapPin className="w-3 h-3 inline mr-1" />地址（選填）
+                    </label>
+                    <input type="text" value={form.address} onChange={e => set('address', e.target.value)}
+                        placeholder="例：1-1-1 Uchisaiwaicho, Chiyoda, Tokyo"
+                        className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    />
+                </div>
+
+                {/* 確認碼 */}
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                        <Hash className="w-3 h-3 inline mr-1" />訂單確認碼（選填）
+                    </label>
+                    <input type="text" value={form.confirmationNo} onChange={e => set('confirmationNo', e.target.value)}
+                        placeholder="例：HXXXX1234 / Booking Ref"
+                        className="w-full p-3 border border-gray-200 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    />
+                </div>
+
+                {/* 備註 */}
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                        <FileText className="w-3 h-3 inline mr-1" />備註（選填）
+                    </label>
+                    <input type="text" value={form.notes} onChange={e => set('notes', e.target.value)}
+                        placeholder="例：含早餐 / 機場接送"
+                        className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    />
+                </div>
+            </div>
+
+            {/* 送出 */}
+            <div className="flex justify-end mt-5">
+                <button type="submit"
+                    className="flex items-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl shadow-md transition-colors">
+                    <Check className="w-4 h-4" />
+                    {isEditing ? '儲存修改' : '新增住宿'}
+                </button>
+            </div>
+        </form>
     );
 }

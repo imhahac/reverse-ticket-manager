@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, ArrowRight, Edit3, Check, X, PlaneTakeoff, PlaneLanding, Clock, CheckCircle2, Plane } from 'lucide-react';
 import { formatDateWithDay } from '../utils/dateHelpers';
+import HotelStayCard from '../features/hotels/components/HotelStayCard';
 
 export default function TripTimeline({
     trips,
@@ -148,6 +149,7 @@ export default function TripTimeline({
                 const costPerDay = trip.costPerDay ?? null;
                 const isExternalOnly = trip.isExternalOnly;
                 const customLabel = tripLabels[comboKey] || `Trip ${index + 1}`;
+                const matchedHotels = trip.matchedHotels ?? [];
 
                 return (
                     <div
@@ -296,6 +298,17 @@ export default function TripTimeline({
                                     </React.Fragment>
                                 );
                             })}
+                            {/* ── 住宿卡片區 ──────────────────────────────── */}
+                            {matchedHotels.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-teal-100 space-y-2">
+                                    <div className="text-xs font-bold text-teal-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                        🏨 住宿安排
+                                    </div>
+                                    {matchedHotels.map(h => (
+                                        <HotelStayCard key={h.id} hotel={h} />
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 );
@@ -335,7 +348,7 @@ export default function TripTimeline({
                 const tripDays = trip.tripDays ?? null;
                 const isExternalOnly = trip.isExternalOnly;
                 const customLabel = tripLabels[comboKey] || `Trip ${index + 1}`;
-
+                const matchedHotels = trip.matchedHotels ?? [];
                 return (
                     <div
                         key={comboKey}
@@ -478,6 +491,17 @@ export default function TripTimeline({
                                     </React.Fragment>
                                 );
                             })}
+                            {/* ── 住宿卡片區 ──────────────────────────────── */}
+                            {matchedHotels.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-teal-100 space-y-2">
+                                    <div className="text-xs font-bold text-teal-600 uppercase tracking-wider mb-1">
+                                        🏨 住宿安排
+                                    </div>
+                                    {matchedHotels.map(h => (
+                                        <HotelStayCard key={h.id} hotel={h} />
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 );

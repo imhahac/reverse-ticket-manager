@@ -1,0 +1,133 @@
+/**
+ * HotelList.jsx ── 飯店住宿清單（管理列表）
+ *
+ * Props:
+ *   hotels   {Array}    - useHotels 的 decoratedHotels
+ *   onEdit   {Function} - (hotel) => void
+ *   onDelete {Function} - (id) => void
+ */
+import React from 'react';
+import { Building2, CalendarDays, Pencil, Trash2, Hash, MapPin, Clock } from 'lucide-react';
+
+function HotelListItem({ hotel, onEdit, onDelete }) {
+    const { id, name, address, checkIn, checkOut, totalNights, priceTWD, costPerNight, confirmationNo, isPast } = hotel;
+
+    return (
+        <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border shadow-sm transition-all hover:shadow-md
+            ${isPast ? 'bg-slate-50 border-slate-200' : 'bg-white border-teal-200'}`}>
+
+            {/* 左側：圖示 + 基本資訊 */}
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border
+                    ${isPast ? 'bg-slate-100 border-slate-300' : 'bg-teal-100 border-teal-300'}`}>
+                    <Building2 className={`w-5 h-5 ${isPast ? 'text-slate-500' : 'text-teal-600'}`} />
+                </div>
+                <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-800 text-sm">{name}</span>
+                        {isPast && (
+                            <span className="text-[10px] font-bold bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">
+                                已完成
+                            </span>
+                        )}
+                        {totalNights && (
+                            <span className="text-[10px] font-bold bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full">
+                                {totalNights} 晚
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                        <span className="flex items-center text-xs text-slate-500">
+                            <CalendarDays className="w-3 h-3 mr-1" />
+                            {checkIn} → {checkOut}
+                        </span>
+                        {address && (
+                            <span className="flex items-center text-xs text-slate-400 truncate max-w-[180px]">
+                                <MapPin className="w-3 h-3 mr-1 shrink-0" />
+                                {address}
+                            </span>
+                        )}
+                        {confirmationNo && (
+                            <span className="flex items-center text-xs font-mono text-slate-400">
+                                <Hash className="w-3 h-3 mr-1" />
+                                {confirmationNo}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* 右側：費用 + 操作按鈕 */}
+            <div className="flex items-center gap-3 justify-end sm:justify-normal shrink-0">
+                {priceTWD > 0 && (
+                    <div className="text-right">
+                        <div className="text-base font-extrabold text-teal-700">
+                            NT$ {Math.round(priceTWD).toLocaleString()}
+                        </div>
+                        {costPerNight && (
+                            <div className="text-[10px] text-slate-400">{costPerNight.toLocaleString()}/晚</div>
+                        )}
+                    </div>
+                )}
+                <button
+                    onClick={() => onEdit(hotel)}
+                    className="p-2 rounded-lg bg-slate-100 hover:bg-indigo-100 text-slate-500 hover:text-indigo-600 transition-colors"
+                    title="編輯住宿"
+                >
+                    <Pencil className="w-4 h-4" />
+                </button>
+                <button
+                    onClick={() => onDelete(id)}
+                    className="p-2 rounded-lg bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-500 transition-colors"
+                    title="刪除住宿"
+                >
+                    <Trash2 className="w-4 h-4" />
+                </button>
+            </div>
+        </div>
+    );
+}
+
+export default function HotelList({ hotels, onEdit, onDelete }) {
+    if (!hotels || hotels.length === 0) {
+        return (
+            <div className="p-12 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+                <Building2 className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                <p className="font-bold">尚無住宿記錄</p>
+                <p className="text-sm mt-1">在上方表單新增飯店或旅宿住宿資訊</p>
+            </div>
+        );
+    }
+
+    const futureHotels = hotels.filter(h => !h.isPast);
+    const pastHotels   = hotels.filter(h => h.isPast);
+
+    return (
+        <div className="space-y-6">
+            {futureHotels.length > 0 && (
+                <div>
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Clock className="w-4 h-4" /> 即將入住
+                    </h3>
+                    <div className="space-y-3">
+                        {futureHotels.map(h => (
+                            <HotelListItem key={h.id} hotel={h} onEdit={onEdit} onDelete={onDelete} />
+                        ))}
+                    </div>
+                </div>
+            )}
+            {pastHotels.length > 0 && (
+                <div>
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Clock className="w-4 h-4 opacity-50" /> 已完成住宿
+                    </h3>
+                    <div className="space-y-3 opacity-70">
+                        {pastHotels.map(h => (
+                            <HotelListItem key={h.id} hotel={h} onEdit={onEdit} onDelete={onDelete} />
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}

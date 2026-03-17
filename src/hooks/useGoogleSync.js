@@ -12,6 +12,10 @@
  * @param {Object}      params.tripLabels         - 行程標籤 map
  * @param {Function}    params.setTickets         - 更新 tickets 的 setter
  * @param {Function}    params.setTripLabels      - 更新 tripLabels 的 setter
+ * @param {Array}       params.hotels             - 食店住宿資料（已裝飾）
+ * @param {Array}       params.rawHotels          - 食店住宿原始資料（不含衍生欄位）
+ * @param {Function}    params.setHotels          - 更新 hotels 的 setter
+ * @param {Function}    params.updateHotelCalendarIds - 回寫日曆事件 ID
  *
  * export：{ isSyncing, handleSyncToDrive, handleLoadFromDrive, handleSyncToCalendar }
  */
@@ -28,6 +32,10 @@ export function useGoogleSync({
     tripLabels,
     setTickets,
     setTripLabels,
+    hotels = [],
+    rawHotels = [],
+    setHotels,
+    updateHotelCalendarIds,
 }) {
     const [isSyncing, setIsSyncing] = useState(false);
 
@@ -42,7 +50,7 @@ export function useGoogleSync({
         if (!accessToken) return toast.error('請先登入 Google');
         setIsSyncing(true);
         const toastId = toast.loading('正在備份至 Google Drive…');
-        let res = await syncToDrive(tickets, tripLabels, accessToken);
+        let res = await syncToDrive(tickets, tripLabels, rawHotels, accessToken);
         setIsSyncing(false);
 
         if (res.success) {
@@ -55,7 +63,7 @@ export function useGoogleSync({
                 const ok = await trySilentRefresh();
                 if (ok) {
                     setIsSyncing(true);
-                    res = await syncToDrive(tickets, tripLabels, getCurrentToken());
+                    res = await syncToDrive(tickets, tripLabels, rawHotels, getCurrentToken());
                     setIsSyncing(false);
                     if (res.success) {
                         return toast.success('雲端備份成功！', { id: toastId, description: `資料已備份至 Google Drive。(檔案 ID: ${res.fileId})` });
@@ -85,6 +93,9 @@ export function useGoogleSync({
                     onClick: () => {
                         setTickets(result.tickets);
                         setTripLabels(result.tripLabels || {});
+                        if (result.hotels?.length > 0 && setHotels) {
+                            setHotels(result.hotels);
+                        }
                         toast.success('雲端資料載入成功！');
                     },
                 },
@@ -116,7 +127,7 @@ export function useGoogleSync({
         if (!accessToken) return toast.error('請先登入 Google');
         setIsSyncing(true);
         const toastId = toast.loading('正在同步至 Google Calendar…');
-        let res = await syncToCalendar(tickets, accessToken);
+        let res = await syncToCalendar(tickets, hotels, accessToken);
         setIsSyncing(false);
 
         const showCalendarSuccess = (result) => {
@@ -139,13 +150,19 @@ export function useGoogleSync({
                         : t
                 ));
             }
+            // 將飯店日曆 ID 回寫
+            if (res.updatedHotelCalendarIds && updateHotelCalendarIds) {
+                Object.entries(res.updatedHotelCalendarIds).forEach(([hotelId, ids]) => {
+                    updateHotelCalendarIds(hotelId, ids.checkInId, ids.checkOutId);
+                });
+            }
             showCalendarSuccess(res);
         } else {
             if (res.expired) {
                 const ok = await trySilentRefresh();
                 if (ok) {
                     setIsSyncing(true);
-                    res = await syncToCalendar(tickets, getCurrentToken());
+                    res = await syncToCalendar(tickets, hotels, getCurrentToken());
                     setIsSyncing(false);
                     if (res.success) {
                         toast.dismiss(toastId);

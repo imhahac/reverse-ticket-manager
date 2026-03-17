@@ -1,45 +1,44 @@
 /**
- * App.jsx ── 應用程式根元件（Travel Itinerary Planner）
- *
- * 職責：只做 layout glue，所有業務邏輯分散在各 Hook / Feature 模組。
+ * App.jsx ── 應用程式根元件（Travel Itinerary Planner v2）
  *
  * 架構層次：
  *   Hooks（資料層）
- *     useGoogleAuth       ← OAuth login / logout / silent refresh
- *     useGoogleSync       ← Drive 備份 / Calendar 同步
+ *     useGoogleAuth       ← OAuth
+ *     useGoogleSync       ← Drive / Calendar 同步
  *     useExchangeRates    ← 即時匯率
  *     useLocalStorage     ← tickets / tripLabels 持久化
- *     useTrips            ← 拆票＋配對 → segments / trips
- *     useTripOverrides    ← 手動重組持久化
+ *     useTrips            ← 航班配對 → segments / trips
+ *     useTripOverrides    ← 手動重組
+ *     useHotels           ← 飯店 CRUD + 衍生欄位
  *
  *   useMemo（衍生資料層）
  *     displayTrips    ← applyTripOverrides(trips, overrides)
- *     decoratedTrips  ← isPast / totalCostTWD / isOpenJaw / tripDays / costPerDay
+ *     decoratedTrips  ← 航班成本 / isOpenJaw / tripDays 計算
+ *     itinerary       ← useItinerary(decoratedTrips, hotels) → 注入 matchedHotels
  *
  *   UI 元件（純渲染）
- *     Dashboard       ← 統計卡片
- *     GoogleToolbar   ← header 右側按鈕組（inline）
- *     TripTimeline / TicketList / TripCalendar / TicketForm / Instructions
+ *     Dashboard / TicketForm / HotelForm / TripTimeline / TicketList / HotelList / TripCalendar / Instructions
  *
- * Features（功能模組，各自獨立）
- *     features/flights/   ← 現有機票功能
- *     features/hotels/    ← 飯店住宿（骨架，待實作）
+ * Tabs：
+ *   📆 Timeline（機票 + 飯店混排）
+ *   🎟️ 機票管理
+ *   🏨 飯店管理
+ *   📅 月曆
  */
 import React, { useState, useRef, useMemo } from 'react';
 import { Plane, Calendar, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn } from 'lucide-react';
-
 
 // ── Hooks ──────────────────────────────────────────────────────────────────
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useGoogleSync } from './hooks/useGoogleSync';
 import { useExchangeRates } from './hooks/useExchangeRates';
+import { useItinerary } from './hooks/useItinerary';
 import { calculateTripDays } from './utils/dateHelpers';
 import { applyTripOverrides } from './utils/tripOverrides';
-
-// ── Features: Flights ──────────────────────────────────────────────────────
 import { useTrips } from './hooks/useTrips';
 import { useTripOverrides } from './hooks/useTripOverrides';
+import { useHotels } from './features/hotels/hooks/useHotels';
 
 // ── UI Components ──────────────────────────────────────────────────────────
 import Instructions from './components/Instructions';
@@ -48,6 +47,8 @@ import TripCalendar from './components/TripCalendar';
 import TicketForm from './components/TicketForm';
 import TicketList from './components/TicketList';
 import TripTimeline from './components/TripTimeline';
+import HotelForm from './features/hotels/components/HotelForm';
+import HotelList from './features/hotels/components/HotelList';
 
 function App() {
     // ── 持久化資料 ───────────────────────────────────────────────────────────
@@ -57,33 +58,35 @@ function App() {
     // ── UI 狀態 ──────────────────────────────────────────────────────────────
     const [activeTab, setActiveTab] = useState('timeline');
     const [editingTicket, setEditingTicket] = useState(null);
+    const [editingHotel, setEditingHotel] = useState(null);
     const fileInputRef = useRef(null);
 
-    // ── Hooks ─────────────────────────────────────────────────────────────────
+    // ── Auth & Sync Hooks ────────────────────────────────────────────────────
     const { accessToken, accessTokenState, login, logout, trySilentRefresh } = useGoogleAuth();
     const { exchangeRates } = useExchangeRates();
+
+    // ── Flights Hooks ────────────────────────────────────────────────────────
     const { segments, trips } = useTrips(tickets);
     const { overrides: tripOverrides, removeSegment, restoreSegment, moveSegmentToTrip, clearAllOverrides } = useTripOverrides();
+
+    // ── Hotels Hook ──────────────────────────────────────────────────────────
+    const { hotels, rawHotels, addHotel, updateHotel, deleteHotel, updateHotelCalendarIds, setHotels } = useHotels();
+
+    // ── Google Sync ──────────────────────────────────────────────────────────
     const { isSyncing, handleSyncToDrive, handleLoadFromDrive, handleSyncToCalendar } = useGoogleSync({
         accessToken, accessTokenState, trySilentRefresh, logout,
         tickets, tripLabels, setTickets, setTripLabels,
+        hotels, rawHotels,
+        setHotels,
+        updateHotelCalendarIds,
     });
 
-    // ── 衍生資料層 ────────────────────────────────────────────────────────────
-    const displayTrips = useMemo(() => applyTripOverrides(trips, tripOverrides), [trips, tripOverrides]);
+    // ── 衍生資料：displayTrips → decoratedTrips → itinerary ─────────────────
+    const displayTrips = useMemo(
+        () => applyTripOverrides(trips, tripOverrides),
+        [trips, tripOverrides]
+    );
 
-    /**
-     * decoratedTrips：為每個 trip 補充衍生欄位。
-     * TripTimeline 直接讀取這些欄位，不再自行計算。
-     *
-     * 欄位說明：
-     *   tripStartAt / tripEndAt → 判斷 isPast 用
-     *   isPast                  → tripEndAt < now
-     *   totalCostTWD            → 各航段分攤成本加總
-     *   isOpenJaw               → 去回程機場不同
-     *   tripDays                → 含頭含尾天數
-     *   costPerDay              → totalCostTWD / tripDays
-     */
     const decoratedTrips = useMemo(() => {
         const now = Date.now();
         const getSegs = (trip) => {
@@ -106,7 +109,7 @@ function App() {
             if (!segs.length) return { ...trip, segments: [], tripStartAt: null, tripEndAt: null, isPast: false, totalCostTWD: 0, isOpenJaw: false, tripDays: null, costPerDay: null };
             const first = segs[0], last = segs[segs.length - 1];
             const tripStartAt = dt(first.date, first.time, '00:00');
-            let tripEndAt = dt(last.arrivalDate, last.arrivalTime, null)
+            const tripEndAt = dt(last.arrivalDate, last.arrivalTime, null)
                 ?? (dt(last.date, last.time, null) ? new Date(dt(last.date, last.time, null).getTime() + 2 * 3600000) : null)
                 ?? dt(last.date, '23:59', '23:59');
             const totalCostTWD = segs.reduce((s, seg) => {
@@ -123,13 +126,17 @@ function App() {
         });
     }, [displayTrips]);
 
-    // ── 費用三分類 ────────────────────────────────────────────────────────────
-    const totalPriceTWD = tickets.reduce((s, t) => s + (t.priceTWD || t.price), 0);
-    const pastCostTWD   = useMemo(() => decoratedTrips.reduce((s, t) => s + (t.isPast  ? t.totalCostTWD : 0), 0), [decoratedTrips]);
-    const futureCostTWD = useMemo(() => decoratedTrips.reduce((s, t) => s + (!t.isPast ? t.totalCostTWD : 0), 0), [decoratedTrips]);
-    const sunkCostTWD   = Math.max(0, totalPriceTWD - pastCostTWD - futureCostTWD);
+    // itinerary = decoratedTrips + 每個 trip 注入 matchedHotels
+    const itinerary = useItinerary(decoratedTrips, hotels);
 
-    // ── 機票 CRUD handlers ────────────────────────────────────────────────────
+    // ── 費用計算 ─────────────────────────────────────────────────────────────
+    const totalPriceTWD  = tickets.reduce((s, t) => s + (t.priceTWD || t.price || 0), 0);
+    const totalHotelTWD  = hotels.reduce((s, h) => s + (h.priceTWD || 0), 0);
+    const pastCostTWD    = useMemo(() => decoratedTrips.reduce((s, t) => s + ( t.isPast ? t.totalCostTWD : 0), 0), [decoratedTrips]);
+    const futureCostTWD  = useMemo(() => decoratedTrips.reduce((s, t) => s + (!t.isPast ? t.totalCostTWD : 0), 0), [decoratedTrips]);
+    const sunkCostTWD    = Math.max(0, totalPriceTWD - pastCostTWD - futureCostTWD);
+
+    // ── 機票 CRUD ─────────────────────────────────────────────────────────────
     const handleSaveTicket = (ticket) => {
         setTickets(prev => editingTicket
             ? prev.map(t => t.id === ticket.id ? ticket : t)
@@ -139,13 +146,33 @@ function App() {
     const handleEditTicket = (ticket) => { setEditingTicket(ticket); window.scrollTo({ top: 0, behavior: 'smooth' }); };
     const handleCancelEdit = () => setEditingTicket(null);
 
-    // importTicket 的 toast confirm 在 useGoogleSync 外（本地 JSON 匯入）
+    // ── 飯店 CRUD ─────────────────────────────────────────────────────────────
+    const handleSaveHotel = (hotel) => {
+        if (editingHotel) {
+            updateHotel(hotel);
+        } else {
+            addHotel(hotel);
+        }
+        setEditingHotel(null);
+    };
+    const handleEditHotel = (hotel) => { setEditingHotel(hotel); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    const handleDeleteHotel = (id) => {
+        import('sonner').then(({ toast }) =>
+            toast('確定要刪除這筆住宿記錄嗎？', {
+                action: { label: '確認刪除', onClick: () => deleteHotel(id) },
+                cancel: { label: '取消', onClick: () => {} },
+                duration: 8000,
+            })
+        );
+    };
+
+    // ── 本地 JSON 匯出入 ──────────────────────────────────────────────────────
     const handleExport = () => {
-        const blob = new Blob([JSON.stringify({ tickets, tripLabels }, null, 2)], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify({ tickets, tripLabels, hotels: rawHotels }, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         Object.assign(document.createElement('a'), {
             href: url,
-            download: `reverse-tickets-backup-${new Date().toISOString().split('T')[0]}.json`,
+            download: `travel-backup-${new Date().toISOString().split('T')[0]}.json`,
         }).click();
         URL.revokeObjectURL(url);
     };
@@ -159,11 +186,16 @@ function App() {
                 const data = JSON.parse(target.result);
                 const newTickets = Array.isArray(data) ? data : (data.tickets || []);
                 const newLabels  = data.tripLabels || {};
+                const newHotels  = data.hotels || [];
                 if (!newTickets.length || !newTickets[0]?.id) throw new Error('Invalid format');
                 import('sonner').then(({ toast }) =>
-                    toast(`成功讀取 ${newTickets.length} 筆機票資料`, {
-                        description: '確認後將覆寫目前所有訂單。',
-                        action: { label: '確認覆寫', onClick: () => { setTickets(newTickets); setTripLabels(newLabels); toast.success('匯入成功！'); } },
+                    toast(`成功讀取 ${newTickets.length} 筆機票、${newHotels.length} 筆住宿`, {
+                        action: { label: '確認覆寫', onClick: () => {
+                            setTickets(newTickets);
+                            setTripLabels(newLabels);
+                            if (newHotels.length > 0) setHotels(newHotels);
+                            toast.success('匯入成功！');
+                        }},
                         cancel: { label: '取消', onClick: () => {} },
                         duration: 10000,
                     })
@@ -176,6 +208,14 @@ function App() {
         reader.readAsText(file);
     };
 
+    // ── Tab 設定 ──────────────────────────────────────────────────────────────
+    const TABS = [
+        { key: 'timeline', label: '📆 行程 Timeline' },
+        { key: 'list',     label: '🎟️ 機票管理' },
+        { key: 'hotels',   label: '🏨 飯店管理' },
+        { key: 'calendar', label: '📅 月曆' },
+    ];
+
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <div className="min-h-screen p-4 md:p-8 bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900">
@@ -185,12 +225,11 @@ function App() {
                 <header className="mb-8 pt-4 flex flex-col md:flex-row justify-between items-center gap-4">
                     <div>
                         <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-3 tracking-tight flex items-center">
-                            <Plane className="w-8 h-8 mr-3 text-indigo-600" /> 航班反向票管理系統
+                            <Plane className="w-8 h-8 mr-3 text-indigo-600" /> 差旅行程管理系統
                         </h1>
-                        <p className="text-slate-500 text-lg">解決來回機票分段購買時，出發方向與日期混淆的問題。</p>
+                        <p className="text-slate-500 text-lg">機票反向防呆 ✈️ + 飯店住宿管理 🏨 一站整合</p>
                     </div>
                     <div className="flex flex-col gap-2 w-full md:w-auto">
-                        {/* Google 雲端按鈕 */}
                         {accessToken ? (
                             <div className="flex flex-wrap gap-2 justify-end bg-indigo-50 p-2 rounded-lg border border-indigo-100">
                                 <span className="flex items-center text-xs font-bold text-indigo-600 w-full mb-1">
@@ -216,7 +255,6 @@ function App() {
                                 </button>
                             </div>
                         )}
-                        {/* 本地 JSON 匯出入 */}
                         <div className="flex gap-2 justify-end mt-1">
                             <button onClick={handleExport} className="flex items-center px-3 py-1.5 bg-white border border-gray-200 text-gray-500 font-bold text-xs rounded hover:bg-gray-50 transition">
                                 <Download className="w-3 h-3 mr-1" /> 本地匯出 JSON
@@ -235,32 +273,39 @@ function App() {
                 <Dashboard
                     ticketCount={tickets.length}
                     tripCount={trips.length}
+                    hotelCount={hotels.length}
                     totalPriceTWD={totalPriceTWD}
+                    totalHotelTWD={totalHotelTWD}
                     futureCostTWD={futureCostTWD}
                     pastCostTWD={pastCostTWD}
                     sunkCostTWD={sunkCostTWD}
                 />
 
-                {/* ── 機票新增/修改表單 ───────────────────────────────────── */}
-                <TicketForm
-                    onAddTicket={handleSaveTicket}
-                    editingTicket={editingTicket}
-                    onCancelEdit={handleCancelEdit}
-                    exchangeRates={exchangeRates}
-                />
+                {/* ── Tab 內容（表單跟著 active tab 變化）─────────────────── */}
+                {activeTab === 'timeline' || activeTab === 'list' ? (
+                    <TicketForm
+                        onAddTicket={handleSaveTicket}
+                        editingTicket={editingTicket}
+                        onCancelEdit={handleCancelEdit}
+                        exchangeRates={exchangeRates}
+                    />
+                ) : activeTab === 'hotels' ? (
+                    <HotelForm
+                        onSaveHotel={handleSaveHotel}
+                        editingHotel={editingHotel}
+                        onCancelEdit={() => setEditingHotel(null)}
+                        exchangeRates={exchangeRates}
+                    />
+                ) : null}
 
-                {/* ── 主視覺 Tab 切換 ─────────────────────────────────────── */}
-                <div className="mt-12 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                {/* ── 主視覺 Tab ─────────────────────────────────────────── */}
+                <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="flex border-b border-gray-200 p-1 bg-slate-50/50">
-                        {[
-                            { key: 'timeline', label: '📆 實際飛行配對 (Timeline)' },
-                            { key: 'list',     label: '🎟️ 購買清單管理 (Purchases)' },
-                            { key: 'calendar', label: '📅 月曆視角 (Calendar)' },
-                        ].map(tab => (
+                        {TABS.map(tab => (
                             <button
                                 key={tab.key}
                                 onClick={() => setActiveTab(tab.key)}
-                                className={`flex-1 py-3 px-2 sm:px-4 font-bold text-sm sm:text-base rounded-t-lg transition-colors ${
+                                className={`flex-1 py-3 px-2 sm:px-3 font-bold text-xs sm:text-sm rounded-t-lg transition-colors ${
                                     activeTab === tab.key
                                         ? 'bg-white text-indigo-700 border-b-2 border-indigo-500 shadow-sm'
                                         : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
@@ -273,7 +318,7 @@ function App() {
                     <div className="p-4 md:p-6 bg-white min-h-[400px]">
                         {activeTab === 'timeline' && (
                             <TripTimeline
-                                trips={decoratedTrips}
+                                trips={itinerary}
                                 tripLabels={tripLabels}
                                 onUpdateLabel={(id, val) => setTripLabels(p => ({ ...p, [id]: val }))}
                                 overrideState={tripOverrides}
@@ -294,6 +339,13 @@ function App() {
                                     })
                                 );
                             }} onEdit={handleEditTicket} />
+                        )}
+                        {activeTab === 'hotels' && (
+                            <HotelList
+                                hotels={hotels}
+                                onEdit={handleEditHotel}
+                                onDelete={handleDeleteHotel}
+                            />
                         )}
                         {activeTab === 'calendar' && <TripCalendar segments={segments} />}
                     </div>

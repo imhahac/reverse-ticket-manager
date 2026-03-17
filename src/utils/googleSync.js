@@ -2,8 +2,12 @@
 
 /**
  * 上傳/覆寫資料到 Google Drive 的 reverse-tickets.json
+ * @param {Array}  tickets    - 機票資料
+ * @param {Object} tripLabels - 行程標籤
+ * @param {Array}  hotels     - 飯店住宿資料
+ * @param {string} accessToken
  */
-export const syncToDrive = async (tickets, tripLabels, accessToken) => {
+export const syncToDrive = async (tickets, tripLabels, hotels = [], accessToken) => {
     try {
         const query = encodeURIComponent(`name="reverse-tickets.json" and trashed=false`);
         const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive`, {
@@ -16,7 +20,7 @@ export const syncToDrive = async (tickets, tripLabels, accessToken) => {
         const searchData = await searchRes.json();
         const existingFile = searchData.files && searchData.files.length > 0 ? searchData.files[0] : null;
 
-        const fileContent = { tickets, tripLabels };
+        const fileContent = { tickets, tripLabels, hotels };
 
         let uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=media';
         let method = 'POST';
@@ -97,15 +101,17 @@ export const loadFromDrive = async (accessToken) => {
         
         let tickets = [];
         let tripLabels = {};
+        let hotels = [];
         
         if (Array.isArray(data)) {
             tickets = data;
         } else {
             tickets = data.tickets || [];
             tripLabels = data.tripLabels || {};
+            hotels = data.hotels || [];
         }
 
-        return { success: true, tickets, tripLabels, foundFilesLog: allFoundFiles };
+        return { success: true, tickets, tripLabels, hotels, foundFilesLog: allFoundFiles };
     } catch (e) {
         console.error(e);
         return { success: false, error: e.message };
@@ -173,10 +179,14 @@ function getIanaTimeZone(seg) {
 
 /**
  * 同步航班時間至 Google Calendar
+ * 並同步飯店 Check-in / Check-out 全天事件
  * - 修正時區：不再硬寫 +08:00，改用純本地時間字串 + timeZone 欄位
  * - 孤兒事件清理：標記 extendedProperties，同步前先刪除本地已不存在的舊事件
+ * @param {Array}  tickets     - 機票資料
+ * @param {Array}  hotels      - 飯店住宿資料
+ * @param {string} accessToken
  */
-export const syncToCalendar = async (tickets, accessToken) => {
+export const syncToCalendar = async (tickets, hotels = [], accessToken) => {
     try {
         const allSegments = [];
         
@@ -326,7 +336,66 @@ export const syncToCalendar = async (tickets, accessToken) => {
             }
         }
 
-        return { success: addedCount > 0 || errorLog === '', count: addedCount, deletedCount, error: errorLog, updatedCalendarIds };
+        // ── 飯店 Check-in / Check-out 事件 ──────────────────────────────
+        const updatedHotelCalendarIds = {};
+        for (const hotel of hotels) {
+            if (!hotel.checkIn || !hotel.checkOut) continue;
+
+            const syncHotelEvent = async (type, date, summary, existingEventId) => {
+                const nextDay = (() => {
+                    const d = new Date(date + 'T00:00:00');
+                    d.setDate(d.getDate() + 1);
+                    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                })();
+                const body = {
+                    summary,
+                    description: `${hotel.name}${hotel.address ? `\n${hotel.address}` : ''}${hotel.confirmationNo ? `\n確認碼: ${hotel.confirmationNo}` : ''}${hotel.notes ? `\n備註: ${hotel.notes}` : ''}`,
+                    start: { date },
+                    end: { date: nextDay },
+                    extendedProperties: {
+                        private: { reverseTicketApp: 'true', reverseTicketHotelId: hotel.id, reverseTicketHotelType: type }
+                    }
+                };
+                let evId = existingEventId;
+                if (evId) {
+                    const chk = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${evId}`, {
+                        headers: { Authorization: `Bearer ${accessToken}` }
+                    });
+                    if (!chk.ok) evId = null;
+                }
+                const method = evId ? 'PUT' : 'POST';
+                const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events${evId ? `/${evId}` : ''}`;
+                const r = await fetch(url, {
+                    method,
+                    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (r.ok) {
+                    const d = await r.json();
+                    addedCount++;
+                    return d.id;
+                } else if (r.status === 401) {
+                    return null; // caller handles expired
+                }
+                return null;
+            };
+
+            const checkInId = await syncHotelEvent(
+                'checkIn', hotel.checkIn,
+                `[住宿 Check-in] ${hotel.name}`,
+                hotel.calendarCheckInId
+            );
+            const checkOutId = await syncHotelEvent(
+                'checkOut', hotel.checkOut,
+                `[住宿 Check-out] ${hotel.name}`,
+                hotel.calendarCheckOutId
+            );
+            if (checkInId || checkOutId) {
+                updatedHotelCalendarIds[hotel.id] = { checkInId, checkOutId };
+            }
+        }
+
+        return { success: addedCount > 0 || errorLog === '', count: addedCount, deletedCount, error: errorLog, updatedCalendarIds, updatedHotelCalendarIds };
     } catch (e) {
         console.error(e);
         return { success: false, count: 0, deletedCount: 0, error: e.message };
