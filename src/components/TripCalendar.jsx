@@ -138,23 +138,26 @@ export default function TripCalendar({ segments, hotels = [] }) {
 
                             <div className="flex flex-col gap-1 mt-0.5">
                                 {/* 住宿區塊 */}
-                                {stayHotels.map((h, i) => (
-                                    <div key={i} className="p-1 rounded border text-[10px] font-bold bg-teal-50 border-teal-200 text-teal-800 leading-tight">
-                                        {checkIn && h.checkIn === toDateStr(day) && <span className="text-[9px] bg-teal-500 text-white rounded px-0.5 mr-0.5">IN</span>}
-                                        {checkOut && h.checkOut === toDateStr(day) ? null : null}
-                                        <span className="truncate block">{h.name}</span>
-                                    </div>
-                                ))}
-                                {/* check-out 標示（不在住宿期間內但是 checkout 日） */}
-                                {checkOut && !hasStay && hotels
-                                    .filter(h => h.checkOut === toDateStr(day))
-                                    .map((h, i) => (
-                                        <div key={`out-${i}`} className="p-1 rounded border text-[10px] font-bold bg-teal-100 border-teal-300 text-teal-900 leading-tight">
-                                            <span className="text-[9px] bg-teal-600 text-white rounded px-0.5 mr-0.5">OUT</span>
+                                {hotels.map((h, i) => {
+                                    const dStr = toDateStr(day);
+                                    if (!h.checkIn || !h.checkOut) return null;
+                                    
+                                    const isCheckIn = h.checkIn === dStr;
+                                    const isCheckOut = h.checkOut === dStr;
+                                    const isStay = dStr > h.checkIn && dStr < h.checkOut;
+                                    
+                                    if (!isCheckIn && !isCheckOut && !isStay) return null;
+                                    
+                                    return (
+                                        <div key={i} className={`p-1 rounded border text-[10px] font-bold leading-tight ${
+                                            isCheckOut && !isCheckIn ? 'bg-teal-100 border-teal-300 text-teal-900' : 'bg-teal-50 border-teal-200 text-teal-800'
+                                        }`}>
+                                            {isCheckIn && <span className="text-[9px] bg-teal-500 text-white rounded px-0.5 mr-0.5">IN</span>}
+                                            {isCheckOut && <span className="text-[9px] bg-teal-600 text-white rounded px-0.5 mr-0.5">OUT</span>}
                                             <span className="truncate block">{h.name}</span>
                                         </div>
-                                    ))
-                                }
+                                    );
+                                })}
                                 {/* 航班 */}
                                 {flights.map((flight, i) => (
                                     <div key={i} className={`p-1 rounded-md border text-[10px] shadow-sm ${

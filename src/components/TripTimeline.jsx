@@ -151,6 +151,21 @@ export default function TripTimeline({
                 const customLabel = tripLabels[comboKey] || `Trip ${index + 1}`;
                 const matchedHotels = trip.matchedHotels ?? [];
 
+                const hotelWarns = (() => {
+                    const warns = [];
+                    if (tripDays > 1 && matchedHotels.length === 0) {
+                        warns.push(`⚠️ 此趟次尚未安排任何住宿`);
+                        return warns;
+                    }
+                    const valid = matchedHotels.filter(h => h.checkIn && h.checkOut).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+                    for (let i = 0; i < valid.length - 1; i++) {
+                        const a = valid[i], b = valid[i + 1];
+                        if (b.checkIn < a.checkOut) warns.push(`⚠️ 住宿重疊：「${a.name}」與「${b.name}」`);
+                        else if (b.checkIn > a.checkOut) warns.push(`⚠️ 住宿缺口：${a.checkOut} 到 ${b.checkIn} 之間無住宿`);
+                    }
+                    return warns;
+                })();
+
                 const totalHotelCostTWD = trip.totalHotelCostTWD ?? 0;
                 const grandTotalTWD = totalCostTWD + totalHotelCostTWD;
 
@@ -229,6 +244,13 @@ export default function TripTimeline({
                             </div>
                         </div>
                         <div className="flex-1 p-5 lg:p-6 flex flex-col justify-center gap-3 bg-white rounded-r-xl">
+                            {hotelWarns.length > 0 && (
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-1 space-y-1">
+                                    {hotelWarns.map((w, i) => (
+                                        <div key={i} className="text-xs font-bold text-amber-700">{w}</div>
+                                    ))}
+                                </div>
+                            )}
                             {segments.map((seg, i) => {
                                 const arrival = getArrivalDate(seg);
                                 const nextDepart = i < segments.length - 1 ? getDepartDate(segments[i + 1]) : null;
@@ -357,6 +379,22 @@ export default function TripTimeline({
                 const isExternalOnly = trip.isExternalOnly;
                 const customLabel = tripLabels[comboKey] || `Trip ${index + 1}`;
                 const matchedHotels = trip.matchedHotels ?? [];
+                
+                const hotelWarns = (() => {
+                    const warns = [];
+                    if (tripDays > 1 && matchedHotels.length === 0) {
+                        warns.push(`⚠️ 此趟次尚未安排任何住宿`);
+                        return warns;
+                    }
+                    const valid = matchedHotels.filter(h => h.checkIn && h.checkOut).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+                    for (let i = 0; i < valid.length - 1; i++) {
+                        const a = valid[i], b = valid[i + 1];
+                        if (b.checkIn < a.checkOut) warns.push(`⚠️ 住宿重疊：「${a.name}」與「${b.name}」`);
+                        else if (b.checkIn > a.checkOut) warns.push(`⚠️ 住宿缺口：${a.checkOut} 到 ${b.checkIn} 之間無住宿`);
+                    }
+                    return warns;
+                })();
+
                 const totalHotelCostTWD = trip.totalHotelCostTWD ?? 0;
                 const grandTotalTWD = totalCostTWD + totalHotelCostTWD;
 
@@ -430,6 +468,13 @@ export default function TripTimeline({
                             </div>
                         </div>
                         <div className="flex-1 p-5 lg:p-6 flex flex-col justify-center gap-3 bg-white rounded-r-xl">
+                            {hotelWarns.length > 0 && (
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-1 space-y-1">
+                                    {hotelWarns.map((w, i) => (
+                                        <div key={i} className="text-xs font-bold text-amber-700">{w}</div>
+                                    ))}
+                                </div>
+                            )}
                             {segments.map((seg, i) => {
                                 const arrival = getArrivalDate(seg);
                                 const nextDepart = i < segments.length - 1 ? getDepartDate(segments[i + 1]) : null;

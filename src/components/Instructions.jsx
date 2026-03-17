@@ -53,9 +53,9 @@ export default function Instructions() {
                             <ol className="list-decimal list-inside text-sm space-y-2 leading-relaxed">
                                 <li>在下方表單輸入機票資訊，支援 <strong>單程票</strong> 與 <strong>多幣別換算 (TWD/JPY/USD)</strong>。所有時間皆精確到分鐘。</li>
                                 <li>在 <strong>「購買清單管理」</strong> 分頁可以隨時 ✏️ <strong>修改訂單</strong> 或 🗑️ 刪除。</li>
-                                <li>切換至 <strong>「實際飛行配對」</strong>，查看系統拼好的趟次與精算成本。點 ✏️ 可<strong>自訂行程命名</strong>，也可<strong>拖曳航段</strong>手動調整配對。</li>
+                                <li>切換至 <strong>「實際飛行配對」</strong>，查看系統拼好的趟次與精算成本。點 ✏️ 可<strong>自訂行程命名</strong>，且支援<strong>拖曳航段</strong>。若系統偵測到趟次內住宿有缺口或重疊，會自動紅字警告。</li>
                                 <li><strong>【雲端同步】</strong>點右上角「登入 Google」，授權後可一鍵<strong>備份/載入</strong>到你的個人 Google Drive。</li>
-                                <li><strong>【日曆推播】</strong>登入後點「同步日曆」，航班自動排入 Google 行事曆；搭配 GitHub Actions 每日 LINE 推播行前提醒！</li>
+                                <li><strong>【日曆推播】</strong>登入後點「同步日曆」，航班自動排入 Google 行事曆，住宿也會合併為連續天數全天事件！</li>
                             </ol>
                         </div>
                     </div>

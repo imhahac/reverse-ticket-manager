@@ -357,19 +357,14 @@ export const syncToCalendar = async (tickets, hotels = [], accessToken) => {
         for (const hotel of hotels) {
             if (!hotel.checkIn || !hotel.checkOut) continue;
 
-            const syncHotelEvent = async (type, date, summary, existingEventId) => {
-                const nextDay = (() => {
-                    const d = new Date(date + 'T00:00:00');
-                    d.setDate(d.getDate() + 1);
-                    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                })();
+            const syncSingleHotelEvent = async (hotel, existingEventId) => {
                 const body = {
-                    summary,
-                    description: `${hotel.name}${hotel.address ? `\n${hotel.address}` : ''}${hotel.confirmationNo ? `\n確認碼: ${hotel.confirmationNo}` : ''}${hotel.notes ? `\n備註: ${hotel.notes}` : ''}`,
-                    start: { date },
-                    end: { date: nextDay },
+                    summary: `[住宿] ${hotel.name}`,
+                    description: `Check-in: ${hotel.checkIn}\nCheck-out: ${hotel.checkOut}${hotel.address ? `\n\n地址: ${hotel.address}` : ''}${hotel.confirmationNo ? `\n確認碼: ${hotel.confirmationNo}` : ''}${hotel.notes ? `\n\n備註: ${hotel.notes}` : ''}`,
+                    start: { date: hotel.checkIn },
+                    end: { date: hotel.checkOut }, // Google Calendar end date for full day events is exclusive, perfectly matching checkOut date
                     extendedProperties: {
-                        private: { reverseTicketApp: 'true', reverseTicketHotelId: hotel.id, reverseTicketHotelType: type }
+                        private: { reverseTicketApp: 'true', reverseTicketHotelId: hotel.id, reverseTicketHotelType: 'stay' }
                     }
                 };
                 let evId = existingEventId;
@@ -396,18 +391,22 @@ export const syncToCalendar = async (tickets, hotels = [], accessToken) => {
                 return null;
             };
 
-            const checkInId = await syncHotelEvent(
-                'checkIn', hotel.checkIn,
-                `[住宿 Check-in] ${hotel.name}`,
-                hotel.calendarCheckInId
-            );
-            const checkOutId = await syncHotelEvent(
-                'checkOut', hotel.checkOut,
-                `[住宿 Check-out] ${hotel.name}`,
-                hotel.calendarCheckOutId
-            );
-            if (checkInId || checkOutId) {
-                updatedHotelCalendarIds[hotel.id] = { checkInId, checkOutId };
+            const stayId = await syncSingleHotelEvent(hotel, hotel.calendarCheckInId);
+            
+            if (stayId) {
+                 updatedHotelCalendarIds[hotel.id] = { checkInId: stayId, checkOutId: null };
+            }
+            
+            // Clean up legacy checkOut event if it exists
+            if (hotel.calendarCheckOutId && hotel.calendarCheckOutId !== stayId) {
+                try {
+                    await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${hotel.calendarCheckOutId}`, {
+                        method: 'DELETE',
+                        headers: { Authorization: `Bearer ${accessToken}` }
+                    });
+                } catch (e) {
+                    console.error("Failed to delete legacy checkout event", e);
+                }
             }
         }
 
