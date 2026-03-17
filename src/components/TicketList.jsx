@@ -74,13 +74,15 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
                                             </div>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex gap-2 justify-end">
-                                        <button onClick={() => onEdit(ticket)} className="text-amber-500 hover:text-amber-700 p-2 rounded hover:bg-amber-50 transition" title="修改訂單">
-                                            <Edit2 className="w-4 h-4" />
-                                        </button>
-                                        <button onClick={() => onDelete(ticket.id)} className="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 transition" title="刪除訂單">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <div className="flex gap-2 justify-end">
+                                            <button onClick={() => onEdit(ticket)} className="text-amber-500 hover:text-amber-700 p-2 rounded hover:bg-amber-50 transition" title="修改機票">
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                            <button onClick={() => onDelete(ticket.id)} className="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 transition" title="刪除機票">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             )
