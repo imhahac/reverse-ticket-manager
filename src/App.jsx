@@ -1,523 +1,187 @@
 /**
- * App.jsx ── 應用程式根元件
+ * App.jsx ── 應用程式根元件（Travel Itinerary Planner）
+ *
+ * 職責：只做 layout glue，所有業務邏輯分散在各 Hook / Feature 模組。
  *
  * 架構層次：
- *   LocalStorage (useLocalStorage)
- *     └─ tickets / tripLabels / accessTokenState
+ *   Hooks（資料層）
+ *     useGoogleAuth       ← OAuth login / logout / silent refresh
+ *     useGoogleSync       ← Drive 備份 / Calendar 同步
+ *     useExchangeRates    ← 即時匯率
+ *     useLocalStorage     ← tickets / tripLabels 持久化
+ *     useTrips            ← 拆票＋配對 → segments / trips
+ *     useTripOverrides    ← 手動重組持久化
  *
- *   資料層 (Data Layer)
- *     useTrips(tickets)              ← 拆票＋配對，產出 segments / trips
- *     applyTripOverrides(trips, ...)  ← 套用使用者手動調整，產出 displayTrips
- *     decoratedTrips (useMemo)        ← 為每個 trip 計算 isPast / totalCostTWD /
- *                                       isOpenJaw / tripDays / costPerDay
+ *   useMemo（衍生資料層）
+ *     displayTrips    ← applyTripOverrides(trips, overrides)
+ *     decoratedTrips  ← isPast / totalCostTWD / isOpenJaw / tripDays / costPerDay
  *
- *   UI 層 (Presentation Layer)
- *     TripTimeline  ← 接收 decoratedTrips，純渲染，不做計算
- *     TicketList    ← 接收 tickets，純渲染
- *     TripCalendar  ← 接收 segments，月曆視角
+ *   UI 元件（純渲染）
+ *     Dashboard       ← 統計卡片
+ *     GoogleToolbar   ← header 右側按鈕組（inline）
+ *     TripTimeline / TicketList / TripCalendar / TicketForm / Instructions
  *
- * Google 整合：
- *   Drive: syncToDrive / loadFromDrive
- *   Calendar: syncToCalendar
- *   OAuth: useGoogleLogin（含 silent refresh 機制）
+ * Features（功能模組，各自獨立）
+ *     features/flights/   ← 現有機票功能
+ *     features/hotels/    ← 飯店住宿（骨架，待實作）
  */
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { toast } from 'sonner';
-import { Plane, Calendar, Trash2, ArrowRight, BookOpen, AlertCircle, CheckCircle2, ListFilter, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn } from 'lucide-react';
-import { calculateTripDays } from './utils/dateHelpers';
-import { useGoogleLogin, googleLogout } from '@react-oauth/google';
-import { syncToDrive, loadFromDrive, syncToCalendar } from './utils/googleSync';
+import React, { useState, useRef, useMemo } from 'react';
+import { Plane, Calendar, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn } from 'lucide-react';
+
+
+// ── Hooks ──────────────────────────────────────────────────────────────────
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { useTrips } from './hooks/useTrips';
-import { useTripOverrides } from './hooks/useTripOverrides';
+import { useGoogleAuth } from './hooks/useGoogleAuth';
+import { useGoogleSync } from './hooks/useGoogleSync';
+import { useExchangeRates } from './hooks/useExchangeRates';
+import { calculateTripDays } from './utils/dateHelpers';
 import { applyTripOverrides } from './utils/tripOverrides';
 
+// ── Features: Flights ──────────────────────────────────────────────────────
+import { useTrips } from './hooks/useTrips';
+import { useTripOverrides } from './hooks/useTripOverrides';
+
+// ── UI Components ──────────────────────────────────────────────────────────
 import Instructions from './components/Instructions';
+import Dashboard from './components/Dashboard';
+import TripCalendar from './components/TripCalendar';
 import TicketForm from './components/TicketForm';
 import TicketList from './components/TicketList';
 import TripTimeline from './components/TripTimeline';
-import TripCalendar from './components/TripCalendar';
-
-// ── 匯率 fallback（當 exchangerate-api 無法存取時使用）────────────────────
-// 實際匯率由 useEffect 動態取得並更新 exchangeRates state
-const DEFAULT_RATES = { JPY: 0.21, USD: 32.5 };
 
 function App() {
+    // ── 持久化資料 ───────────────────────────────────────────────────────────
     const [tickets, setTickets] = useLocalStorage('reverse-tickets', []);
     const [tripLabels, setTripLabels] = useLocalStorage('reverse-trip-labels', {});
-    // Backward compatible:
-    // - 舊版存 string accessToken
-    // - 新版存 { token, expiresAt }
-    const [accessTokenState, setAccessTokenState] = useLocalStorage('google-access-token', null);
-    const accessToken = typeof accessTokenState === 'string' ? accessTokenState : accessTokenState?.token || null;
-    const accessTokenExpiresAt = typeof accessTokenState === 'object' ? accessTokenState?.expiresAt || null : null;
+
+    // ── UI 狀態 ──────────────────────────────────────────────────────────────
     const [activeTab, setActiveTab] = useState('timeline');
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [exchangeRates, setExchangeRates] = useState(DEFAULT_RATES);
+    const [editingTicket, setEditingTicket] = useState(null);
     const fileInputRef = useRef(null);
 
-    const [editingTicket, setEditingTicket] = useState(null);
-
-    // Calculate smart groupings via custom hook
+    // ── Hooks ─────────────────────────────────────────────────────────────────
+    const { accessToken, accessTokenState, login, logout, trySilentRefresh } = useGoogleAuth();
+    const { exchangeRates } = useExchangeRates();
     const { segments, trips } = useTrips(tickets);
+    const { overrides: tripOverrides, removeSegment, restoreSegment, moveSegmentToTrip, clearAllOverrides } = useTripOverrides();
+    const { isSyncing, handleSyncToDrive, handleLoadFromDrive, handleSyncToCalendar } = useGoogleSync({
+        accessToken, accessTokenState, trySilentRefresh, logout,
+        tickets, tripLabels, setTickets, setTripLabels,
+    });
 
-    // Manual override layer (persisted)
-    const {
-        overrides: tripOverrides,
-        removeSegment,
-        restoreSegment,
-        moveSegmentToTrip,
-        clearAllOverrides,
-    } = useTripOverrides();
-
+    // ── 衍生資料層 ────────────────────────────────────────────────────────────
     const displayTrips = useMemo(() => applyTripOverrides(trips, tripOverrides), [trips, tripOverrides]);
 
-    // ── 資料層：decoratedTrips ─────────────────────────────────────────────────
-    // displayTrips（已套用手動 override）再加工，計算每個 trip 的衍生欄位：
-    //   tripStartAt / tripEndAt  → 用於判斷行程是否已結束
-    //   isPast                   → tripEndAt < now
-    //   totalCostTWD             → 各航段分攤成本加總
-    //   isOpenJaw                → 去回程機場不同
-    //   tripDays                 → 含頭含尾天數
-    //   costPerDay               → totalCostTWD / tripDays
-    //
-    // TripTimeline 直接讀取這些欄位，不再自行計算，保持 UI 層乾淨。
+    /**
+     * decoratedTrips：為每個 trip 補充衍生欄位。
+     * TripTimeline 直接讀取這些欄位，不再自行計算。
+     *
+     * 欄位說明：
+     *   tripStartAt / tripEndAt → 判斷 isPast 用
+     *   isPast                  → tripEndAt < now
+     *   totalCostTWD            → 各航段分攤成本加總
+     *   isOpenJaw               → 去回程機場不同
+     *   tripDays                → 含頭含尾天數
+     *   costPerDay              → totalCostTWD / tripDays
+     */
     const decoratedTrips = useMemo(() => {
         const now = Date.now();
-
-        const getSegments = (trip) => {
+        const getSegs = (trip) => {
             if (Array.isArray(trip.segments) && trip.segments.length > 0) return trip.segments;
-            const segs = [];
-            if (trip.outbound) segs.push(trip.outbound);
-            if (Array.isArray(trip.connections)) segs.push(...trip.connections);
-            if (trip.inbound) segs.push(trip.inbound);
-            return segs;
+            const s = [];
+            if (trip.outbound) s.push(trip.outbound);
+            if (Array.isArray(trip.connections)) s.push(...trip.connections);
+            if (trip.inbound) s.push(trip.inbound);
+            return s;
         };
-
-        const buildDateTime = (date, time, fallbackTime) => {
+        const dt = (date, time, fallback) => {
             if (!date) return null;
-            const t = time || fallbackTime;
+            const t = time || fallback;
             if (!t) return null;
             const d = new Date(`${date}T${t}:00`);
             return isNaN(d.getTime()) ? null : d;
         };
-
         return displayTrips.map(trip => {
-            const segs = getSegments(trip);
+            const segs = getSegs(trip);
             if (!segs.length) return { ...trip, segments: [], tripStartAt: null, tripEndAt: null, isPast: false, totalCostTWD: 0, isOpenJaw: false, tripDays: null, costPerDay: null };
-
-            const firstSeg = segs[0];
-            const lastSeg = segs[segs.length - 1];
-
-            const tripStartAt = buildDateTime(firstSeg.date, firstSeg.time, '00:00');
-
-            let tripEndAt = null;
-            if (lastSeg.arrivalDate && lastSeg.arrivalTime) {
-                tripEndAt = buildDateTime(lastSeg.arrivalDate, lastSeg.arrivalTime, null);
-            }
-            if (!tripEndAt && lastSeg.date && lastSeg.time) {
-                const dep = buildDateTime(lastSeg.date, lastSeg.time, null);
-                if (dep) tripEndAt = new Date(dep.getTime() + 2 * 60 * 60 * 1000);
-            }
-            if (!tripEndAt && lastSeg.date) {
-                tripEndAt = buildDateTime(lastSeg.date, '23:59', '23:59');
-            }
-
-            const totalCostTWD = segs.reduce((sum, seg) => {
+            const first = segs[0], last = segs[segs.length - 1];
+            const tripStartAt = dt(first.date, first.time, '00:00');
+            let tripEndAt = dt(last.arrivalDate, last.arrivalTime, null)
+                ?? (dt(last.date, last.time, null) ? new Date(dt(last.date, last.time, null).getTime() + 2 * 3600000) : null)
+                ?? dt(last.date, '23:59', '23:59');
+            const totalCostTWD = segs.reduce((s, seg) => {
                 const base = seg.ticket?.priceTWD ?? seg.ticket?.price ?? 0;
-                const cost = seg.ticket?.type === 'oneway' ? base : base / 2;
-                return sum + cost;
+                return s + (seg.ticket?.type === 'oneway' ? base : base / 2);
             }, 0);
-
             const isPast = tripEndAt ? tripEndAt.getTime() < now : false;
-
-            // 邏輯層集中：isOpenJaw / tripDays / costPerDay
-            const isOpenJaw = segs.length >= 2
-                ? (() => {
-                    const outCode = (firstSeg.to || '').split(' ')[0];
-                    const inCode = (lastSeg.from || '').split(' ')[0];
-                    return Boolean(outCode && inCode && outCode !== inCode);
-                })()
-                : false;
-
-            const tripDays = (trip.isComplete && segs.length >= 2)
-                ? calculateTripDays(firstSeg.date, lastSeg.date)
-                : null;
-
+            const outCode = (first.to || '').split(' ')[0];
+            const inCode  = (last.from || '').split(' ')[0];
+            const isOpenJaw = segs.length >= 2 && Boolean(outCode && inCode && outCode !== inCode);
+            const tripDays = (trip.isComplete && segs.length >= 2) ? calculateTripDays(first.date, last.date) : null;
             const costPerDay = (tripDays && tripDays > 0) ? Math.round(totalCostTWD / tripDays) : null;
-
-            return {
-                ...trip,
-                segments: segs,
-                tripStartAt,
-                tripEndAt,
-                isPast,
-                totalCostTWD,
-                isOpenJaw,
-                tripDays,
-                costPerDay,
-            };
+            return { ...trip, segments: segs, tripStartAt, tripEndAt, isPast, totalCostTWD, isOpenJaw, tripDays, costPerDay };
         });
     }, [displayTrips]);
 
-    // ── 動態即時匯率 ──────────────────────────────────────────────────
-    useEffect(() => {
-        fetch('https://api.exchangerate-api.com/v4/latest/TWD')
-            .then(r => r.json())
-            .then(data => {
-                if (data?.rates) {
-                    // data.rates.JPY = 幾 JPY 換 1 TWD → 1 JPY = 1/rates.JPY TWD
-                    const jpyRate = data.rates.JPY ? parseFloat((1 / data.rates.JPY).toFixed(4)) : DEFAULT_RATES.JPY;
-                    // data.rates.USD = 幾 USD 換 1 TWD → 1 USD = 1/rates.USD TWD
-                    const usdRate = data.rates.USD ? parseFloat((1 / data.rates.USD).toFixed(2)) : DEFAULT_RATES.USD;
-                    setExchangeRates({ JPY: jpyRate, USD: usdRate });
-                }
-            })
-            .catch(() => {
-                // silently fallback to defaults
-            });
-    }, []);
-    // ──────────────────────────────────────────────────────────────────
+    // ── 費用三分類 ────────────────────────────────────────────────────────────
+    const totalPriceTWD = tickets.reduce((s, t) => s + (t.priceTWD || t.price), 0);
+    const pastCostTWD   = useMemo(() => decoratedTrips.reduce((s, t) => s + (t.isPast  ? t.totalCostTWD : 0), 0), [decoratedTrips]);
+    const futureCostTWD = useMemo(() => decoratedTrips.reduce((s, t) => s + (!t.isPast ? t.totalCostTWD : 0), 0), [decoratedTrips]);
+    const sunkCostTWD   = Math.max(0, totalPriceTWD - pastCostTWD - futureCostTWD);
 
+    // ── 機票 CRUD handlers ────────────────────────────────────────────────────
     const handleSaveTicket = (ticket) => {
-        if (editingTicket) {
-            setTickets(tickets.map(t => t.id === ticket.id ? ticket : t));
-            setEditingTicket(null);
-        } else {
-            setTickets([...tickets, ticket]);
-        }
-    };
-
-    const handleEditTicket = (ticket) => {
-        setEditingTicket(ticket);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-
-    const handleCancelEdit = () => {
+        setTickets(prev => editingTicket
+            ? prev.map(t => t.id === ticket.id ? ticket : t)
+            : [...prev, ticket]);
         setEditingTicket(null);
     };
+    const handleEditTicket = (ticket) => { setEditingTicket(ticket); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    const handleCancelEdit = () => setEditingTicket(null);
 
-    const deleteTicket = (id) => {
-        toast('確定要刪除這筆機票訂單嗎？', {
-            description: '相關的趟次配對將會被移除。',
-            action: {
-                label: '確認刪除',
-                onClick: () => setTickets(tickets.filter(t => t.id !== id)),
-            },
-            cancel: {
-                label: '取消',
-                onClick: () => {},
-            },
-            duration: 8000,
-        });
-    };
-
-    const updateLabel = (comboKey, name) => {
-        if (!name) {
-            const newLabels = { ...tripLabels };
-            delete newLabels[comboKey];
-            setTripLabels(newLabels);
-        } else {
-            setTripLabels({ ...tripLabels, [comboKey]: name });
-        }
-    };
-
+    // importTicket 的 toast confirm 在 useGoogleSync 外（本地 JSON 匯入）
     const handleExport = () => {
-        const dataToExport = { tickets, tripLabels };
-        const dataStr = JSON.stringify(dataToExport, null, 2);
-        const blob = new Blob([dataStr], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify({ tickets, tripLabels }, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `reverse-tickets-backup-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        Object.assign(document.createElement('a'), {
+            href: url,
+            download: `reverse-tickets-backup-${new Date().toISOString().split('T')[0]}.json`,
+        }).click();
         URL.revokeObjectURL(url);
     };
 
     const handleImport = (e) => {
         const file = e.target.files[0];
         if (!file) return;
-
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = ({ target }) => {
             try {
-                const importedData = JSON.parse(event.target.result);
-                let newTickets = [];
-                let newLabels = {};
-
-                if (Array.isArray(importedData)) {
-                    newTickets = importedData;
-                } else if (importedData.tickets && Array.isArray(importedData.tickets)) {
-                    newTickets = importedData.tickets;
-                    newLabels = importedData.tripLabels || {};
-                } else {
-                    throw new Error('Invalid format');
-                }
-
-                if (newTickets.length > 0 && !newTickets[0].id) {
-                    throw new Error('Invalid format');
-                }
-
-                toast(`成功讀取 ${newTickets.length} 筆機票資料`, {
-                    description: '確認後將覆寫目前所有訂單。',
-                    action: {
-                        label: '確認覆寫',
-                        onClick: () => {
-                            setTickets(newTickets);
-                            setTripLabels(newLabels);
-                            toast.success('匯入成功！');
-                        },
-                    },
-                    cancel: {
-                        label: '取消',
-                        onClick: () => {},
-                    },
-                    duration: 10000,
-                });
-            } catch (err) {
-                toast.error('匯入失敗', { description: '檔案格式錯誤或損毀，請確認 JSON 結構正確。' });
-                console.error(err);
+                const data = JSON.parse(target.result);
+                const newTickets = Array.isArray(data) ? data : (data.tickets || []);
+                const newLabels  = data.tripLabels || {};
+                if (!newTickets.length || !newTickets[0]?.id) throw new Error('Invalid format');
+                import('sonner').then(({ toast }) =>
+                    toast(`成功讀取 ${newTickets.length} 筆機票資料`, {
+                        description: '確認後將覆寫目前所有訂單。',
+                        action: { label: '確認覆寫', onClick: () => { setTickets(newTickets); setTripLabels(newLabels); toast.success('匯入成功！'); } },
+                        cancel: { label: '取消', onClick: () => {} },
+                        duration: 10000,
+                    })
+                );
+            } catch {
+                import('sonner').then(({ toast }) => toast.error('匯入失敗', { description: '檔案格式錯誤或損毀。' }));
             }
             e.target.value = '';
         };
         reader.readAsText(file);
     };
 
-    const refreshResolverRef = useRef(null);
-
-    const login = useGoogleLogin({
-        onSuccess: (codeResponse) => {
-            const expiresIn = Number(codeResponse.expires_in || 3600);
-            const expiresAt = Date.now() + expiresIn * 1000;
-            setAccessTokenState({ token: codeResponse.access_token, expiresAt });
-            toast.success('Google 登入成功！');
-        },
-        onError: (error) => {
-            console.error('Login Failed:', error);
-            toast.error('Google 登入失敗', {
-                description: `錯誤訊息: ${error?.error_description || error?.error || '未知錯誤'}。請確認 Client ID 與已授權的 JavaScript 來源。`,
-                duration: 8000,
-            });
-        },
-        scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events'
-    });
-
-    const silentLogin = useGoogleLogin({
-        onSuccess: (codeResponse) => {
-            const expiresIn = Number(codeResponse.expires_in || 3600);
-            const expiresAt = Date.now() + expiresIn * 1000;
-            setAccessTokenState({ token: codeResponse.access_token, expiresAt });
-            if (refreshResolverRef.current) {
-                refreshResolverRef.current(true);
-                refreshResolverRef.current = null;
-            }
-        },
-        onError: (error) => {
-            console.warn('Silent refresh failed:', error);
-            if (refreshResolverRef.current) {
-                refreshResolverRef.current(false);
-                refreshResolverRef.current = null;
-            }
-        },
-        // best-effort: some browsers will still show a prompt or block
-        prompt: 'none',
-        scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events'
-    });
-
-    const logout = () => {
-        googleLogout();
-        setAccessTokenState(null);
-    };
-
-    const trySilentRefresh = async () => {
-        // no expiresAt => can't pre-judge; still can try when 401 happens
-        return await new Promise((resolve) => {
-            refreshResolverRef.current = resolve;
-            silentLogin();
-            // safety timeout (avoid hanging forever)
-            setTimeout(() => {
-                if (refreshResolverRef.current) {
-                    refreshResolverRef.current(false);
-                    refreshResolverRef.current = null;
-                }
-            }, 8000);
-        });
-    };
-
-    // Background refresh when close to expiry (best-effort)
-    useEffect(() => {
-        if (!accessToken || !accessTokenExpiresAt) return;
-        const interval = setInterval(() => {
-            const remaining = accessTokenExpiresAt - Date.now();
-            if (remaining < 10 * 60 * 1000) {
-                trySilentRefresh();
-            }
-        }, 5 * 60 * 1000);
-        return () => clearInterval(interval);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [accessToken, accessTokenExpiresAt]);
-
-    const handleSyncToDrive = async () => {
-        if (!accessToken) return toast.error('請先登入 Google');
-        setIsSyncing(true);
-        const toastId = toast.loading('正在備份至 Google Drive…');
-        let res = await syncToDrive(tickets, tripLabels, accessToken);
-        setIsSyncing(false);
-        if (res.success) {
-            toast.success('雲端備份成功！', {
-                id: toastId,
-                description: `資料已備份至 Google Drive。(檔案 ID: ${res.fileId})`,
-            });
-        } else {
-            if (res.expired) {
-                // try once silently
-                const ok = await trySilentRefresh();
-                if (ok) {
-                    setIsSyncing(true);
-                    res = await syncToDrive(tickets, tripLabels, typeof accessTokenState === 'string' ? accessTokenState : (accessTokenState?.token || accessToken));
-                    setIsSyncing(false);
-                    if (res.success) {
-                        return toast.success('雲端備份成功！', { id: toastId, description: `資料已備份至 Google Drive。(檔案 ID: ${res.fileId})` });
-                    }
-                }
-                toast.error('登入已過期，請重新登入 Google', { id: toastId });
-                logout();
-            } else {
-                toast.error('雲端備份失敗', { id: toastId, description: res.error });
-            }
-        }
-    };
-
-    const handleLoadFromDrive = async () => {
-        if (!accessToken) return toast.error('請先登入 Google');
-        setIsSyncing(true);
-        const toastId = toast.loading('正在從 Google Drive 載入…');
-        let res = await loadFromDrive(accessToken);
-        setIsSyncing(false);
-        
-        if (res.success) {
-            toast.dismiss(toastId);
-            toast(`雲端讀取成功，共 ${res.tickets.length} 筆趟次`, {
-                description: `找到的檔案：${res.foundFilesLog}`,
-                action: {
-                    label: '確認覆寫',
-                    onClick: () => {
-                        setTickets(res.tickets);
-                        setTripLabels(res.tripLabels || {});
-                        toast.success('雲端資料載入成功！');
-                    },
-                },
-                cancel: {
-                    label: '取消',
-                    onClick: () => {},
-                },
-                duration: 12000,
-            });
-        } else {
-            if (res.expired) {
-                const ok = await trySilentRefresh();
-                if (ok) {
-                    setIsSyncing(true);
-                    res = await loadFromDrive(typeof accessTokenState === 'string' ? accessTokenState : (accessTokenState?.token || accessToken));
-                    setIsSyncing(false);
-                    if (res.success) {
-                        toast.dismiss(toastId);
-                        return toast(`雲端讀取成功，共 ${res.tickets.length} 筆趟次`, {
-                            description: `找到的檔案：${res.foundFilesLog}`,
-                            action: {
-                                label: '確認覆寫',
-                                onClick: () => {
-                                    setTickets(res.tickets);
-                                    setTripLabels(res.tripLabels || {});
-                                    toast.success('雲端資料載入成功！');
-                                },
-                            },
-                            cancel: { label: '取消', onClick: () => {} },
-                            duration: 12000,
-                        });
-                    }
-                }
-                toast.error('登入已過期，請重新登入 Google', { id: toastId });
-                logout();
-            } else {
-                toast.error('雲端載入失敗', { id: toastId, description: res.error });
-            }
-        }
-    };
-
-    const handleSyncToCalendar = async () => {
-        if (!accessToken) return toast.error('請先登入 Google');
-        setIsSyncing(true);
-        const toastId = toast.loading('正在同步至 Google Calendar…');
-        let res = await syncToCalendar(tickets, accessToken);
-        setIsSyncing(false);
-        if (res.success) {
-            if (res.updatedCalendarIds && Object.keys(res.updatedCalendarIds).length > 0) {
-                const newTickets = tickets.map(t => {
-                    if (res.updatedCalendarIds[t.id]) {
-                        return { ...t, calendarIds: { ...(t.calendarIds || {}), ...res.updatedCalendarIds[t.id] } };
-                    }
-                    return t;
-                });
-                setTickets(newTickets);
-            }
-            const deletedNote = res.deletedCount > 0 ? `，已自動清除 ${res.deletedCount} 個廢棄事件` : '';
-            toast.success('日曆同步成功！', {
-                id: toastId,
-                description: `共同步 ${res.count} 個航班事件${deletedNote}。${res.error ? `\n⚠️ 部分警告：${res.error}` : ''}`,
-                duration: 6000,
-            });
-        } else {
-            if (res.expired) {
-                const ok = await trySilentRefresh();
-                if (ok) {
-                    setIsSyncing(true);
-                    res = await syncToCalendar(tickets, typeof accessTokenState === 'string' ? accessTokenState : (accessTokenState?.token || accessToken));
-                    setIsSyncing(false);
-                    if (res.success) {
-                        toast.dismiss(toastId);
-                        const deletedNote = res.deletedCount > 0 ? `，已自動清除 ${res.deletedCount} 個廢棄事件` : '';
-                        return toast.success('日曆同步成功！', {
-                            id: toastId,
-                            description: `共同步 ${res.count} 個航班事件${deletedNote}。${res.error ? `\n⚠️ 部分警告：${res.error}` : ''}`,
-                            duration: 6000,
-                        });
-                    }
-                }
-            }
-            toast.error('日曆同步失敗', {
-                id: toastId,
-                description: res.error || 'Access Token 可能已過期，請重新登入。',
-            });
-            logout();
-        }
-    };
-
-    // ── 費用三分類 ───────────────────────────────────────────────────────────
-    // totalPriceTWD：所有票券的實際入帳金額（不分攤）
-    // pastCostTWD：已完成趟次分攤成本
-    // futureCostTWD：未來趟次分攤成本
-    // sunkCostTWD：入帳中未被任何趟次涵蓋的「孤兒票」費用
-    //   計算原理：某張票若完全沒有航段被配對到任何 trip，其費用不會進入 past/future，
-    //             因此差值即為未配對部分。Math.max(0,...) 防止浮點誤差出現負數。
-    const totalPriceTWD = tickets.reduce((sum, t) => sum + (t.priceTWD || t.price), 0);
-
-    const pastCostTWD = useMemo(
-        () => decoratedTrips.reduce((sum, trip) => sum + (trip.isPast ? (trip.totalCostTWD || 0) : 0), 0),
-        [decoratedTrips]
-    );
-    const futureCostTWD = useMemo(
-        () => decoratedTrips.reduce((sum, trip) => sum + (!trip.isPast ? (trip.totalCostTWD || 0) : 0), 0),
-        [decoratedTrips]
-    );
-    const sunkCostTWD = Math.max(0, totalPriceTWD - futureCostTWD - pastCostTWD);
-
+    // ── Render ────────────────────────────────────────────────────────────────
     return (
         <div className="min-h-screen p-4 md:p-8 bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900">
             <div className="max-w-5xl mx-auto">
 
+                {/* ── Header ─────────────────────────────────────────────── */}
                 <header className="mb-8 pt-4 flex flex-col md:flex-row justify-between items-center gap-4">
                     <div>
                         <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-3 tracking-tight flex items-center">
@@ -526,148 +190,86 @@ function App() {
                         <p className="text-slate-500 text-lg">解決來回機票分段購買時，出發方向與日期混淆的問題。</p>
                     </div>
                     <div className="flex flex-col gap-2 w-full md:w-auto">
+                        {/* Google 雲端按鈕 */}
                         {accessToken ? (
                             <div className="flex flex-wrap gap-2 justify-end bg-indigo-50 p-2 rounded-lg border border-indigo-100">
-                                <span className="flex items-center text-xs font-bold text-indigo-600 w-full mb-1"><Cloud className="w-3 h-3 mr-1" /> 已連結 Google (Drive & Calendar)</span>
-                                <button
-                                    onClick={handleSyncToDrive} disabled={isSyncing}
-                                    className="flex items-center px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 font-bold text-sm rounded shadow-sm hover:bg-indigo-50 transition min-w-[120px] justify-center disabled:opacity-50"
-                                >
+                                <span className="flex items-center text-xs font-bold text-indigo-600 w-full mb-1">
+                                    <Cloud className="w-3 h-3 mr-1" /> 已連結 Google (Drive &amp; Calendar)
+                                </span>
+                                <button onClick={handleSyncToDrive} disabled={isSyncing} className="flex items-center px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 font-bold text-sm rounded shadow-sm hover:bg-indigo-50 transition min-w-[120px] justify-center disabled:opacity-50">
                                     <CloudUpload className="w-4 h-4 mr-1.5" /> 雲端備份
                                 </button>
-                                <button
-                                    onClick={handleLoadFromDrive} disabled={isSyncing}
-                                    className="flex items-center px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 font-bold text-sm rounded shadow-sm hover:bg-indigo-50 transition min-w-[120px] justify-center disabled:opacity-50"
-                                >
+                                <button onClick={handleLoadFromDrive} disabled={isSyncing} className="flex items-center px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 font-bold text-sm rounded shadow-sm hover:bg-indigo-50 transition min-w-[120px] justify-center disabled:opacity-50">
                                     <CloudDownload className="w-4 h-4 mr-1.5" /> 雲端載入
                                 </button>
-                                <button
-                                    onClick={handleSyncToCalendar} disabled={isSyncing}
-                                    className="flex items-center px-3 py-1.5 bg-indigo-600 border border-indigo-700 text-white font-bold text-sm rounded shadow-sm hover:bg-indigo-700 transition min-w-[120px] justify-center disabled:opacity-50"
-                                >
+                                <button onClick={handleSyncToCalendar} disabled={isSyncing} className="flex items-center px-3 py-1.5 bg-indigo-600 border border-indigo-700 text-white font-bold text-sm rounded shadow-sm hover:bg-indigo-700 transition min-w-[120px] justify-center disabled:opacity-50">
                                     <Calendar className="w-4 h-4 mr-1.5" /> 同步日曆
                                 </button>
-                                <button
-                                    onClick={logout} disabled={isSyncing}
-                                    className="flex items-center px-3 py-1.5 bg-gray-100 border border-gray-200 text-gray-600 font-bold text-sm rounded shadow-sm hover:bg-gray-200 transition"
-                                >
+                                <button onClick={logout} disabled={isSyncing} className="flex items-center px-3 py-1.5 bg-gray-100 border border-gray-200 text-gray-600 font-bold text-sm rounded shadow-sm hover:bg-gray-200 transition">
                                     <LogOut className="w-4 h-4" />
                                 </button>
                             </div>
                         ) : (
                             <div className="flex flex-wrap gap-2 justify-end border p-2 rounded-lg bg-white border-gray-200 shadow-sm">
-                                <button
-                                    onClick={() => login()}
-                                    className="flex items-center px-4 py-2 bg-indigo-600 text-white font-bold text-sm rounded hover:bg-indigo-700 transition"
-                                >
+                                <button onClick={() => login()} className="flex items-center px-4 py-2 bg-indigo-600 text-white font-bold text-sm rounded hover:bg-indigo-700 transition">
                                     <LogIn className="w-4 h-4 mr-2" /> 登入 Google 啟用雲端功能
                                 </button>
                             </div>
                         )}
+                        {/* 本地 JSON 匯出入 */}
                         <div className="flex gap-2 justify-end mt-1">
-                            <button
-                                onClick={handleExport}
-                                className="flex items-center px-3 py-1.5 bg-white border border-gray-200 text-gray-500 font-bold text-xs rounded hover:bg-gray-50 transition"
-                            >
+                            <button onClick={handleExport} className="flex items-center px-3 py-1.5 bg-white border border-gray-200 text-gray-500 font-bold text-xs rounded hover:bg-gray-50 transition">
                                 <Download className="w-3 h-3 mr-1" /> 本地匯出 JSON
                             </button>
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="flex items-center px-3 py-1.5 bg-white border border-gray-200 text-gray-500 font-bold text-xs rounded hover:bg-gray-50 transition"
-                            >
+                            <button onClick={() => fileInputRef.current?.click()} className="flex items-center px-3 py-1.5 bg-white border border-gray-200 text-gray-500 font-bold text-xs rounded hover:bg-gray-50 transition">
                                 <Upload className="w-3 h-3 mr-1" /> 本地匯入 JSON
                             </button>
-                            <input
-                                type="file"
-                                accept=".json"
-                                ref={fileInputRef}
-                                className="hidden"
-                                onChange={handleImport}
-                            />
+                            <input type="file" accept=".json" ref={fileInputRef} className="hidden" onChange={handleImport} />
                         </div>
                     </div>
                 </header>
 
                 <Instructions />
 
-                {/* Dashboard 統計 */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                    <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
-                        <div className="relative z-10">
-                            <p className="text-indigo-100 font-medium mb-1 text-sm">購入機票總數</p>
-                            <p className="text-3xl font-extrabold">{tickets.length} 套</p>
-                        </div>
-                        <ListFilter className="w-20 h-20 absolute -right-3 -bottom-3 text-white opacity-10" />
-                    </div>
-                    <div className="bg-gradient-to-br from-emerald-400 to-emerald-500 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
-                        <div className="relative z-10">
-                            <p className="text-emerald-50 font-medium mb-1 text-sm">精算趟次</p>
-                            <p className="text-3xl font-extrabold">{trips.length} 趟</p>
-                        </div>
-                        <Plane className="w-20 h-20 absolute -right-3 -bottom-3 text-white opacity-10" />
-                    </div>
-                    <div className="col-span-2 bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
-                        <div className="relative z-10">
-                            <p className="text-slate-300 font-medium mb-2 text-sm">🧾 入帳總計 (TWD)</p>
-                            <p className="text-3xl font-extrabold mb-3">${totalPriceTWD.toLocaleString()}</p>
-                            <div className="grid grid-cols-3 gap-2 text-xs">
-                                <div className="bg-white/10 rounded-lg px-2 py-1.5">
-                                    <p className="text-slate-400 mb-0.5">🗓️ 未來待出行</p>
-                                    <p className="font-bold text-emerald-300">${futureCostTWD.toLocaleString()}</p>
-                                </div>
-                                <div className="bg-white/10 rounded-lg px-2 py-1.5">
-                                    <p className="text-slate-400 mb-0.5">✅ 歷史已實現</p>
-                                    <p className="font-bold text-slate-200">${pastCostTWD.toLocaleString()}</p>
-                                </div>
-                                <div className={`rounded-lg px-2 py-1.5 ${sunkCostTWD > 0 ? 'bg-amber-500/20' : 'bg-white/10'}`}>
-                                    <p className={`mb-0.5 ${sunkCostTWD > 0 ? 'text-amber-300' : 'text-slate-400'}`}>⚠️ 未配對成本</p>
-                                    <p className={`font-bold ${sunkCostTWD > 0 ? 'text-amber-300' : 'text-slate-200'}`}>${sunkCostTWD.toLocaleString()}</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="text-6xl font-black absolute -right-2 -bottom-6 text-white opacity-[0.03]">$</div>
-                    </div>
-                </div>
+                {/* ── Dashboard ──────────────────────────────────────────── */}
+                <Dashboard
+                    ticketCount={tickets.length}
+                    tripCount={trips.length}
+                    totalPriceTWD={totalPriceTWD}
+                    futureCostTWD={futureCostTWD}
+                    pastCostTWD={pastCostTWD}
+                    sunkCostTWD={sunkCostTWD}
+                />
 
-                <TicketForm 
-                    onAddTicket={handleSaveTicket} 
-                    editingTicket={editingTicket} 
+                {/* ── 機票新增/修改表單 ───────────────────────────────────── */}
+                <TicketForm
+                    onAddTicket={handleSaveTicket}
+                    editingTicket={editingTicket}
                     onCancelEdit={handleCancelEdit}
                     exchangeRates={exchangeRates}
                 />
 
-                {/* 主視覺 Tab 切換區 */}
+                {/* ── 主視覺 Tab 切換 ─────────────────────────────────────── */}
                 <div className="mt-12 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="flex border-b border-gray-200 p-1 bg-slate-50/50">
-                        <button
-                            onClick={() => setActiveTab('timeline')}
-                            className={`flex-1 py-3 px-4 font-bold text-sm sm:text-base rounded-t-lg transition-colors ${activeTab === 'timeline'
-                                ? 'bg-white text-indigo-700 border-b-2 border-indigo-500 shadow-sm'
-                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                        {[
+                            { key: 'timeline', label: '📆 實際飛行配對 (Timeline)' },
+                            { key: 'list',     label: '🎟️ 購買清單管理 (Purchases)' },
+                            { key: 'calendar', label: '📅 月曆視角 (Calendar)' },
+                        ].map(tab => (
+                            <button
+                                key={tab.key}
+                                onClick={() => setActiveTab(tab.key)}
+                                className={`flex-1 py-3 px-2 sm:px-4 font-bold text-sm sm:text-base rounded-t-lg transition-colors ${
+                                    activeTab === tab.key
+                                        ? 'bg-white text-indigo-700 border-b-2 border-indigo-500 shadow-sm'
+                                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                                 }`}
-                        >
-                            📆 實際飛行配對 (Timeline)
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('list')}
-                            className={`flex-1 py-3 px-4 font-bold text-sm sm:text-base rounded-t-lg transition-colors ${activeTab === 'list'
-                                ? 'bg-white text-indigo-700 border-b-2 border-indigo-500 shadow-sm'
-                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-                                }`}
-                        >
-                            🎟️ 購買清單管理 (Purchases)
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('calendar')}
-                            className={`flex-1 py-3 px-2 sm:px-4 font-bold text-sm sm:text-base rounded-t-lg transition-colors ${activeTab === 'calendar'
-                                ? 'bg-white text-indigo-700 border-b-2 border-indigo-500 shadow-sm'
-                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-                                }`}
-                        >
-                            📅 月曆視角 (Calendar)
-                        </button>
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
                     </div>
-
                     <div className="p-4 md:p-6 bg-white min-h-[400px]">
                         {activeTab === 'timeline' && (
                             <TripTimeline
@@ -681,13 +283,24 @@ function App() {
                                 onClearAllOverrides={clearAllOverrides}
                             />
                         )}
-                        {activeTab === 'list' && <TicketList tickets={tickets} onDelete={deleteTicket} onEdit={handleEditTicket} />}
+                        {activeTab === 'list' && (
+                            <TicketList tickets={tickets} onDelete={(id) => {
+                                import('sonner').then(({ toast }) =>
+                                    toast('確定要刪除這筆機票訂單嗎？', {
+                                        description: '相關的趟次配對將會被移除。',
+                                        action: { label: '確認刪除', onClick: () => setTickets(prev => prev.filter(t => t.id !== id)) },
+                                        cancel: { label: '取消', onClick: () => {} },
+                                        duration: 8000,
+                                    })
+                                );
+                            }} onEdit={handleEditTicket} />
+                        )}
                         {activeTab === 'calendar' && <TripCalendar segments={segments} />}
                     </div>
                 </div>
 
                 <footer className="mt-12 text-center text-sm text-gray-400 pb-8">
-                    &copy; {new Date().getFullYear()} Reverse Ticket Manager. Data stored locally.
+                    &copy; {new Date().getFullYear()} Travel Itinerary Planner. Data stored locally.
                 </footer>
             </div>
         </div>
