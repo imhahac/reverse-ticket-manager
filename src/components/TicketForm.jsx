@@ -85,19 +85,29 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
             const arrDateRaw = flight.arrival.scheduled ? flight.arrival.scheduled.split('T')[0] : depDateRaw;
             
             // Calculate date offset (usually 0 or 1 for red-eye flights)
-            const depD = new Date(`${depDateRaw}T00:00:00`);
-            const arrD = new Date(`${arrDateRaw}T00:00:00`);
+            // Parse as local dates to avoid timezone shift (e.g. UTC vs Asia/Taipei difference)
+            const parseLocalDate = (dateStr) => {
+                const [y, m, d] = dateStr.split('-');
+                return new Date(y, m - 1, d);
+            };
+
+            const depD = parseLocalDate(depDateRaw);
+            const arrD = parseLocalDate(arrDateRaw);
             const dayOffset = Math.round((arrD - depD) / (1000 * 60 * 60 * 24));
 
             const depTime = flight.departure.scheduled ? flight.departure.scheduled.split('T')[1].substring(0, 5) : '';
             const arrTime = flight.arrival.scheduled ? flight.arrival.scheduled.split('T')[1].substring(0, 5) : '';
 
-            // Apply the offset to the user's selected date
-            const getOffsetDate = (baseDate, offset) => {
-                if (!baseDate || isNaN(offset)) return baseDate;
-                const d = new Date(`${baseDate}T00:00:00`);
+            // Apply the offset to the user's selected date safely
+            const getOffsetDate = (baseDateStr, offset) => {
+                if (!baseDateStr || isNaN(offset)) return baseDateStr;
+                const d = parseLocalDate(baseDateStr);
                 d.setDate(d.getDate() + offset);
-                return d.toISOString().split('T')[0];
+                // format back to YYYY-MM-DD
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                return `${yyyy}-${mm}-${dd}`;
             };
 
             const targetArrivalDate = getOffsetDate(flightDate, dayOffset);
