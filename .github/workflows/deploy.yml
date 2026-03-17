@@ -40,6 +40,7 @@ jobs:
       - name: Build project
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          VITE_AVIATIONSTACK_API_KEY: ${{ secrets.VITE_AVIATIONSTACK_API_KEY }}
         run: npm run build
 
       # 將打包好的 dist 資料夾上傳為 artifact，供部署 job 使用
