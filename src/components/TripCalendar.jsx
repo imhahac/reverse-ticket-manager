@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 
-export default function TripCalendar({ segments, hotels = [] }) {
+export default function TripCalendar({ trips = [], tripLabels = {} }) {
     const [currentMonth, setCurrentMonth] = useState(new Date());
+
+    // 展平所有航段與住宿供渲染使用
+    const allSegments = trips.flatMap(t => t.segments || []);
+    const allHotels   = trips.flatMap(t => t.matchedHotels || []);
 
     const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
     const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
@@ -31,13 +35,13 @@ export default function TripCalendar({ segments, hotels = [] }) {
 
     const getFlightsForDay = (day) => {
         const dateStr = toDateStr(day);
-        return segments.filter(seg => seg.date === dateStr);
+        return allSegments.filter(seg => seg.date === dateStr);
     };
 
     // 取得這天屬於哪些住宿（checkIn <= dateStr <= checkOut 前一天，即住宿期間內）
     const getHotelsForDay = (day) => {
         const dateStr = toDateStr(day);
-        return hotels.filter(h => {
+        return allHotels.filter(h => {
             if (!h.checkIn || !h.checkOut) return false;
             return dateStr >= h.checkIn && dateStr < h.checkOut;
         });
@@ -45,25 +49,34 @@ export default function TripCalendar({ segments, hotels = [] }) {
 
     const isCheckIn = (day) => {
         const dateStr = toDateStr(day);
-        return hotels.some(h => h.checkIn === dateStr);
+        return allHotels.some(h => h.checkIn === dateStr);
     };
 
     const isCheckOut = (day) => {
         const dateStr = toDateStr(day);
-        return hotels.some(h => h.checkOut === dateStr);
+        return allHotels.some(h => h.checkOut === dateStr);
     };
 
-    // 住宿缺口與重疊警告
+    // 住宿缺口與重疊警告 (以 Trip 為單位計算，避免 Trip 之間的假缺口)
     const hotelWarnings = (() => {
-        const warns = [];
-        if (!hotels.length) return warns;
-        const valid = hotels.filter(h => h.checkIn && h.checkOut).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
-        for (let i = 0; i < valid.length - 1; i++) {
-            const a = valid[i], b = valid[i + 1];
-            if (b.checkIn < a.checkOut) warns.push(`⚠️ 住宿重疊：「${a.name}」與「${b.name}」`);
-            else if (b.checkIn > a.checkOut) warns.push(`⚠️ 住宿缺口：${a.checkOut} 到 ${b.checkIn} 之間無住宿`);
-        }
-        return warns;
+        const allWarns = [];
+        trips.forEach(trip => {
+            const matchedHotels = trip.matchedHotels ?? [];
+            const label = tripLabels[trip.id] || `行程 ${trip.id}`;
+            
+            if (trip.tripDays > 1 && matchedHotels.length === 0) {
+                allWarns.push(`⚠️ 「${label}」尚未安排任何住宿`);
+                return;
+            }
+            
+            const valid = matchedHotels.filter(h => h.checkIn && h.checkOut).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+            for (let i = 0; i < valid.length - 1; i++) {
+                const a = valid[i], b = valid[i + 1];
+                if (b.checkIn < a.checkOut) allWarns.push(`⚠️「${label}」住宿重疊：${a.name} 與 ${b.name}`);
+                else if (b.checkIn > a.checkOut) allWarns.push(`⚠️「${label}」住宿缺口：${a.checkOut} 到 ${b.checkIn}`);
+            }
+        });
+        return allWarns;
     })();
 
     const monthNames = ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"];
@@ -138,7 +151,7 @@ export default function TripCalendar({ segments, hotels = [] }) {
 
                             <div className="flex flex-col gap-1 mt-0.5">
                                 {/* 住宿區塊 */}
-                                {hotels.map((h, i) => {
+                                {allHotels.map((h, i) => {
                                     const dStr = toDateStr(day);
                                     if (!h.checkIn || !h.checkOut) return null;
                                     

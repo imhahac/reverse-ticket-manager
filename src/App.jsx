@@ -347,7 +347,7 @@ function App() {
                                 onDelete={handleDeleteHotel}
                             />
                         )}
-                        {activeTab === 'calendar' && <TripCalendar segments={segments} hotels={hotels} />}
+                        {activeTab === 'calendar' && <TripCalendar trips={itinerary} tripLabels={tripLabels} />}
                     </div>
                 </div>
 
