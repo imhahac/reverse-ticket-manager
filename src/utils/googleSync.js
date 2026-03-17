@@ -220,11 +220,14 @@ export const syncToCalendar = async (tickets, hotels = [], accessToken) => {
             const orphanData = await orphanCheckRes.json();
             const calendarEvents = orphanData.items || [];
             const activeSegIds = new Set(allSegments.map(s => s.id));
+            const activeHotelIds = new Set(hotels.map(h => h.id));
 
             for (const ev of calendarEvents) {
                 const segId = ev.extendedProperties?.private?.reverseTicketSegId;
+                const hotelId = ev.extendedProperties?.private?.reverseTicketHotelId;
+
+                // 檢查是否為航班孤兒
                 if (segId && !activeSegIds.has(segId)) {
-                    // 孤兒事件：本地已不存在，刪除之
                     const delRes = await fetch(
                         `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${ev.id}`,
                         { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } }
@@ -232,7 +235,20 @@ export const syncToCalendar = async (tickets, hotels = [], accessToken) => {
                     if (delRes.ok || delRes.status === 204 || delRes.status === 410) {
                         deletedCount++;
                     } else {
-                        errorLog += `刪除孤兒事件失敗 (${ev.summary}): [${delRes.status}]\n`;
+                        errorLog += `刪除航班孤兒事件失敗 (${ev.summary}): [${delRes.status}]\n`;
+                    }
+                }
+
+                // 檢查是否為飯店孤兒
+                if (hotelId && !activeHotelIds.has(hotelId)) {
+                    const delRes = await fetch(
+                        `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${ev.id}`,
+                        { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } }
+                    );
+                    if (delRes.ok || delRes.status === 204 || delRes.status === 410) {
+                        deletedCount++;
+                    } else {
+                        errorLog += `刪除飯店孤兒事件失敗 (${ev.summary}): [${delRes.status}]\n`;
                     }
                 }
             }

@@ -14,6 +14,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { Building2, CalendarDays, Banknote, Hash, MapPin, FileText, X, Check } from 'lucide-react';
+import { convertToTWD } from '../../../utils/currency';
 
 const EMPTY = {
     name: '', address: '', checkIn: '', checkOut: '',
@@ -21,14 +22,7 @@ const EMPTY = {
     confirmationNo: '', notes: '',
 };
 
-function calcTWD(priceTotal, currency, rates) {
-    const v = parseFloat(priceTotal);
-    if (!v || isNaN(v)) return 0;
-    if (currency === 'TWD') return Math.round(v);
-    if (currency === 'JPY') return Math.round(v * (rates?.JPY ?? 0.21));
-    if (currency === 'USD') return Math.round(v * (rates?.USD ?? 32.5));
-    return 0;
-}
+
 
 function calcNights(checkIn, checkOut) {
     if (!checkIn || !checkOut) return null;
@@ -55,9 +49,9 @@ export default function HotelForm({ onSaveHotel, editingHotel, onCancelEdit, exc
         const next = { ...f, [key]: val };
         // 幣別或金額改變時自動重算 priceTWD
         if (key === 'priceTotal' || key === 'currency') {
-            next.priceTWD = calcTWD(
+            next.priceTWD = convertToTWD(
                 key === 'priceTotal' ? val : f.priceTotal,
-                key === 'currency'   ? val : f.currency,
+                key === 'currency'    ? val : f.currency,
                 exchangeRates
             );
         }

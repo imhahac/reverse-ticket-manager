@@ -151,6 +151,9 @@ export default function TripTimeline({
                 const customLabel = tripLabels[comboKey] || `Trip ${index + 1}`;
                 const matchedHotels = trip.matchedHotels ?? [];
 
+                const totalHotelCostTWD = trip.totalHotelCostTWD ?? 0;
+                const grandTotalTWD = totalCostTWD + totalHotelCostTWD;
+
                 return (
                     <div
                         key={comboKey}
@@ -208,12 +211,17 @@ export default function TripTimeline({
                                     <Edit3 className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 transition-colors" />
                                 </div>
                             )}
-                            <div className="text-2xl font-black text-indigo-600 mb-1 tracking-tight">
-                                NT$ {Math.round(totalCostTWD).toLocaleString()}
+                            <div className="text-2xl font-black text-slate-900 mb-1 tracking-tight">
+                                NT$ {Math.round(grandTotalTWD).toLocaleString()}
                             </div>
+                            {totalHotelCostTWD > 0 && (
+                                <div className="text-[10px] text-slate-500 mb-1">
+                                    機票 {Math.round(totalCostTWD).toLocaleString()} + 住宿 {Math.round(totalHotelCostTWD).toLocaleString()}
+                                </div>
+                            )}
                             {costPerDay && (
-                                <div className="text-[11px] font-bold text-indigo-900 bg-indigo-100/80 px-2 py-1 rounded-md border border-indigo-200 mt-1">
-                                    每日機票成本：約 NT$ {costPerDay.toLocaleString()}
+                                <div className="text-[10px] font-bold text-indigo-900 bg-indigo-100/80 px-2 py-1 rounded-md border border-indigo-200 mt-1">
+                                    每日預算：約 NT$ {Math.round(grandTotalTWD / tripDays).toLocaleString()}
                                 </div>
                             )}
                             <div className="text-xs font-bold text-slate-400 bg-slate-200/50 px-2 py-1.5 rounded-md mt-1 border border-slate-200/50">
@@ -349,6 +357,9 @@ export default function TripTimeline({
                 const isExternalOnly = trip.isExternalOnly;
                 const customLabel = tripLabels[comboKey] || `Trip ${index + 1}`;
                 const matchedHotels = trip.matchedHotels ?? [];
+                const totalHotelCostTWD = trip.totalHotelCostTWD ?? 0;
+                const grandTotalTWD = totalCostTWD + totalHotelCostTWD;
+
                 return (
                     <div
                         key={comboKey}
@@ -406,9 +417,14 @@ export default function TripTimeline({
                                     <Edit3 className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 transition-colors" />
                                 </div>
                             )}
-                            <div className="text-2xl font-black text-indigo-600 mb-1 tracking-tight">
-                                NT$ {Math.round(totalCostTWD).toLocaleString()}
+                            <div className="text-2xl font-black text-slate-900 mb-1 tracking-tight">
+                                NT$ {Math.round(grandTotalTWD).toLocaleString()}
                             </div>
+                            {totalHotelCostTWD > 0 && (
+                                <div className="text-[10px] text-slate-500 mb-1 text-center">
+                                    機票 {Math.round(totalCostTWD).toLocaleString()} + 住宿 {Math.round(totalHotelCostTWD).toLocaleString()}
+                                </div>
+                            )}
                             <div className="text-xs font-bold text-slate-400 bg-slate-200/50 px-2 py-1.5 rounded-md mt-1 border border-slate-200/50">
                                 🛫 共 {segments.length} 段航班
                             </div>

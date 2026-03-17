@@ -29,11 +29,11 @@ export function useItinerary(decoratedTrips, hotels) {
                 return { ...trip, matchedHotels: [], totalHotelCostTWD: 0 };
             }
 
-            // 飯店 checkIn 在趟次出發後、checkOut 在趟次返回前（或當天）
+            // 邏輯優化：[飯店期間] 與 [行程期間] 只要有重疊就收入（Intersects）
             const matchedHotels = hotels.filter(h =>
                 h.checkIn && h.checkOut &&
-                h.checkIn >= tripStartDate &&
-                h.checkOut <= tripEndDate
+                h.checkIn <= tripEndDate &&
+                h.checkOut >= tripStartDate
             );
 
             const totalHotelCostTWD = matchedHotels.reduce(
