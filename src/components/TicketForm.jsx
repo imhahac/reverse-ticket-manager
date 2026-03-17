@@ -81,21 +81,38 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
 
             if (!flight.departure || !flight.arrival) throw new Error('回傳的航班資訊不齊全');
 
+            const depDateRaw = flight.departure.scheduled ? flight.departure.scheduled.split('T')[0] : flight.flight_date;
+            const arrDateRaw = flight.arrival.scheduled ? flight.arrival.scheduled.split('T')[0] : depDateRaw;
+            
+            // Calculate date offset (usually 0 or 1 for red-eye flights)
+            const depD = new Date(`${depDateRaw}T00:00:00`);
+            const arrD = new Date(`${arrDateRaw}T00:00:00`);
+            const dayOffset = Math.round((arrD - depD) / (1000 * 60 * 60 * 24));
+
             const depTime = flight.departure.scheduled ? flight.departure.scheduled.split('T')[1].substring(0, 5) : '';
-            const arrDate = flight.arrival.scheduled ? flight.arrival.scheduled.split('T')[0] : '';
             const arrTime = flight.arrival.scheduled ? flight.arrival.scheduled.split('T')[1].substring(0, 5) : '';
+
+            // Apply the offset to the user's selected date
+            const getOffsetDate = (baseDate, offset) => {
+                if (!baseDate || isNaN(offset)) return baseDate;
+                const d = new Date(`${baseDate}T00:00:00`);
+                d.setDate(d.getDate() + offset);
+                return d.toISOString().split('T')[0];
+            };
+
+            const targetArrivalDate = getOffsetDate(flightDate, dayOffset);
 
             setFormData(prev => ({
                 ...prev,
                 ...(segment === 'outbound' ? {
                     outboundTime: depTime,
-                    outboundArrivalDate: arrDate,
+                    outboundArrivalDate: targetArrivalDate,
                     outboundArrivalTime: arrTime,
                     departRegion: `${flight.departure.iata || ''} (${flight.departure.airport || prev.departRegion})`,
                     returnRegion: `${flight.arrival.iata || ''} (${flight.arrival.airport || prev.returnRegion})`
                 } : {
                     inboundTime: depTime,
-                    inboundArrivalDate: arrDate,
+                    inboundArrivalDate: targetArrivalDate,
                     inboundArrivalTime: arrTime,
                     returnRegion: `${flight.departure.iata || ''} (${flight.departure.airport || prev.returnRegion})`,
                     departRegion: `${flight.arrival.iata || ''} (${flight.arrival.airport || prev.departRegion})`
