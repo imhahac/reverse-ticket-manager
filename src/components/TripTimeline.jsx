@@ -151,20 +151,7 @@ export default function TripTimeline({
                 const customLabel = tripLabels[comboKey] || `Trip ${index + 1}`;
                 const matchedHotels = trip.matchedHotels ?? [];
 
-                const hotelWarns = (() => {
-                    const warns = [];
-                    if (tripDays > 1 && matchedHotels.length === 0) {
-                        warns.push(`⚠️ 此趟次尚未安排任何住宿`);
-                        return warns;
-                    }
-                    const valid = matchedHotels.filter(h => h.checkIn && h.checkOut).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
-                    for (let i = 0; i < valid.length - 1; i++) {
-                        const a = valid[i], b = valid[i + 1];
-                        if (b.checkIn < a.checkOut) warns.push(`⚠️ 住宿重疊：「${a.name}」與「${b.name}」`);
-                        else if (b.checkIn > a.checkOut) warns.push(`⚠️ 住宿缺口：${a.checkOut} 到 ${b.checkIn} 之間無住宿`);
-                    }
-                    return warns;
-                })();
+                const hotelWarns = trip.hotelWarnings || [];
 
                 const totalHotelCostTWD = trip.totalHotelCostTWD ?? 0;
                 const grandTotalTWD = totalCostTWD + totalHotelCostTWD;
@@ -235,8 +222,9 @@ export default function TripTimeline({
                                 </div>
                             )}
                             {costPerDay && (
-                                <div className="text-[10px] font-bold text-indigo-900 bg-indigo-100/80 px-2 py-1 rounded-md border border-indigo-200 mt-1">
-                                    每日預算：約 NT$ {Math.round(grandTotalTWD / tripDays).toLocaleString()}
+                                <div className="text-[10px] font-bold text-indigo-900 bg-indigo-100/80 px-2 py-1.5 rounded-md border border-indigo-200 mt-2 flex flex-col items-center gap-0.5 shadow-sm">
+                                    <span className="text-[8px] uppercase tracking-tighter opacity-60">每日平均成本 (CP 值)</span>
+                                    <span>NT$ {Math.round(grandTotalTWD / tripDays).toLocaleString()} / 天</span>
                                 </div>
                             )}
                             <div className="text-xs font-bold text-slate-400 bg-slate-200/50 px-2 py-1.5 rounded-md mt-1 border border-slate-200/50">
@@ -380,20 +368,7 @@ export default function TripTimeline({
                 const customLabel = tripLabels[comboKey] || `Trip ${index + 1}`;
                 const matchedHotels = trip.matchedHotels ?? [];
                 
-                const hotelWarns = (() => {
-                    const warns = [];
-                    if (tripDays > 1 && matchedHotels.length === 0) {
-                        warns.push(`⚠️ 此趟次尚未安排任何住宿`);
-                        return warns;
-                    }
-                    const valid = matchedHotels.filter(h => h.checkIn && h.checkOut).sort((a, b) => a.checkIn.localeCompare(b.checkIn));
-                    for (let i = 0; i < valid.length - 1; i++) {
-                        const a = valid[i], b = valid[i + 1];
-                        if (b.checkIn < a.checkOut) warns.push(`⚠️ 住宿重疊：「${a.name}」與「${b.name}」`);
-                        else if (b.checkIn > a.checkOut) warns.push(`⚠️ 住宿缺口：${a.checkOut} 到 ${b.checkIn} 之間無住宿`);
-                    }
-                    return warns;
-                })();
+                const hotelWarns = trip.hotelWarnings || [];
 
                 const totalHotelCostTWD = trip.totalHotelCostTWD ?? 0;
                 const grandTotalTWD = totalCostTWD + totalHotelCostTWD;

@@ -59,6 +59,8 @@ function App() {
     const [activeTab, setActiveTab] = useState('timeline');
     const [editingTicket, setEditingTicket] = useState(null);
     const [editingHotel, setEditingHotel] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterStatus, setFilterStatus] = useState('all'); // all, upcoming, warning
     const fileInputRef = useRef(null);
 
     // ── Auth & Sync Hooks ────────────────────────────────────────────────────
@@ -133,8 +135,56 @@ function App() {
     const totalPriceTWD  = tickets.reduce((s, t) => s + (t.priceTWD || t.price || 0), 0);
     const totalHotelTWD  = hotels.reduce((s, h) => s + (h.priceTWD || 0), 0);
     const pastCostTWD    = useMemo(() => decoratedTrips.reduce((s, t) => s + ( t.isPast ? t.totalCostTWD : 0), 0), [decoratedTrips]);
-    const futureCostTWD  = useMemo(() => decoratedTrips.reduce((s, t) => s + (!t.isPast ? t.totalCostTWD : 0), 0), [decoratedTrips]);
+    const totalTripDays  = useMemo(() => decoratedTrips.reduce((s, t) => s + (t.tripDays || 0), 0), [decoratedTrips]);
     const sunkCostTWD    = Math.max(0, totalPriceTWD - pastCostTWD - futureCostTWD);
+
+    // ── 智慧搜尋與篩選引擎 ──────────────────────────────────────────────────
+    const searchLower = searchTerm.toLowerCase();
+    
+    const filteredTickets = useMemo(() => {
+        return tickets.filter(t => {
+            const matchesSearch = !searchTerm || [t.airline, t.outboundFlightNo, t.inboundFlightNo, t.departRegion, t.returnRegion, t.note]
+                .some(field => String(field || '').toLowerCase().includes(searchLower));
+            
+            if (filterStatus === 'upcoming') {
+                return matchesSearch && new Date(t.outboundDate) >= new Date().setHours(0,0,0,0);
+            }
+            return matchesSearch;
+        });
+    }, [tickets, searchTerm, filterStatus]);
+
+    const filteredHotels = useMemo(() => {
+        return hotels.filter(h => {
+            const matchesSearch = !searchTerm || [h.name, h.confirmationNo, h.address, h.note]
+                .some(field => String(field || '').toLowerCase().includes(searchLower));
+            
+            if (filterStatus === 'upcoming') {
+                return matchesSearch && new Date(h.checkIn) >= new Date().setHours(0,0,0,0);
+            }
+            return matchesSearch;
+        });
+    }, [hotels, searchTerm, filterStatus]);
+
+    const filteredItinerary = useMemo(() => {
+        return itinerary.filter(trip => {
+            // 1. 搜尋比對 (Label, 機場, 航班)
+            const segments = trip.segments || [];
+            const customLabel = tripLabels[trip.id] || '';
+            const matchesSearch = !searchTerm || [
+                customLabel,
+                ...segments.map(s => s.from),
+                ...segments.map(s => s.to),
+                ...segments.map(s => s.flightNo),
+                ...segments.map(s => s.ticket.airline)
+            ].some(field => String(field || '').toLowerCase().includes(searchLower));
+
+            // 2. 狀態比對
+            if (filterStatus === 'upcoming') return matchesSearch && !trip.isPast;
+            if (filterStatus === 'warning') return matchesSearch && trip.hasWarning;
+            
+            return matchesSearch;
+        });
+    }, [itinerary, searchTerm, filterStatus, tripLabels]);
 
     // ── 機票 CRUD ─────────────────────────────────────────────────────────────
     const handleSaveTicket = (ticket) => {
@@ -279,7 +329,41 @@ function App() {
                     futureCostTWD={futureCostTWD}
                     pastCostTWD={pastCostTWD}
                     sunkCostTWD={sunkCostTWD}
+                    totalTripDays={totalTripDays}
                 />
+
+                {/* ── 智慧篩選列 ─────────────────────────────────────────── */}
+                <div className="mb-6 flex flex-col md:flex-row gap-3 items-center bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+                    <div className="relative flex-1 w-full">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+                        <input 
+                            type="text" 
+                            placeholder="搜尋航班、機場、飯店或自訂名稱..."
+                            className="w-full pl-9 pr-4 py-2 bg-slate-50 border-none rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <div className="flex gap-1 bg-slate-100 p-1 rounded-lg w-full md:w-auto">
+                        {[
+                            { key: 'all', label: '全部' },
+                            { key: 'upcoming', label: '未來' },
+                            { key: 'warning', label: '⚠️ 警告' }
+                        ].map(opt => (
+                            <button
+                                key={opt.key}
+                                onClick={() => setFilterStatus(opt.key)}
+                                className={`flex-1 md:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-all ${
+                                    filterStatus === opt.key 
+                                        ? 'bg-white text-indigo-600 shadow-sm' 
+                                        : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
 
                 {/* ── Tab 內容（表單跟著 active tab 變化）─────────────────── */}
                 {activeTab === 'timeline' || activeTab === 'list' ? (
@@ -318,7 +402,7 @@ function App() {
                     <div className="p-4 md:p-6 bg-white min-h-[400px]">
                         {activeTab === 'timeline' && (
                             <TripTimeline
-                                trips={itinerary}
+                                trips={filteredItinerary}
                                 tripLabels={tripLabels}
                                 onUpdateLabel={(id, val) => setTripLabels(p => ({ ...p, [id]: val }))}
                                 overrideState={tripOverrides}
@@ -329,7 +413,7 @@ function App() {
                             />
                         )}
                         {activeTab === 'list' && (
-                            <TicketList tickets={tickets} onDelete={(id) => {
+                            <TicketList tickets={filteredTickets} onDelete={(id) => {
                                 import('sonner').then(({ toast }) =>
                                     toast('確定要刪除這筆機票訂單嗎？', {
                                         description: '相關的趟次配對將會被移除。',
@@ -342,7 +426,7 @@ function App() {
                         )}
                         {activeTab === 'hotels' && (
                             <HotelList
-                                hotels={hotels}
+                                hotels={filteredHotels}
                                 onEdit={handleEditHotel}
                                 onDelete={handleDeleteHotel}
                             />

@@ -40,7 +40,26 @@ export function useItinerary(decoratedTrips, hotels) {
                 (s, h) => s + (h.priceTWD || 0), 0
             );
 
-            return { ...trip, matchedHotels, totalHotelCostTWD };
+            // ⚠️ 住宿警告檢測 (Gaps/Overlaps)
+            const hotelWarnings = (() => {
+                const warns = [];
+                const tripDays = trip.tripDays || 0;
+                if (tripDays > 1 && matchedHotels.length === 0) {
+                    warns.push(`⚠️ 此趟次尚未安排任何住宿`);
+                    return warns;
+                }
+                const valid = [...matchedHotels].sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
+                for (let i = 0; i < valid.length - 1; i++) {
+                    const a = valid[i], b = valid[i + 1];
+                    if (b.checkIn < a.checkOut) warns.push(`⚠️ 住宿重疊：「${a.name}」與「${b.name}」`);
+                    else if (b.checkIn > a.checkOut) warns.push(`⚠️ 住宿缺口：${a.checkOut} 到 ${b.checkIn} 之間無住宿`);
+                }
+                return warns;
+            })();
+
+            const hasWarning = hotelWarnings.length > 0 || trip.isOpenJaw;
+
+            return { ...trip, matchedHotels, totalHotelCostTWD, hotelWarnings, hasWarning };
         });
     }, [decoratedTrips, hotels]);
 }

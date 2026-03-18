@@ -25,74 +25,92 @@ export default function Dashboard({
     futureCostTWD,
     pastCostTWD,
     sunkCostTWD,
+    totalTripDays = 0,
 }) {
     const grandTotal = totalPriceTWD + totalHotelTWD;
+    const flightRatio = grandTotal > 0 ? (totalPriceTWD / grandTotal) * 100 : 0;
+    const hotelRatio = grandTotal > 0 ? (totalHotelTWD / grandTotal) * 100 : 0;
 
     return (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {/* 購入機票總數 */}
-            <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
+            <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden group">
                 <div className="relative z-10">
                     <p className="text-indigo-100 font-medium mb-1 text-sm">購入機票總數</p>
                     <p className="text-3xl font-extrabold">{ticketCount} 套</p>
+                    <p className="text-[10px] text-indigo-200 mt-2 opacity-80 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                        <Plane className="w-3 h-3" /> 各項反向/單程機票總計
+                    </p>
                 </div>
-                <ListFilter className="w-20 h-20 absolute -right-3 -bottom-3 text-white opacity-10" />
+                <ListFilter className="w-20 h-20 absolute -right-3 -bottom-3 text-white opacity-10 group-hover:scale-110 transition-transform" />
             </div>
 
             {/* 精算趟次 + 住宿筆數 */}
-            <div className="bg-gradient-to-br from-emerald-400 to-emerald-500 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
+            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden group">
                 <div className="relative z-10">
-                    <p className="text-emerald-50 font-medium mb-1 text-sm">精算趟次</p>
+                    <p className="text-emerald-50 font-medium mb-1 text-sm">精算行程總額</p>
                     <p className="text-3xl font-extrabold">{tripCount} 趟</p>
-                    {hotelCount > 0 && (
-                        <p className="text-xs text-emerald-100 mt-1 flex items-center gap-1">
-                            <Building2 className="w-3 h-3" /> {hotelCount} 筆住宿
-                        </p>
-                    )}
+                    <div className="text-[10px] text-emerald-100 mt-2 flex items-center gap-3">
+                        {hotelCount > 0 && <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {hotelCount} 筆住宿</span>}
+                        {totalTripDays > 0 && <span className="flex items-center gap-1">🗓️ 共 {totalTripDays} 天</span>}
+                    </div>
                 </div>
-                <Plane className="w-20 h-20 absolute -right-3 -bottom-3 text-white opacity-10" />
+                <Plane className="w-20 h-20 absolute -right-3 -bottom-3 text-white opacity-10 group-hover:scale-110 transition-transform" />
             </div>
 
-            {/* 入帳總計（機票） + 三分類明細 */}
-            <div className="col-span-2 bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden">
+            {/* 預算深度分析卡片 (占兩格) */}
+            <div className="col-span-2 bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl shadow-lg text-white relative overflow-hidden group">
                 <div className="relative z-10">
-                    <div className="flex items-baseline justify-between mb-1">
-                        <p className="text-slate-300 font-medium text-sm">🧾 旅費總計 (TWD)</p>
-                        {totalHotelTWD > 0 && (
-                            <p className="text-[10px] text-slate-400">機票 {totalPriceTWD.toLocaleString()} + 住宿 {totalHotelTWD.toLocaleString()}</p>
-                        )}
+                    <div className="flex items-baseline justify-between mb-2">
+                        <p className="text-slate-300 font-medium text-sm">📊 旅費預算分析 (TWD)</p>
+                        <p className="text-[10px] text-slate-400 font-bold bg-white/10 px-2 py-0.5 rounded-full">
+                            日均：${totalTripDays > 0 ? Math.round(grandTotal / totalTripDays).toLocaleString() : 0} / 天
+                        </p>
                     </div>
-                    <p className="text-3xl font-extrabold mb-3">
-                        ${grandTotal.toLocaleString()}
-                    </p>
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                        {/* 未來待出行 */}
-                        <div className="bg-white/10 rounded-lg px-2 py-1.5">
-                            <p className="text-slate-400 mb-0.5">🗓️ 未來待出行</p>
-                            <p className="font-bold text-emerald-300">${futureCostTWD.toLocaleString()}</p>
+                    
+                    <div className="flex items-end gap-2 mb-4">
+                        <p className="text-3xl font-extrabold">${grandTotal.toLocaleString()}</p>
+                        <span className="text-xs text-slate-400 mb-1">機票 + 住宿</span>
+                    </div>
+
+                    {/* 預算佔比條 */}
+                    <div className="mb-4">
+                        <div className="flex justify-between text-[10px] mb-1.5 font-bold">
+                            <span className="text-indigo-300">✈️ 機票 ({Math.round(flightRatio)}%)</span>
+                            <span className="text-teal-300">🏨 住宿 ({Math.round(hotelRatio)}%)</span>
                         </div>
-                        {/* 歷史已實現 */}
-                        <div className="bg-white/10 rounded-lg px-2 py-1.5">
-                            <p className="text-slate-400 mb-0.5">✅ 歷史已實現</p>
-                            <p className="font-bold text-slate-200">${pastCostTWD.toLocaleString()}</p>
+                        <div className="h-2.5 w-full bg-slate-700 rounded-full overflow-hidden flex shadow-inner">
+                            <div 
+                                className="h-full bg-indigo-500 transition-all duration-1000 shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
+                                style={{ width: `${flightRatio}%` }}
+                            ></div>
+                            <div 
+                                className="h-full bg-teal-400 transition-all duration-1000 shadow-[0_0_10px_rgba(45,212,191,0.5)]" 
+                                style={{ width: `${hotelRatio}%` }}
+                            ></div>
                         </div>
-                        {/* 未配對成本 */}
-                        <div className={`rounded-lg px-2 py-1.5 ${sunkCostTWD > 0 ? 'bg-amber-500/20' : 'bg-white/10'}`}>
-                            <p className={`mb-0.5 ${sunkCostTWD > 0 ? 'text-amber-300' : 'text-slate-400'}`}>⚠️ 未配對成本</p>
-                            <p className={`font-bold ${sunkCostTWD > 0 ? 'text-amber-300' : 'text-slate-200'}`}>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-[10px]">
+                        <div className="bg-white/5 border border-white/5 rounded-xl px-2 py-2 group-hover:bg-white/10 transition-colors">
+                            <p className="text-slate-400 mb-0.5 flex items-center gap-1">🗓️ 待出行</p>
+                            <p className="font-bold text-emerald-400 text-xs">${futureCostTWD.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-white/5 border border-white/5 rounded-xl px-2 py-2 group-hover:bg-white/10 transition-colors">
+                            <p className="text-slate-400 mb-0.5 flex items-center gap-1">✅ 已完成</p>
+                            <p className="font-bold text-slate-200 text-xs">${pastCostTWD.toLocaleString()}</p>
+                        </div>
+                        <div className={`rounded-xl px-2 py-2 border transition-colors ${sunkCostTWD > 0 ? 'bg-amber-500/10 border-amber-500/20 group-hover:bg-amber-500/20' : 'bg-white/5 border-white/5 group-hover:bg-white/10'}`}>
+                            <p className={`mb-0.5 flex items-center gap-1 ${sunkCostTWD > 0 ? 'text-amber-300' : 'text-slate-400'}`}>
+                                ⚠️ 沉沒成本
+                            </p>
+                            <p className={`font-bold text-xs ${sunkCostTWD > 0 ? 'text-amber-300' : 'text-slate-200'}`}>
                                 ${sunkCostTWD.toLocaleString()}
                             </p>
                         </div>
                     </div>
-                    {/* 住宿費用列（有住宿時才顯示） */}
-                    {totalHotelTWD > 0 && (
-                        <div className="mt-2 flex items-center gap-2 text-[11px] bg-teal-500/20 rounded-lg px-2 py-1.5">
-                            <Building2 className="w-3 h-3 text-teal-300 shrink-0" />
-                            <span className="text-teal-300 font-bold">住宿費用：${totalHotelTWD.toLocaleString()}</span>
-                        </div>
-                    )}
                 </div>
-                <div className="text-6xl font-black absolute -right-2 -bottom-6 text-white opacity-[0.03]">$</div>
+                <div className="text-7xl font-black absolute -right-2 -bottom-8 text-white opacity-[0.03] select-none select-none group-hover:opacity-[0.05] transition-opacity font-mono">$</div>
             </div>
         </div>
     );
