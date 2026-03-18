@@ -2,7 +2,7 @@
  * Instructions.jsx ── 頁面頂部可折疊的「使用說明與操作指南」元件。
  *
  * ・預設展開（isOpen = true），使用者可點擊標題列收合。
- * ・說明文字隨功能迭代需同步更新（最後更新：v6.0）。
+ * ・說明文字隨功能迭代需同步更新（最後更新：v7.0）。
  */
 import React, { useState } from 'react';
 import { BookOpen, AlertCircle, CheckCircle2, Banknote, Plane } from 'lucide-react';
@@ -19,7 +19,7 @@ export default function Instructions() {
             >
                 <span className="flex items-center text-lg font-bold">
                     <BookOpen className="w-5 h-5 mr-2" />
-                    使用說明與操作指南
+                    使用說明與操作指南 v7.0
                 </span>
                 <span className="text-sm font-medium">{isOpen ? '收起 ▴' : '展開 ▾'}</span>
             </button>
@@ -35,13 +35,12 @@ export default function Instructions() {
                                 <AlertCircle className="w-4 h-4 mr-1" /> 系統運作邏輯
                             </h3>
                             <p className="text-sm mb-2 leading-relaxed">
-                                本系統專門用來解決「混買來回票」所造成的日期混淆。系統會將你買的每一筆來回訂單拆解成兩張單程票，接著按照<strong>時間順序重新排列</strong>，自動拼出你實際的出行趟次。
+                                本系統專門處理解決「混買來回票」造成的日期混淆與成本計算難題。系統會自動拆解訂單並按照<strong>時間順序重新堆疊</strong>，精準拼湊出你實際的出行趟次。
                             </p>
                             <ul className="list-disc list-inside text-sm space-y-1.5">
-                                <li><strong>正向票</strong>：第一段「出發地 → 目的地」，第二段「目的地 → 出發地」。</li>
-                                <li><strong>反向票</strong>：第一段「目的地 → 出發地」，第二段「出發地 → 目的地」（方向顛倒）。</li>
-                                <li><strong>單程票</strong>：只有一段，系統直接列入切確日期行程。</li>
-                                <li><strong>紅眼航班</strong>：填入抵達時間時，若早於出發時間，系統會<strong>自動修正抵達日期 +1 天</strong>，無須手動計算。</li>
+                                <li><strong>正/反向與單程票</strong>：支援複雜票種邏輯，自動判定出發與抵達的相對關係。</li>
+                                <li><strong>⚡ 航班 API 自動帶入</strong>：輸入航班編號與日期後，點擊「⚡」即可自動連線 AviationStack / AirLabs 抓取確切時刻表（支援紅眼航班自動 +1 天）。</li>
+                                <li><strong>全局保險機制</strong>：系統具備核彈級防護。若遭遇資料毀損，不再出現萬年白畫面，而是提供獨立的安全模式介面讓您一鍵重設。</li>
                             </ul>
                         </div>
 
@@ -51,11 +50,11 @@ export default function Instructions() {
                                 <CheckCircle2 className="w-4 h-4 mr-1" /> 操作步驟
                             </h3>
                             <ol className="list-decimal list-inside text-sm space-y-2 leading-relaxed">
-                                <li>在下方表單輸入機票資訊，支援 <strong>單程票</strong> 與 <strong>多幣別換算 (TWD/JPY/USD)</strong>。所有時間皆精確到分鐘。</li>
-                                <li>在 <strong>「購買清單管理」</strong> 分頁可以隨時 ✏️ <strong>修改訂單</strong> 或 🗑️ 刪除。</li>
-                                <li>切換至 <strong>「實際飛行配對」</strong>，查看系統拼好的趟次與精算成本。點 ✏️ 可<strong>自訂行程命名</strong>，且支援<strong>拖曳航段</strong>。若系統偵測到趟次內住宿有缺口或重疊，會自動紅字警告。</li>
-                                <li><strong>【雲端同步】</strong>點右上角「登入 Google」，授權後可一鍵<strong>備份/載入</strong>到你的個人 Google Drive。</li>
-                                <li><strong>【日曆推播】</strong>登入後點「同步日曆」，航班自動排入 Google 行事曆，住宿也會合併為連續天數全天事件！</li>
+                                <li>在 <strong>機票與住宿管理</strong> 區塊輸入訂單，支援多幣別換算，航班更可一鍵連線 API 生成時間。</li>
+                                <li>在 <strong>「實際飛行配對」</strong> 中，查看系統精算出的所有趟次（可拖曳航段、自訂趟次名稱）。若飯店預定有缺口或重疊，系統會紅字警示！</li>
+                                <li>利用頂部 <strong>搜尋列</strong> 輕鬆過濾特定的機場、航班、飯店名稱或標籤。</li>
+                                <li><strong>【Dashboard 預算分析】</strong>：首頁圖表自動剖析機票/住宿的費用佔比，且每趟行程皆會計算「每日 CP 值」。</li>
+                                <li><strong>【雲端備份與日曆】</strong>：登入 Google 授權後，一鍵將資料完整備份至 Drive，或將所有航班、連續住宿無縫推播至行事曆！</li>
                             </ol>
                         </div>
                     </div>
@@ -66,20 +65,19 @@ export default function Instructions() {
                             <Banknote className="w-4 h-4 mr-1" /> 費用統計說明
                         </h3>
                         <ul className="list-disc list-inside text-xs text-blue-800 space-y-1 leading-relaxed">
-                            <li><strong>入帳總計</strong>：你實際付出的所有機票金額加總。</li>
-                            <li><strong>未來待出行</strong>：尚未出發的趟次分攤成本。每張來回票的費用平均分給兩段航班。</li>
-                            <li><strong>歷史已實現</strong>：所有已完成趟次的分攤成本。</li>
-                            <li><strong>未配對成本</strong>：入帳總計中，尚未被任何趟次使用的孤兒票費用（橘色警示代表有資料需要確認）。</li>
+                            <li><strong>機票與住宿佔比</strong>：一目了然旅費的資源配置。</li>
+                            <li><strong>未來待出行</strong>：尚未出發的趟次分攤成本；每張來回票費用平均分給兩段航班。</li>
+                            <li><strong>已實現與沉沒成本</strong>：歷史趟次成本總結，以及未被配對的孤兒機票（標橘色）警示。</li>
                         </ul>
                     </div>
 
                     {/* ── 底部隱私說明 + 狀態徽章 ──────────────────────────────── */}
                     <div className="mt-3 flex flex-wrap gap-2 text-xs text-blue-700">
-                        <span className="bg-blue-100 flex items-center px-2 py-1 rounded">
-                            🛡️ 隱私保證：資料只存在你的瀏覽器，不會自動上傳（Google 功能需主動操作）
+                        <span className="bg-blue-100 flex items-center px-2 py-1 rounded shadow-sm">
+                            🛡️ 100% 隱私保證：離線優先架構，資料預設僅存於本機瀏覽器
                         </span>
-                        <span className="bg-blue-100 flex items-center px-2 py-1 rounded">
-                            <Plane className="w-3 h-3 mr-1" /> 支援不同點進出 (Open-Jaw)・外站轉機顯示等待時間
+                        <span className="bg-blue-100 flex items-center px-2 py-1 rounded shadow-sm">
+                            <Plane className="w-3 h-3 mr-1" /> 完美支援 Open-Jaw (不同點進出) 與跨日轉機計算
                         </span>
                     </div>
                 </div>

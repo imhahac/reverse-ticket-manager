@@ -180,15 +180,10 @@ function App() {
     }, [tickets, hotels, trips, tripOverrides]);
 
     // ── itinerary = decoratedTrips + 每個 trip 注入 matchedHotels ────────────
-    const itinerary = useMemo(() => {
-        try {
-            const list = Array.isArray(decoratedTrips) ? decoratedTrips : [];
-            return useItinerary(list, hotels);
-        } catch (e) {
-            console.error("useItinerary error:", e);
-            return [];
-        }
-    }, [decoratedTrips, hotels]);
+    const itinerary = useItinerary(
+        Array.isArray(decoratedTrips) ? decoratedTrips : [],
+        Array.isArray(hotels) ? hotels : []
+    );
 
     // ── 智慧搜尋與篩選引擎 ──────────────────────────────────────────────────
     const searchLower = (searchTerm || '').toLowerCase();
