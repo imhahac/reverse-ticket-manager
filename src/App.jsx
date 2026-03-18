@@ -143,10 +143,12 @@ function App() {
     const sunkCostTWD    = Math.max(0, totalPriceTWD - pastCostTWD - futureCostTWD);
 
     // ── 智慧搜尋與篩選引擎 ──────────────────────────────────────────────────
-    const searchLower = searchTerm.toLowerCase();
+    const searchLower = (searchTerm || '').toLowerCase();
     
     const filteredTickets = useMemo(() => {
-        return tickets.filter(t => {
+        const safeTickets = Array.isArray(tickets) ? tickets : [];
+        return safeTickets.filter(t => {
+            if (!t) return false;
             const matchesSearch = !searchTerm || [t.airline, t.outboundFlightNo, t.inboundFlightNo, t.departRegion, t.returnRegion, t.note]
                 .some(field => String(field || '').toLowerCase().includes(searchLower));
             
@@ -158,7 +160,9 @@ function App() {
     }, [tickets, searchTerm, filterStatus]);
 
     const filteredHotels = useMemo(() => {
-        return hotels.filter(h => {
+        const safeHotels = Array.isArray(hotels) ? hotels : [];
+        return safeHotels.filter(h => {
+            if (!h) return false;
             const matchesSearch = !searchTerm || [h.name, h.confirmationNo, h.address, h.note]
                 .some(field => String(field || '').toLowerCase().includes(searchLower));
             
@@ -171,9 +175,10 @@ function App() {
 
     const filteredItinerary = useMemo(() => {
         return itinerary.filter(trip => {
+            if (!trip) return false;
             // 1. 搜尋比對 (Label, 機場, 航班)
             const segments = trip.segments || [];
-            const customLabel = tripLabels[trip.id] || '';
+            const customLabel = (tripLabels && trip.id) ? (tripLabels[trip.id] || '') : '';
             const matchesSearch = !searchTerm || [
                 customLabel,
                 ...segments.map(s => s?.from),

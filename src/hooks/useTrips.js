@@ -42,8 +42,8 @@ export const useTrips = (tickets) => {
     return useMemo(() => {
 
         // ── Step 1：拆票成航段 ────────────────────────────────────────────────
-        let segments = [];
-        tickets.forEach(t => {
+        const safeTickets = (tickets || []).filter(t => t && typeof t === 'object' && t.id);
+        safeTickets.forEach(t => {
             // 建構出發/抵達的 Date 物件，供排序用
             const outTime = t.outboundTime ? `T${t.outboundTime}:00` : 'T00:00:00';
             const inTime  = t.inboundTime  ? `T${t.inboundTime}:00`  : 'T00:00:00';

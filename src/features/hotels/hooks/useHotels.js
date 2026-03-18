@@ -24,7 +24,8 @@ export function useHotels() {
     // ── 衍生欄位裝飾 ──────────────────────────────────────────────────────
     const decoratedHotels = useMemo(() => {
         const now = Date.now();
-        return hotels.map(h => {
+        const safeHotels = (hotels || []).filter(h => h && typeof h === 'object' && h.id);
+        return safeHotels.map(h => {
             let totalNights = null;
             if (h.checkIn && h.checkOut) {
                 const diff = new Date(h.checkOut) - new Date(h.checkIn);
