@@ -51,88 +51,161 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
             return;
         }
 
-        const apiKey = import.meta.env.VITE_AVIATIONSTACK_API_KEY;
-        if (!apiKey) {
-            toast.error('尚未設定 VITE_AVIATIONSTACK_API_KEY 環境變數', {
-                description: '請在開發環境 .env 或 GitHub Actions Secrets 中加入金鑰。'
+        const avKey = import.meta.env.VITE_AVIATIONSTACK_API_KEY;
+        const alKey = import.meta.env.VITE_AIRLABS_API_KEY;
+
+        if (!avKey && !alKey) {
+            toast.error('尚未設定 API 金鑰', {
+                description: '請在 GitHub Secrets 中加入 VITE_AVIATIONSTACK_API_KEY 或 VITE_AIRLABS_API_KEY。'
             });
             return;
         }
 
         setIsFetchingFlight(true);
-        const toastId = toast.loading('正在查詢航班資訊...');
-        try {
-            // AviationStack free tier only supports HTTP. We use a CORS proxy to avoid Mixed Content errors on HTTPS deployments like GitHub Pages.
-            const targetUrl = `http://api.aviationstack.com/v1/flights?access_key=${apiKey}&flight_iata=${flightNo}`;
+        const toastId = toast.loading(`正在查詢航班 ${flightNo.toUpperCase()} ...`);
+
+        const getSafeDateFromISO = (isoStr, fallback) => {
+            if (!isoStr) return fallback;
+            const datePart = isoStr.includes('T') ? isoStr.split('T')[0] : (isoStr.includes(' ') ? isoStr.split(' ')[0] : isoStr);
+            return datePart;
+        };
+
+        const parseLocalDate = (dateStr) => {
+            if (!dateStr) return new Date();
+            const [y, m, d] = dateStr.split('-').map(Number);
+            if (isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
+            return new Date(y, m - 1, d);
+        };
+
+        const getOffsetDate = (baseDateStr, offset) => {
+            if (!baseDateStr || isNaN(offset)) return baseDateStr;
+            const d = parseLocalDate(baseDateStr);
+            d.setDate(d.getDate() + offset);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        };
+
+        const getTimeFromISO = (isoStr) => {
+            if (!isoStr) return '';
+            const tech = isoStr.includes('T') ? isoStr.split('T')[1] : (isoStr.includes(' ') ? isoStr.split(' ')[1] : '');
+            return tech ? tech.substring(0, 5) : '';
+        };
+
+        // Source 1: AviationStack
+        const tryAviationStack = async () => {
+            if (!avKey) return null;
+            const targetUrl = `http://api.aviationstack.com/v1/flights?access_key=${avKey}&flight_iata=${flightNo}`;
             const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-            
             const res = await fetch(proxyUrl);
-            const wrappedData = await res.json();
+            const wrapped = await res.json();
+            if (!wrapped.contents) return null;
+            const data = JSON.parse(wrapped.contents);
+            if (data.error || !data.data || data.data.length === 0) return null;
             
-            if (!wrappedData.contents) throw new Error('Proxy returned empty contents');
-            const data = JSON.parse(wrappedData.contents);
-
-            if (data.error) throw new Error(data.error.message || 'API 錯誤');
-            if (!data.data || data.data.length === 0) throw new Error(`找不到航班 ${flightNo} 的相關資訊`);
-
-            // Sort by recent scheduled date
             const scheduledFlights = data.data.filter(f => f.flight_date >= flightDate);
             const flight = scheduledFlights.length > 0 ? scheduledFlights[0] : data.data[0];
+            if (!flight.departure || !flight.arrival) return null;
 
-            if (!flight.departure || !flight.arrival) throw new Error('回傳的航班資訊不齊全');
-
-            const depDateRaw = flight.departure.scheduled ? flight.departure.scheduled.split('T')[0] : flight.flight_date;
-            const arrDateRaw = flight.arrival.scheduled ? flight.arrival.scheduled.split('T')[0] : depDateRaw;
-            
-            // Calculate date offset (usually 0 or 1 for red-eye flights)
-            // Parse as local dates to avoid timezone shift (e.g. UTC vs Asia/Taipei difference)
-            const parseLocalDate = (dateStr) => {
-                const [y, m, d] = dateStr.split('-');
-                return new Date(y, m - 1, d);
-            };
-
+            const depDateRaw = getSafeDateFromISO(flight.departure.scheduled, flight.flight_date);
+            const arrDateRaw = getSafeDateFromISO(flight.arrival.scheduled, depDateRaw);
             const depD = parseLocalDate(depDateRaw);
             const arrD = parseLocalDate(arrDateRaw);
-            const dayOffset = Math.round((arrD - depD) / (1000 * 60 * 60 * 24));
-
-            const depTime = flight.departure.scheduled ? flight.departure.scheduled.split('T')[1].substring(0, 5) : '';
-            const arrTime = flight.arrival.scheduled ? flight.arrival.scheduled.split('T')[1].substring(0, 5) : '';
-
-            // Apply the offset to the user's selected date safely
-            const getOffsetDate = (baseDateStr, offset) => {
-                if (!baseDateStr || isNaN(offset)) return baseDateStr;
-                const d = parseLocalDate(baseDateStr);
-                d.setDate(d.getDate() + offset);
-                // format back to YYYY-MM-DD
-                const yyyy = d.getFullYear();
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
-                return `${yyyy}-${mm}-${dd}`;
+            
+            return {
+                depTime: getTimeFromISO(flight.departure.scheduled),
+                arrTime: getTimeFromISO(flight.arrival.scheduled),
+                dayOffset: Math.round((arrD - depD) / (86400000)),
+                airline: flight.airline ? flight.airline.name : '',
+                originIata: flight.departure.iata || '',
+                originName: flight.departure.airport || '',
+                destIata: flight.arrival.iata || '',
+                destName: flight.arrival.airport || '',
+                source: 'AviationStack'
             };
+        };
 
-            const targetArrivalDate = getOffsetDate(flightDate, dayOffset);
+        // Source 2: AirLabs (Routes API)
+        const tryAirLabs = async () => {
+            if (!alKey) return null;
+            const targetUrl = `https://airlabs.co/api/v9/routes?api_key=${alKey}&flight_iata=${flightNo}`;
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+            const res = await fetch(proxyUrl);
+            const wrapped = await res.json();
+            if (!wrapped.contents) return null;
+            const data = JSON.parse(wrapped.contents);
+            if (!data.response || data.response.length === 0) return null;
+
+            const flight = data.response[0];
+            
+            // Routes API doesn't have dates, so arrival date offset logic:
+            // If arr_time < dep_time, assume +1 day (red-eye)
+            const depT = flight.dep_time || '';
+            const arrT = flight.arr_time || '';
+            let offset = 0;
+            if (depT && arrT) {
+                const depSum = parseInt(depT.replace(':',''));
+                const arrSum = parseInt(arrT.replace(':',''));
+                if (arrSum < depSum) offset = 1;
+            }
+
+            return {
+                depTime: depT,
+                arrTime: arrT,
+                dayOffset: offset,
+                airline: flight.airline_iata || '',
+                originIata: flight.dep_iata || '',
+                originName: '', 
+                destIata: flight.arr_iata || '',
+                destName: '',
+                source: 'AirLabs'
+            };
+        };
+
+        try {
+            let flightData = await tryAviationStack();
+            if (!flightData) {
+                console.log('AviationStack failed or empty, trying AirLabs...');
+                flightData = await tryAirLabs();
+            }
+
+            if (!flightData) throw new Error(`找不到航班 ${flightNo.toUpperCase()} 的有效資訊`);
+
+            const targetArrivalDate = getOffsetDate(flightDate, flightData.dayOffset);
+            const isReverse = formData.type === 'reverse';
 
             setFormData(prev => ({
                 ...prev,
                 ...(segment === 'outbound' ? {
-                    outboundTime: depTime,
+                    outboundTime: flightData.depTime,
                     outboundArrivalDate: targetArrivalDate,
-                    outboundArrivalTime: arrTime,
-                    departRegion: `${flight.departure.iata || ''} (${flight.departure.airport || prev.departRegion})`,
-                    returnRegion: `${flight.arrival.iata || ''} (${flight.arrival.airport || prev.returnRegion})`
+                    outboundArrivalTime: flightData.arrTime,
+                    ...(!isReverse ? {
+                        departRegion: flightData.originIata ? `${flightData.originIata} (${flightData.originName || prev.departRegion})` : prev.departRegion,
+                        returnRegion: flightData.destIata ? `${flightData.destIata} (${flightData.destName || prev.returnRegion})` : prev.returnRegion
+                    } : {
+                        returnRegion: flightData.originIata ? `${flightData.originIata} (${flightData.originName || prev.returnRegion})` : prev.returnRegion,
+                        departRegion: flightData.destIata ? `${flightData.destIata} (${flightData.destName || prev.departRegion})` : prev.departRegion
+                    })
                 } : {
-                    inboundTime: depTime,
+                    inboundTime: flightData.depTime,
                     inboundArrivalDate: targetArrivalDate,
-                    inboundArrivalTime: arrTime,
-                    returnRegion: `${flight.departure.iata || ''} (${flight.departure.airport || prev.returnRegion})`,
-                    departRegion: `${flight.arrival.iata || ''} (${flight.arrival.airport || prev.departRegion})`
+                    inboundArrivalTime: flightData.arrTime,
+                    ...(!isReverse ? {
+                        returnRegion: flightData.originIata ? `${flightData.originIata} (${flightData.originName || prev.returnRegion})` : prev.returnRegion,
+                        departRegion: flightData.destIata ? `${flightData.destIata} (${flightData.destName || prev.departRegion})` : prev.departRegion
+                    } : {
+                        departRegion: flightData.originIata ? `${flightData.originIata} (${flightData.originName || prev.departRegion})` : prev.departRegion,
+                        returnRegion: flightData.destIata ? `${flightData.destIata} (${flightData.destName || prev.returnRegion})` : prev.returnRegion
+                    })
                 }),
-                airline: flight.airline ? flight.airline.name : prev.airline
+                airline: flightData.airline || prev.airline
             }));
 
-            toast.success(`已成功帶入航班 ${flightNo} 的時刻表！`, { id: toastId });
+            toast.success(`已從 ${flightData.source} 取得航班 ${flightNo.toUpperCase()} 時程！`, { id: toastId });
         } catch (err) {
-            toast.error(`航班查詢失敗：${err.message}`, { id: toastId });
+            toast.error(`查詢失敗：${err.message}`, { id: toastId });
         } finally {
             setIsFetchingFlight(false);
         }
@@ -159,9 +232,13 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
         };
 
         const addOneDay = (dateStr) => {
-            const d = new Date(`${dateStr}T00:00:00`);
-            d.setDate(d.getDate() + 1);
-            return d.toISOString().split('T')[0];
+            const [y, m, d] = dateStr.split('-');
+            const date = new Date(y, m - 1, d);
+            date.setDate(date.getDate() + 1);
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const dd = String(date.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
         };
 
         // Smart Cross-Day Fix：若抵達時間早於出發時間，自動 +1 天（紅眼航班）
