@@ -7,10 +7,22 @@
  *   onDelete {Function} - (id) => void
  */
 import React from 'react';
-import { Building2, CalendarDays, Pencil, Trash2, Hash, MapPin, Clock } from 'lucide-react';
+import { Building2, CalendarDays, Pencil, Trash2, Hash, MapPin, Clock, Copy, Check } from 'lucide-react';
+import { toast } from 'sonner';
 
 function HotelListItem({ hotel, onEdit, onDelete }) {
     const { id, name, address, checkIn, checkOut, totalNights, priceTWD, costPerNight, confirmationNo, isPast } = hotel;
+    const [copiedId, setCopiedId] = React.useState(null);
+
+    const handleCopy = (text, type) => {
+        navigator.clipboard.writeText(text);
+        setCopiedId(type);
+        toast.success(`已複製${type === 'name' ? '飯店名稱' : '確認碼'}`);
+        setTimeout(() => setCopiedId(null), 2000);
+    };
+
+    const googleMapsUrl = address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : '';
+
 
     return (
         <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border shadow-sm transition-all hover:shadow-md
@@ -25,6 +37,13 @@ function HotelListItem({ hotel, onEdit, onDelete }) {
                 <div className="min-w-0 w-full">
                     <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-slate-800 text-sm">{name}</span>
+                        <button 
+                            onClick={() => handleCopy(name, 'name')}
+                            className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-teal-600 transition-colors"
+                            title="複製飯店名稱"
+                        >
+                            {copiedId === 'name' ? <Check className="w-3 h-3 text-teal-500" /> : <Copy className="w-3 h-3" />}
+                        </button>
                         {isPast && (
                             <span className="text-[10px] font-bold bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">
                                 已完成
@@ -42,16 +61,31 @@ function HotelListItem({ hotel, onEdit, onDelete }) {
                             {checkIn} → {checkOut}
                         </span>
                         {address && (
-                            <span className="flex items-center text-xs text-slate-400 truncate max-w-[180px]">
+                            <a 
+                                href={googleMapsUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="flex items-center text-xs text-slate-400 hover:text-teal-600 transition-colors truncate max-w-[180px]"
+                                title="在 Google Maps 中查看"
+                            >
                                 <MapPin className="w-3 h-3 mr-1 shrink-0" />
-                                {address}
-                            </span>
+                                <span className="underline decoration-dotted underline-offset-2">{address}</span>
+                            </a>
                         )}
                         {confirmationNo && (
-                            <span className="flex items-center text-xs font-mono text-slate-400">
-                                <Hash className="w-3 h-3 mr-1" />
-                                {confirmationNo}
-                            </span>
+                            <div className="flex items-center gap-1">
+                                <span className="flex items-center text-xs font-mono text-slate-400">
+                                    <Hash className="w-3 h-3 mr-1" />
+                                    {confirmationNo}
+                                </span>
+                                <button 
+                                    onClick={() => handleCopy(confirmationNo, 'conf')}
+                                    className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-teal-600 transition-colors"
+                                    title="複製確認碼"
+                                >
+                                    {copiedId === 'conf' ? <Check className="w-3 h-3 text-teal-500" /> : <Copy className="w-3 h-3" />}
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>

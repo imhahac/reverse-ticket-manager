@@ -10,8 +10,25 @@
  *   - 為避免行動裝置排版跑版，管理按鈕已用 div 包覆確保佈局穩定。
  */
 import React from 'react';
-import { Trash2, Calendar, Clock, Edit2 } from 'lucide-react';
+import { Trash2, Calendar, Clock, Edit2, ExternalLink } from 'lucide-react';
 import { formatDateWithDay } from '../utils/dateHelpers';
+
+const FlightLink = ({ flightNo }) => {
+    if (!flightNo) return null;
+    const url = `https://flightaware.com/live/flight/${flightNo}`;
+    return (
+        <a 
+            href={url} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="ml-2 font-mono text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm hover:bg-indigo-100 hover:border-indigo-300 transition-colors flex items-center gap-1 group"
+            title={`在 FlightAware 追蹤 ${flightNo}`}
+        >
+            {flightNo}
+            <ExternalLink className="w-2 h-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </a>
+    );
+};
 
 export default function TicketList({ tickets, onDelete, onEdit }) {
     if (tickets.length === 0) return (
@@ -58,7 +75,7 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
                                     <div className="text-gray-500 mt-1 text-xs flex flex-wrap items-center gap-y-1">
                                        <Calendar className="w-3 h-3 mr-1" /> {formatDateWithDay(ticket.outboundDate)}
                                        {ticket.outboundTime && <><Clock className="w-3 h-3 ml-2 mr-1 text-slate-400" /> {ticket.outboundTime}</>}
-                                       {ticket.outboundFlightNo && <span className="ml-2 font-mono text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm">{ticket.outboundFlightNo}</span>}
+                                       <FlightLink flightNo={ticket.outboundFlightNo} />
                                     </div>
                                 </div>
                                 {ticket.type !== 'oneway' && (
@@ -67,7 +84,7 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
                                         <div className="text-gray-500 mt-1 text-xs flex flex-wrap items-center gap-y-1">
                                            <Calendar className="w-3 h-3 mr-1" /> {formatDateWithDay(ticket.inboundDate)}
                                            {ticket.inboundTime && <><Clock className="w-3 h-3 ml-2 mr-1 text-slate-400" /> {ticket.inboundTime}</>}
-                                           {ticket.inboundFlightNo && <span className="ml-2 font-mono text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm">{ticket.inboundFlightNo}</span>}
+                                           <FlightLink flightNo={ticket.inboundFlightNo} />
                                         </div>
                                     </div>
                                 )}
@@ -128,7 +145,7 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
                                             <div className="text-sm text-gray-500 mt-1 flex items-center">
                                                 <Calendar className="w-3 h-3 mr-1" /> {formatDateWithDay(ticket.outboundDate)}
                                                 {ticket.outboundTime && <><Clock className="w-3 h-3 ml-2 mr-1 text-slate-400" /> {ticket.outboundTime}</>}
-                                                {ticket.outboundFlightNo && <span className="ml-2 font-mono text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm">{ticket.outboundFlightNo}</span>}
+                                                <FlightLink flightNo={ticket.outboundFlightNo} />
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
@@ -137,7 +154,7 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
                                                 <div className="text-sm text-gray-500 mt-1 flex items-center">
                                                     <Calendar className="w-3 h-3 mr-1" /> {formatDateWithDay(ticket.inboundDate)}
                                                     {ticket.inboundTime && <><Clock className="w-3 h-3 ml-2 mr-1 text-slate-400" /> {ticket.inboundTime}</>}
-                                                    {ticket.inboundFlightNo && <span className="ml-2 font-mono text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm">{ticket.inboundFlightNo}</span>}
+                                                    <FlightLink flightNo={ticket.inboundFlightNo} />
                                                 </div>
                                             )}
                                         </td>
