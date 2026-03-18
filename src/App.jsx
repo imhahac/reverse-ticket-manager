@@ -145,55 +145,88 @@ function App() {
     // ── 智慧搜尋與篩選引擎 ──────────────────────────────────────────────────
     const searchLower = (searchTerm || '').toLowerCase();
     
+    // 超級防呆的字串比對輔助函式
+    const safeMatch = (val, search) => {
+        try {
+            if (val === null || val === undefined) return false;
+            return String(val).toLowerCase().includes(search);
+        } catch(e) { return false; }
+    };
+
     const filteredTickets = useMemo(() => {
-        const safeTickets = Array.isArray(tickets) ? tickets : [];
-        return safeTickets.filter(t => {
-            if (!t) return false;
-            const matchesSearch = !searchTerm || [t.airline, t.outboundFlightNo, t.inboundFlightNo, t.departRegion, t.returnRegion, t.note]
-                .some(field => String(field || '').toLowerCase().includes(searchLower));
-            
-            if (filterStatus === 'upcoming') {
-                return matchesSearch && new Date(t.outboundDate) >= new Date().setHours(0,0,0,0);
-            }
-            return matchesSearch;
-        });
-    }, [tickets, searchTerm, filterStatus]);
+        try {
+            const safeTickets = Array.isArray(tickets) ? tickets : [];
+            return safeTickets.filter(t => {
+                if (!t || typeof t !== 'object') return false;
+                
+                let matchesSearch = true;
+                if (searchTerm) {
+                    const fields = [t.airline, t.outboundFlightNo, t.inboundFlightNo, t.departRegion, t.returnRegion, t.note];
+                    matchesSearch = fields.some(f => safeMatch(f, searchLower));
+                }
+                
+                if (filterStatus === 'upcoming') {
+                    if (!t.outboundDate) return false;
+                    const d = new Date(t.outboundDate);
+                    return matchesSearch && !isNaN(d) && d.getTime() >= new Date().setHours(0,0,0,0);
+                }
+                return matchesSearch;
+            });
+        } catch (e) { console.error('Filter tickets error:', e); return Array.isArray(tickets) ? tickets : []; }
+    }, [tickets, searchTerm, filterStatus, searchLower]);
 
     const filteredHotels = useMemo(() => {
-        const safeHotels = Array.isArray(hotels) ? hotels : [];
-        return safeHotels.filter(h => {
-            if (!h) return false;
-            const matchesSearch = !searchTerm || [h.name, h.confirmationNo, h.address, h.note]
-                .some(field => String(field || '').toLowerCase().includes(searchLower));
-            
-            if (filterStatus === 'upcoming') {
-                return matchesSearch && new Date(h.checkIn) >= new Date().setHours(0,0,0,0);
-            }
-            return matchesSearch;
-        });
-    }, [hotels, searchTerm, filterStatus]);
+        try {
+            const safeHotels = Array.isArray(hotels) ? hotels : [];
+            return safeHotels.filter(h => {
+                if (!h || typeof h !== 'object') return false;
+                
+                let matchesSearch = true;
+                if (searchTerm) {
+                    const fields = [h.name, h.confirmationNo, h.address, h.note];
+                    matchesSearch = fields.some(f => safeMatch(f, searchLower));
+                }
+                
+                if (filterStatus === 'upcoming') {
+                    if (!h.checkIn) return false;
+                    const d = new Date(h.checkIn);
+                    return matchesSearch && !isNaN(d) && d.getTime() >= new Date().setHours(0,0,0,0);
+                }
+                return matchesSearch;
+            });
+        } catch (e) { console.error('Filter hotels error:', e); return Array.isArray(hotels) ? hotels : []; }
+    }, [hotels, searchTerm, filterStatus, searchLower]);
 
     const filteredItinerary = useMemo(() => {
-        return itinerary.filter(trip => {
-            if (!trip) return false;
-            // 1. 搜尋比對 (Label, 機場, 航班)
-            const segments = trip.segments || [];
-            const customLabel = (tripLabels && trip.id) ? (tripLabels[trip.id] || '') : '';
-            const matchesSearch = !searchTerm || [
-                customLabel,
-                ...segments.map(s => s?.from),
-                ...segments.map(s => s?.to),
-                ...segments.map(s => s?.flightNo),
-                ...segments.map(s => s?.ticket?.airline)
-            ].some(field => String(field || '').toLowerCase().includes(searchLower));
-
-            // 2. 狀態比對
-            if (filterStatus === 'upcoming') return matchesSearch && !trip.isPast;
-            if (filterStatus === 'warning') return matchesSearch && trip.hasWarning;
-            
-            return matchesSearch;
-        });
-    }, [itinerary, searchTerm, filterStatus, tripLabels]);
+        try {
+            const safeItinerary = Array.isArray(itinerary) ? itinerary : [];
+            return safeItinerary.filter(trip => {
+                if (!trip || typeof trip !== 'object') return false;
+                
+                let matchesSearch = true;
+                if (searchTerm) {
+                    const customLabel = (tripLabels && trip.id) ? (tripLabels[trip.id] || '') : '';
+                    let fields = [customLabel];
+                    
+                    if (Array.isArray(trip.segments)) {
+                        trip.segments.forEach(s => {
+                            if (s && typeof s === 'object') {
+                                fields.push(s.from, s.to, s.flightNo);
+                                if (s.ticket && typeof s.ticket === 'object') {
+                                    fields.push(s.ticket.airline);
+                                }
+                            }
+                        });
+                    }
+                    matchesSearch = fields.some(f => safeMatch(f, searchLower));
+                }
+                
+                if (filterStatus === 'upcoming') return matchesSearch && !trip.isPast;
+                if (filterStatus === 'warning') return matchesSearch && trip.hasWarning;
+                return matchesSearch;
+            });
+        } catch (e) { console.error('Filter itinerary error:', e); return Array.isArray(itinerary) ? itinerary : []; }
+    }, [itinerary, searchTerm, filterStatus, tripLabels, searchLower]);
 
     // ── 機票 CRUD ─────────────────────────────────────────────────────────────
     const handleSaveTicket = (ticket) => {
@@ -330,9 +363,9 @@ function App() {
 
                 {/* ── Dashboard ──────────────────────────────────────────── */}
                 <Dashboard
-                    ticketCount={tickets.length}
+                    ticketCount={safeTickets.length}
                     tripCount={trips.length}
-                    hotelCount={hotels.length}
+                    hotelCount={safeHotels.length}
                     totalPriceTWD={totalPriceTWD}
                     totalHotelTWD={totalHotelTWD}
                     futureCostTWD={futureCostTWD}
