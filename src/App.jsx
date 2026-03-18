@@ -172,10 +172,10 @@ function App() {
             const customLabel = tripLabels[trip.id] || '';
             const matchesSearch = !searchTerm || [
                 customLabel,
-                ...segments.map(s => s.from),
-                ...segments.map(s => s.to),
-                ...segments.map(s => s.flightNo),
-                ...segments.map(s => s.ticket.airline)
+                ...segments.map(s => s?.from),
+                ...segments.map(s => s?.to),
+                ...segments.map(s => s?.flightNo),
+                ...segments.map(s => s?.ticket?.airline)
             ].some(field => String(field || '').toLowerCase().includes(searchLower));
 
             // 2. 狀態比對
