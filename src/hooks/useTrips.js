@@ -44,6 +44,7 @@ export const useTrips = (tickets) => {
         // ── Step 1：拆票成航段 ────────────────────────────────────────────────
         const validTickets = Array.isArray(tickets) ? tickets : [];
         const safeTickets = validTickets.filter(t => t && typeof t === 'object' && t.id);
+        const segments = [];
         safeTickets.forEach(t => {
             // 建構出發/抵達的 Date 物件，供排序用
             const outTime = t.outboundTime ? `T${t.outboundTime}:00` : 'T00:00:00';
