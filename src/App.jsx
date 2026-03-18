@@ -68,11 +68,11 @@ function App() {
     const { exchangeRates } = useExchangeRates();
 
     // ── Flights Hooks ────────────────────────────────────────────────────────
-    const { segments, trips } = useTrips(tickets);
+    const { segments = [], trips = [] } = useTrips(tickets || []);
     const { overrides: tripOverrides, removeSegment, restoreSegment, moveSegmentToTrip, clearAllOverrides } = useTripOverrides();
 
     // ── Hotels Hook ──────────────────────────────────────────────────────────
-    const { hotels, rawHotels, addHotel, updateHotel, deleteHotel, updateHotelCalendarIds, setHotels } = useHotels();
+    const { hotels = [], rawHotels = [], addHotel, updateHotel, deleteHotel, updateHotelCalendarIds, setHotels } = useHotels();
 
     // ── Google Sync ──────────────────────────────────────────────────────────
     const { isSyncing, handleSyncToDrive, handleLoadFromDrive, handleSyncToCalendar } = useGoogleSync({
@@ -132,9 +132,13 @@ function App() {
     const itinerary = useItinerary(decoratedTrips, hotels);
 
     // ── 費用計算 ─────────────────────────────────────────────────────────────
-    const totalPriceTWD  = tickets.reduce((s, t) => s + (t.priceTWD || t.price || 0), 0);
-    const totalHotelTWD  = hotels.reduce((s, h) => s + (h.priceTWD || 0), 0);
+    const safeTickets = Array.isArray(tickets) ? tickets : [];
+    const safeHotels  = Array.isArray(hotels) ? hotels : [];
+
+    const totalPriceTWD  = safeTickets.reduce((s, t) => s + (t?.priceTWD || t?.price || 0), 0);
+    const totalHotelTWD  = safeHotels.reduce((s, h) => s + (h?.priceTWD || 0), 0);
     const pastCostTWD    = useMemo(() => decoratedTrips.reduce((s, t) => s + ( t.isPast ? t.totalCostTWD : 0), 0), [decoratedTrips]);
+    const futureCostTWD  = useMemo(() => decoratedTrips.reduce((s, t) => s + (!t.isPast ? t.totalCostTWD : 0), 0), [decoratedTrips]);
     const totalTripDays  = useMemo(() => decoratedTrips.reduce((s, t) => s + (t.tripDays || 0), 0), [decoratedTrips]);
     const sunkCostTWD    = Math.max(0, totalPriceTWD - pastCostTWD - futureCostTWD);
 

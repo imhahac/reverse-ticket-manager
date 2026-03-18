@@ -262,7 +262,7 @@ export default function TripTimeline({
                                                 </div>
                                                 <div>
                                                     <div className="text-xs font-bold text-indigo-500 mb-1 tracking-wide flex items-center gap-2 flex-wrap">
-                                                        <span>{seg.ticket.airline}</span>
+                                                        <span>{seg.ticket?.airline || '未知航空公司'}</span>
                                                         {seg.flightNo && (
                                                             <a href={`https://flightaware.com/live/flight/${seg.flightNo}`} target="_blank" rel="noreferrer" className="inline-flex items-center text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-mono px-1.5 py-0.5 rounded border border-indigo-200 transition-colors shadow-sm" title="前往 FlightAware 觀看航班動態" onClick={(e) => e.stopPropagation()}>
                                                                 {seg.flightNo} ↗
