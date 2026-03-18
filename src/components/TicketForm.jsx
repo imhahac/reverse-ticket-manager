@@ -93,85 +93,7 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
             return tech ? tech.substring(0, 5) : '';
         };
 
-        // Source 1: AviationStack
-        const tryAviationStack = async () => {
-            if (!avKey) return null;
-            const targetUrl = `http://api.aviationstack.com/v1/flights?access_key=${avKey}&flight_iata=${flightNo}`;
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-            const res = await fetch(proxyUrl);
-            const wrapped = await res.json();
-            if (!wrapped.contents) return null;
-            const data = JSON.parse(wrapped.contents);
-            if (data.error || !data.data || data.data.length === 0) return null;
-            
-            const scheduledFlights = data.data.filter(f => f.flight_date >= flightDate);
-            const flight = scheduledFlights.length > 0 ? scheduledFlights[0] : data.data[0];
-            if (!flight.departure || !flight.arrival) return null;
-
-            const depDateRaw = getSafeDateFromISO(flight.departure.scheduled, flight.flight_date);
-            const arrDateRaw = getSafeDateFromISO(flight.arrival.scheduled, depDateRaw);
-            const depD = parseLocalDate(depDateRaw);
-            const arrD = parseLocalDate(arrDateRaw);
-            
-            return {
-                depTime: getTimeFromISO(flight.departure.scheduled),
-                arrTime: getTimeFromISO(flight.arrival.scheduled),
-                dayOffset: Math.round((arrD - depD) / (86400000)),
-                airline: flight.airline ? flight.airline.name : '',
-                originIata: flight.departure.iata || '',
-                originName: flight.departure.airport || '',
-                destIata: flight.arrival.iata || '',
-                destName: flight.arrival.airport || '',
-                source: 'AviationStack'
-            };
-        };
-
-        // Source 2: AirLabs (Routes API)
-        const tryAirLabs = async () => {
-            if (!alKey) return null;
-            const targetUrl = `https://airlabs.co/api/v9/routes?api_key=${alKey}&flight_iata=${flightNo}`;
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-            const res = await fetch(proxyUrl);
-            const wrapped = await res.json();
-            if (!wrapped.contents) return null;
-            const data = JSON.parse(wrapped.contents);
-            if (!data.response || data.response.length === 0) return null;
-
-            const flight = data.response[0];
-            
-            // Routes API doesn't have dates, so arrival date offset logic:
-            // If arr_time < dep_time, assume +1 day (red-eye)
-            const depT = flight.dep_time || '';
-            const arrT = flight.arr_time || '';
-            let offset = 0;
-            if (depT && arrT) {
-                const depSum = parseInt(depT.replace(':',''));
-                const arrSum = parseInt(arrT.replace(':',''));
-                if (arrSum < depSum) offset = 1;
-            }
-
-            return {
-                depTime: depT,
-                arrTime: arrT,
-                dayOffset: offset,
-                airline: flight.airline_iata || '',
-                originIata: flight.dep_iata || '',
-                originName: '', 
-                destIata: flight.arr_iata || '',
-                destName: '',
-                source: 'AirLabs'
-            };
-        };
-
-        try {
-            let flightData = await tryAviationStack();
-            if (!flightData) {
-                console.log('AviationStack failed or empty, trying AirLabs...');
-                flightData = await tryAirLabs();
-            }
-
-            if (!flightData) throw new Error(`找不到航班 ${flightNo.toUpperCase()} 的有效資訊`);
-
+        const applyData = (flightData, sourceLabel) => {
             const targetArrivalDate = getOffsetDate(flightDate, flightData.dayOffset);
             const isReverse = formData.type === 'reverse';
 
@@ -181,6 +103,7 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
                     outboundTime: flightData.depTime,
                     outboundArrivalDate: targetArrivalDate,
                     outboundArrivalTime: flightData.arrTime,
+                    outboundFlightICAO: flightData.flightIcao || prev.outboundFlightICAO || '',
                     ...(!isReverse ? {
                         departRegion: flightData.originIata ? `${flightData.originIata} (${flightData.originName || prev.departRegion})` : prev.departRegion,
                         returnRegion: flightData.destIata ? `${flightData.destIata} (${flightData.destName || prev.returnRegion})` : prev.returnRegion
@@ -192,6 +115,7 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
                     inboundTime: flightData.depTime,
                     inboundArrivalDate: targetArrivalDate,
                     inboundArrivalTime: flightData.arrTime,
+                    inboundFlightICAO: flightData.flightIcao || prev.inboundFlightICAO || '',
                     ...(!isReverse ? {
                         returnRegion: flightData.originIata ? `${flightData.originIata} (${flightData.originName || prev.returnRegion})` : prev.returnRegion,
                         departRegion: flightData.destIata ? `${flightData.destIata} (${flightData.destName || prev.departRegion})` : prev.departRegion
@@ -203,7 +127,115 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
                 airline: flightData.airline || prev.airline
             }));
 
-            toast.success(`已從 ${flightData.source} 取得航班 ${flightNo.toUpperCase()} 時程！`, { id: toastId });
+            toast.success(`已從 ${sourceLabel} 取得航班 ${flightNo.toUpperCase()} 時程！`, { id: toastId });
+        };
+
+        // Caching Setup
+        const CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 1 week
+        const cacheKey = `fcache_${flightNo.toUpperCase()}`;
+
+        try {
+            // 1. Check Cache
+            const cachedValue = localStorage.getItem(cacheKey);
+            if (cachedValue) {
+                try {
+                    const { timestamp, data } = JSON.parse(cachedValue);
+                    if (Date.now() - timestamp < CACHE_EXPIRY) {
+                        applyData(data, '本地快取');
+                        setIsFetchingFlight(false);
+                        return;
+                    }
+                } catch (e) {
+                    localStorage.removeItem(cacheKey);
+                }
+            }
+
+            // 2. Try APIs
+            // Source 1: AviationStack
+            const tryAviationStack = async () => {
+                if (!avKey) return null;
+                const targetUrl = `http://api.aviationstack.com/v1/flights?access_key=${avKey}&flight_iata=${flightNo}`;
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+                const res = await fetch(proxyUrl);
+                const wrapped = await res.json();
+                if (!wrapped.contents) return null;
+                const data = JSON.parse(wrapped.contents);
+                if (data.error || !data.data || data.data.length === 0) return null;
+                
+                const scheduledFlights = data.data.filter(f => f.flight_date >= flightDate);
+                const flight = scheduledFlights.length > 0 ? scheduledFlights[0] : data.data[0];
+                if (!flight.departure || !flight.arrival) return null;
+
+                const depDateRaw = getSafeDateFromISO(flight.departure.scheduled, flight.flight_date);
+                const arrDateRaw = getSafeDateFromISO(flight.arrival.scheduled, depDateRaw);
+                const depD = parseLocalDate(depDateRaw);
+                const arrD = parseLocalDate(arrDateRaw);
+                
+                return {
+                    depTime: getTimeFromISO(flight.departure.scheduled),
+                    arrTime: getTimeFromISO(flight.arrival.scheduled),
+                    dayOffset: Math.round((arrD - depD) / (86400000)),
+                    airline: flight.airline ? flight.airline.name : '',
+                    flightIcao: flight.flight ? flight.flight.icao : '',
+                    originIata: flight.departure.iata || '',
+                    originName: flight.departure.airport || '',
+                    destIata: flight.arrival.iata || '',
+                    destName: flight.arrival.airport || '',
+                    source: 'AviationStack'
+                };
+            };
+
+            // Source 2: AirLabs (Routes API)
+            const tryAirLabs = async () => {
+                if (!alKey) return null;
+                const targetUrl = `https://airlabs.co/api/v9/routes?api_key=${alKey}&flight_iata=${flightNo}`;
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+                const res = await fetch(proxyUrl);
+                const wrapped = await res.json();
+                if (!wrapped.contents) return null;
+                const data = JSON.parse(wrapped.contents);
+                if (!data.response || data.response.length === 0) return null;
+
+                const flight = data.response[0];
+                
+                const depT = flight.dep_time || '';
+                const arrT = flight.arr_time || '';
+                let offset = 0;
+                if (depT && arrT) {
+                    const depSum = parseInt(depT.replace(':',''));
+                    const arrSum = parseInt(arrT.replace(':',''));
+                    if (arrSum < depSum) offset = 1;
+                }
+
+                return {
+                    depTime: depT,
+                    arrTime: arrT,
+                    dayOffset: offset,
+                    airline: flight.airline_iata || '',
+                    flightIcao: flight.flight_icao || '',
+                    originIata: flight.dep_iata || '',
+                    originName: '', 
+                    destIata: flight.arr_iata || '',
+                    destName: '',
+                    source: 'AirLabs'
+                };
+            };
+
+            let flightData = await tryAviationStack();
+            if (!flightData) {
+                console.log('AviationStack failed/empty, trying AirLabs...');
+                flightData = await tryAirLabs();
+            }
+
+            if (!flightData) throw new Error(`找不到航班 ${flightNo.toUpperCase()} 的有效資訊`);
+
+            // Save to Cache
+            localStorage.setItem(cacheKey, JSON.stringify({
+                timestamp: Date.now(),
+                data: flightData
+            }));
+
+            applyData(flightData, flightData.source);
         } catch (err) {
             toast.error(`查詢失敗：${err.message}`, { id: toastId });
         } finally {
