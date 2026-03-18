@@ -89,58 +89,106 @@ function App() {
         [trips, tripOverrides]
     );
 
-    const decoratedTrips = useMemo(() => {
-        const now = Date.now();
-        const getSegs = (trip) => {
-            if (Array.isArray(trip.segments) && trip.segments.length > 0) return trip.segments;
-            const s = [];
-            if (trip.outbound) s.push(trip.outbound);
-            if (Array.isArray(trip.connections)) s.push(...trip.connections);
-            if (trip.inbound) s.push(trip.inbound);
-            return s;
-        };
-        const dt = (date, time, fallback) => {
-            if (!date) return null;
-            const t = time || fallback;
-            if (!t) return null;
-            const d = new Date(`${date}T${t}:00`);
-            return isNaN(d.getTime()) ? null : d;
-        };
-        return displayTrips.map(trip => {
-            const segs = getSegs(trip);
-            if (!segs.length) return { ...trip, segments: [], tripStartAt: null, tripEndAt: null, isPast: false, totalCostTWD: 0, isOpenJaw: false, tripDays: null, costPerDay: null };
-            const first = segs[0], last = segs[segs.length - 1];
-            const tripStartAt = dt(first.date, first.time, '00:00');
-            const tripEndAt = dt(last.arrivalDate, last.arrivalTime, null)
-                ?? (dt(last.date, last.time, null) ? new Date(dt(last.date, last.time, null).getTime() + 2 * 3600000) : null)
-                ?? dt(last.date, '23:59', '23:59');
-            const totalCostTWD = segs.reduce((s, seg) => {
-                const base = seg.ticket?.priceTWD ?? seg.ticket?.price ?? 0;
-                return s + (seg.ticket?.type === 'oneway' ? base : base / 2);
-            }, 0);
-            const isPast = tripEndAt ? tripEndAt.getTime() < now : false;
-            const outCode = (first.to || '').split(' ')[0];
-            const inCode  = (last.from || '').split(' ')[0];
-            const isOpenJaw = segs.length >= 2 && Boolean(outCode && inCode && outCode !== inCode);
-            const tripDays = (trip.isComplete && segs.length >= 2) ? calculateTripDays(first.date, last.date) : null;
-            const costPerDay = (tripDays && tripDays > 0) ? Math.round(totalCostTWD / tripDays) : null;
-            return { ...trip, segments: segs, tripStartAt, tripEndAt, isPast, totalCostTWD, isOpenJaw, tripDays, costPerDay };
-        });
-    }, [displayTrips]);
+    // ── 衍生資料預運算 (極度防呆版) ─────────────────────────────────────────────
+    const { decoratedTrips, totalPriceTWD, totalHotelTWD, pastCostTWD, futureCostTWD, totalTripDays, sunkCostTWD, renderError, safeTickets, safeHotels } = useMemo(() => {
+        try {
+            const safeTickets = Array.isArray(tickets) ? tickets : [];
+            const safeHotels = Array.isArray(hotels) ? hotels : [];
 
-    // itinerary = decoratedTrips + 每個 trip 注入 matchedHotels
-    const itinerary = useItinerary(decoratedTrips, hotels);
+            // 1. 基本費用
+            const _totalPriceTWD = safeTickets.reduce((s, t) => s + (Number(t?.priceTWD || t?.price || 0)), 0);
+            const _totalHotelTWD = safeHotels.reduce((s, h) => s + (Number(h?.priceTWD || 0)), 0);
 
-    // ── 費用計算 ─────────────────────────────────────────────────────────────
-    const safeTickets = Array.isArray(tickets) ? tickets : [];
-    const safeHotels  = Array.isArray(hotels) ? hotels : [];
+            // 2. 裝飾趟次
+            const getSegs = (trip) => {
+                if (!trip) return [];
+                let list = [];
+                if (Array.isArray(trip.segments)) list = trip.segments;
+                else {
+                    if (trip.outbound) list.push(trip.outbound);
+                    if (Array.isArray(trip.connections)) list.push(...trip.connections);
+                    if (trip.inbound) list.push(trip.inbound);
+                }
+                return list.filter(s => s && typeof s === 'object' && s.date);
+            };
 
-    const totalPriceTWD  = safeTickets.reduce((s, t) => s + (t?.priceTWD || t?.price || 0), 0);
-    const totalHotelTWD  = safeHotels.reduce((s, h) => s + (h?.priceTWD || 0), 0);
-    const pastCostTWD    = useMemo(() => decoratedTrips.reduce((s, t) => s + ( t.isPast ? t.totalCostTWD : 0), 0), [decoratedTrips]);
-    const futureCostTWD  = useMemo(() => decoratedTrips.reduce((s, t) => s + (!t.isPast ? t.totalCostTWD : 0), 0), [decoratedTrips]);
-    const totalTripDays  = useMemo(() => decoratedTrips.reduce((s, t) => s + (t.tripDays || 0), 0), [decoratedTrips]);
-    const sunkCostTWD    = Math.max(0, totalPriceTWD - pastCostTWD - futureCostTWD);
+            const displayTrips = applyTripOverrides(trips || [], tripOverrides || {});
+            const _decoratedTrips = displayTrips.map(trip => {
+                try {
+                    if (!trip) return null;
+                    const segs = getSegs(trip);
+                    if (!segs.length) return { ...trip, segments: [], tripStartAt: null, tripEndAt: null, isPast: false, totalCostTWD: 0, isOpenJaw: false, tripDays: null, costPerDay: null };
+
+                    const first = segs[0];
+                    const last = segs[segs.length - 1];
+                    const now = new Date().setHours(0,0,0,0);
+
+                    const dt = (date, time) => {
+                        if (!date) return null;
+                        const t = (time && time.length === 5) ? time : '00:00';
+                        const d = new Date(`${date}T${t}:00`);
+                        return isNaN(d.getTime()) ? null : d;
+                    };
+
+                    const tripStartAt = dt(first.date, first.time);
+                    const tripEndAt   = dt(last.arrivalDate || last.date, last.arrivalTime || last.time);
+                    const isPast      = tripEndAt ? tripEndAt.getTime() < now : false;
+
+                    const _cost = segs.reduce((sum, s) => {
+                        const ticket = s.ticket || {};
+                        const price = Number(ticket.priceTWD || 0);
+                        const weight = (ticket.type === 'normal' || ticket.type === 'reverse') ? 0.5 : 1.0;
+                        return sum + (price * weight);
+                    }, 0);
+
+                    const outCode = (first.to || '').split(' ')[0];
+                    const inCode  = (last.from || '').split(' ')[0];
+                    const isOpenJaw = segs.length >= 2 && Boolean(outCode && inCode && outCode !== inCode);
+                    const tripDays = (tripStartAt && tripEndAt) ? calculateTripDays(first.date, last.date) : null;
+                    const costPerDay = (tripDays && tripDays > 0) ? Math.round(_cost / tripDays) : null;
+
+                    return { ...trip, segments: segs, tripStartAt, tripEndAt, isPast, totalCostTWD: _cost, isOpenJaw, tripDays, costPerDay };
+                } catch (e) { return null; }
+            }).filter(Boolean);
+
+            const _past = _decoratedTrips.reduce((s, t) => s + (t.isPast ? (t.totalCostTWD || 0) : 0), 0);
+            const _future = _decoratedTrips.reduce((s, t) => s + (!t.isPast ? (t.totalCostTWD || 0) : 0), 0);
+            const _days = _decoratedTrips.reduce((s, t) => s + (t.tripDays || 0), 0);
+            const _sunk = Math.max(0, _totalPriceTWD - _past - _future);
+
+            return {
+                decoratedTrips: _decoratedTrips,
+                totalPriceTWD: _totalPriceTWD,
+                totalHotelTWD: _totalHotelTWD,
+                pastCostTWD: _past,
+                futureCostTWD: _future,
+                totalTripDays: _days,
+                sunkCostTWD: _sunk,
+                renderError: null,
+                safeTickets,
+                safeHotels
+            };
+        } catch (e) {
+            console.error("Critical calculation error:", e);
+            return { 
+                decoratedTrips: [], totalPriceTWD: 0, totalHotelTWD: 0, 
+                pastCostTWD: 0, futureCostTWD: 0, totalTripDays: 0, 
+                sunkCostTWD: 0, renderError: e.message,
+                safeTickets: [], safeHotels: []
+            };
+        }
+    }, [tickets, hotels, trips, tripOverrides]);
+
+    // ── itinerary = decoratedTrips + 每個 trip 注入 matchedHotels ────────────
+    const itinerary = useMemo(() => {
+        try {
+            const list = Array.isArray(decoratedTrips) ? decoratedTrips : [];
+            return useItinerary(list, hotels);
+        } catch (e) {
+            console.error("useItinerary error:", e);
+            return [];
+        }
+    }, [decoratedTrips, hotels]);
 
     // ── 智慧搜尋與篩選引擎 ──────────────────────────────────────────────────
     const searchLower = (searchTerm || '').toLowerCase();
@@ -308,7 +356,41 @@ function App() {
         { key: 'calendar', label: '📅 月曆' },
     ];
 
-    // ── Render ────────────────────────────────────────────────────────────────
+    // ── Render (Nuclear Protection Mode) ─────────────────────────────────────
+    if (renderError) {
+        return (
+            <div className="min-h-screen p-8 flex items-center justify-center bg-slate-50">
+                <div className="max-w-md w-full bg-white p-6 rounded-2xl shadow-xl border border-red-100 text-center">
+                    <div className="text-5xl mb-4">😵</div>
+                    <h1 className="text-xl font-bold text-slate-800 mb-2">程式發生非預期錯誤</h1>
+                    <p className="text-sm text-slate-500 mb-6">這通常是因為瀏覽器儲存的資料格式損毀所致。我們建議您重設資料後重新載入。</p>
+                    <div className="bg-red-50 p-3 rounded-lg mb-6 text-left">
+                        <p className="text-[10px] font-mono text-red-600 break-all leading-tight">Error: {renderError}</p>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                        <button 
+                            onClick={() => window.location.reload()} 
+                            className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition"
+                        >
+                            重新整理網頁
+                        </button>
+                        <button 
+                            onClick={() => {
+                                if (confirm('確定要清除所有本地資料嗎？這將無法復原（除非您有雲端備份）。')) {
+                                    localStorage.clear();
+                                    window.location.reload();
+                                }
+                            }} 
+                            className="w-full py-3 bg-white border border-red-200 text-red-600 font-bold rounded-lg hover:bg-red-50 transition"
+                        >
+                            ⚠️ 強制清除資料並重設
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen p-4 md:p-8 bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900 pb-24 md:pb-8">
             <div className="max-w-5xl mx-auto">
