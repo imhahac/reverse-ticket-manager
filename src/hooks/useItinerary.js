@@ -54,6 +54,16 @@ export function useItinerary(decoratedTrips, hotels) {
                     if (b.checkIn < a.checkOut) warns.push(`⚠️ 住宿重疊：「${a.name}」與「${b.name}」`);
                     else if (b.checkIn > a.checkOut) warns.push(`⚠️ 住宿缺口：${a.checkOut} 到 ${b.checkIn} 之間無住宿`);
                 }
+                
+                if (tripDays > 1 && valid.length > 0) {
+                    if (valid[0].checkIn > tripStartDate) {
+                        warns.push(`⚠️ 住宿缺口：${tripStartDate} 到 ${valid[0].checkIn} 之間無住宿`);
+                    }
+                    if (valid[valid.length - 1].checkOut < tripEndDate) {
+                        warns.push(`⚠️ 住宿缺口：${valid[valid.length - 1].checkOut} 到 ${tripEndDate} 之間無住宿`);
+                    }
+                }
+
                 return warns;
             })();
 

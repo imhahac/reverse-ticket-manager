@@ -86,6 +86,20 @@ export default function TripCalendar({ trips = [], tripLabels = {} }) {
                 if (b.checkIn < a.checkOut) allWarns.push(`⚠️「${label}」住宿重疊：${a.name} 與 ${b.name}`);
                 else if (b.checkIn > a.checkOut) allWarns.push(`⚠️「${label}」住宿缺口：${a.checkOut} 到 ${b.checkIn}`);
             }
+
+            if (trip.tripDays > 1 && valid.length > 0) {
+                const segs = trip.segments || [];
+                if (segs.length > 0) {
+                    const tripStartDate = segs[0]?.date;
+                    const tripEndDate = segs[segs.length - 1]?.date;
+                    if (tripStartDate && valid[0].checkIn > tripStartDate) {
+                        allWarns.push(`⚠️「${label}」住宿缺口：${tripStartDate} 到 ${valid[0].checkIn}`);
+                    }
+                    if (tripEndDate && valid[valid.length - 1].checkOut < tripEndDate) {
+                        allWarns.push(`⚠️「${label}」住宿缺口：${valid[valid.length - 1].checkOut} 到 ${tripEndDate}`);
+                    }
+                }
+            }
         });
         return allWarns;
     })();
