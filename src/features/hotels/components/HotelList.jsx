@@ -11,7 +11,7 @@ import { Building2, CalendarDays, Pencil, Trash2, Hash, MapPin, Clock, Copy, Che
 import { toast } from 'sonner';
 
 function HotelListItem({ hotel, onEdit, onDelete }) {
-    const { id, name, address, checkIn, checkOut, totalNights, priceTWD, costPerNight, confirmationNo, isPast } = hotel;
+    const { id, name, address, checkIn, checkOut, totalNights, currency, priceTotal, priceTWD, costPerNight, confirmationNo, isPast } = hotel;
     const [copiedId, setCopiedId] = React.useState(null);
 
     const handleCopy = (text, type) => {
@@ -98,6 +98,11 @@ function HotelListItem({ hotel, onEdit, onDelete }) {
                         <div className="text-base font-extrabold text-teal-700">
                             NT$ {Math.round(priceTWD).toLocaleString()}
                         </div>
+                        {currency !== 'TWD' && priceTotal > 0 && (
+                            <div className="text-[10px] text-slate-500 font-medium">
+                                {currency} {priceTotal.toLocaleString()}
+                            </div>
+                        )}
                         {costPerNight && (
                             <div className="text-[10px] text-slate-400">{costPerNight.toLocaleString()}/晚</div>
                         )}

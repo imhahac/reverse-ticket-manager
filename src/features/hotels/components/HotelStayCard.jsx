@@ -10,7 +10,7 @@ import React from 'react';
 import { Building2, CalendarDays, Hash, MapPin } from 'lucide-react';
 
 export default function HotelStayCard({ hotel }) {
-    const { name, address, checkIn, checkOut, totalNights, priceTWD, costPerNight, confirmationNo } = hotel;
+    const { name, address, checkIn, checkOut, totalNights, currency, priceTotal, priceTWD, costPerNight, confirmationNo } = hotel;
 
     return (
         <div className="flex items-start gap-3 pl-3 pr-4 py-3 bg-teal-50/80 rounded-xl border border-teal-200 shadow-sm">
@@ -59,6 +59,11 @@ export default function HotelStayCard({ hotel }) {
                     <div className="text-sm font-extrabold text-teal-700">
                         NT$ {Math.round(priceTWD).toLocaleString()}
                     </div>
+                    {currency !== 'TWD' && priceTotal > 0 && (
+                        <div className="text-[10px] text-teal-600 font-medium">
+                            {currency} {priceTotal.toLocaleString()}
+                        </div>
+                    )}
                     {costPerNight && (
                         <div className="text-[10px] text-teal-500">
                             {costPerNight.toLocaleString()}/晚
