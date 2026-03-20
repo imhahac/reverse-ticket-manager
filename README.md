@@ -71,6 +71,11 @@
 
 1. **Google OAuth**：於 [Google Cloud Console](https://console.cloud.google.com/) 建立專案，啟用 Drive / Calendar API，並建立 OAuth Web Client 憑證。
 2. **航班 API (可選但推薦)**：註冊 [AviationStack](https://aviationstack.com/) 或 [AirLabs](https://airlabs.co/) 取得免費 API Key 用於航班自動帶入。
+3. **Google Service Account（LINE Bot 每日推播用）**：
+   - 在 [Google Cloud Console](https://console.cloud.google.com/) 的同一專案中，前往「IAM 與管理員」→「服務帳戶」，建立新的服務帳戶。
+   - 建立後，選擇「金鑰」→「新增金鑰」→「JSON 格式」，下載金鑰檔案。
+   - 將下載到的 **JSON 金鑰內容**（整份複製）存入 GitHub Secrets 的 `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS`。
+   - 回到你的 **Google Drive**，找到系統備份的資料檔案，對它按右鍵→「共用」，將該服務帳戶的 Email 加入，給予「檢視者」權限，讓 cron 腳本能讀取雲端資料。
 
 在專案根目錄建立 `.env.local` 供本機開發：
 ```bash
@@ -94,7 +99,18 @@ npm run dev
    - `AIRLABS_API_KEY` (可選)
 2. 未來只要 Push 到 `main` 分支，系統即自動編譯 (Target: ES2015 確保舊手機相容) 並更新至 `gh-pages` 分支。
 
+### 第四步：設定 LINE Bot 每日推播 (`.github/workflows/line-bot-cron.yml`)
+
+系統內建每日自動通知行程的 cron 工作流程，需在 GitHub Secrets 中額外設定：
+
+| Secret 名稱 | 說明 |
+|---|---|
+| `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS` | Google 服務帳戶 JSON 金鑰（整份內容貼上）。需已對 Drive 備份檔案設定共用給此帳戶。 |
+| `LINE_CHANNEL_ACCESS_TOKEN` | LINE Messaging API 的 Channel Access Token |
+| `LINE_USER_ID` | 推播目標的 LINE User ID |
+
 ---
+
 
 ## 📁 專案重點模組
 

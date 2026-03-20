@@ -7,6 +7,11 @@ on:
   workflow_dispatch: # 允許手動觸發測試
 
 jobs:
+  # 所需 GitHub Secrets：
+  #   GOOGLE_SERVICE_ACCOUNT_CREDENTIALS: Google 服務帳戶 JSON 金鑰（整份內容）
+  #                                        需將 Drive 備份檔案共用給此服務帳戶（檢視者）
+  #   LINE_CHANNEL_ACCESS_TOKEN:           LINE Messaging API Channel Access Token
+  #   LINE_USER_ID:                        推播目標的 LINE User ID
   notify:
     runs-on: ubuntu-latest
     
