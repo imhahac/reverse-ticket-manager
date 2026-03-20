@@ -1,14 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
+/**
+ * useLocalStorage ── 帶持久化的 useState
+ *
+ * 修正：
+ *  - setValue(null) 現在會從 localStorage **移除**該 key，
+ *    確保下次初始化能正確回傳 initialValue（不再出現 storedValue 為 null
+ *    但 initialValue 為 [] 的不一致狀態）。
+ *  - 初始化時，null / undefined 皆 fallback 到 initialValue。
+ */
 export function useLocalStorage(key, initialValue) {
-    // Pass initial state function to useState so logic is only executed once
     const [storedValue, setStoredValue] = useState(() => {
         if (typeof window === "undefined") {
             return initialValue;
         }
         try {
             const item = window.localStorage.getItem(key);
-            const parsed = item ? JSON.parse(item) : initialValue;
+            if (item === null || item === undefined) return initialValue;
+            const parsed = JSON.parse(item);
             return (parsed === null || parsed === undefined) ? initialValue : parsed;
         } catch (error) {
             console.warn(`Error reading localStorage key "${key}":`, error);
@@ -16,16 +25,21 @@ export function useLocalStorage(key, initialValue) {
         }
     });
 
-    // Return a wrapped version of useState's setter function that ...
-    // ... persists the new value to localStorage.
     const setValue = (value) => {
         try {
-            // Allow value to be a function so we have same API as useState
             const valueToStore =
                 value instanceof Function ? value(storedValue) : value;
+
             setStoredValue(valueToStore);
+
             if (typeof window !== "undefined") {
-                window.localStorage.setItem(key, JSON.stringify(valueToStore));
+                if (valueToStore === null || valueToStore === undefined) {
+                    // null 表示「清除」，直接移除 key，
+                    // 下次初始化會乾淨地回傳 initialValue
+                    window.localStorage.removeItem(key);
+                } else {
+                    window.localStorage.setItem(key, JSON.stringify(valueToStore));
+                }
             }
         } catch (error) {
             console.warn(`Error setting localStorage key "${key}":`, error);
