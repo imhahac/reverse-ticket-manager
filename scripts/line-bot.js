@@ -195,25 +195,54 @@ function getHotelWarnings(trip, allHotels) {
         }
     }
 
-    const tripIataCodes = [];
-    segs.forEach(s => {
-        const fromCode = (s.from || '').split(' ')[0];
-        const toCode = (s.to || '').split(' ')[0];
-        if (fromCode && !isTaiwan(fromCode)) tripIataCodes.push(fromCode);
-        if (toCode && !isTaiwan(toCode)) tripIataCodes.push(toCode);
-    });
-    const uniqueCodes = [...new Set(tripIataCodes)];
+    const uniqueCodes = [...new Set(segs.flatMap(s => [s.from?.split(' ')[0], s.to?.split(' ')[0]]))]
+        .filter(code => code && !isTaiwan(code));
     
     if (uniqueCodes.length > 0 && valid.length > 0) {
-        const validKeywords = uniqueCodes.flatMap(code => getCityKeywords(code));
+        // 彙整合法的大區與次級關鍵字
+        const validRegions = new Set();
+        uniqueCodes.forEach(code => (AIRPORT_REGIONS[code] || []).forEach(r => validRegions.add(r)));
+        const validLocalKeywords = uniqueCodes.flatMap(code => AIRPORT_LOCAL_WORDS[code] || []);
+
         valid.forEach(h => {
             const text = ((h.name || '') + ' ' + (h.address || '')).toLowerCase();
-            const hasValid = validKeywords.some(kw => text.includes(kw.toLowerCase()));
-            if (!hasValid) {
-                const hasOther = ALL_KNOWN_KEYWORDS.some(kw => text.includes(kw.toLowerCase()));
-                if (hasOther) {
-                    warns.push(`⚠️ 飯店地點矛盾：「${h.name}」似乎不在您的航點城市`);
+            let isConflict = false;
+            let conflictReason = '';
+
+            // 1. 先掃描飯店文字具備的所有「大區」
+            const detectedRegions = [];
+            for (const [regionName, keywords] of Object.entries(MAJOR_REGIONS)) {
+                if (keywords.some(kw => text.includes(kw.toLowerCase()))) {
+                    detectedRegions.push(regionName.split(' ')[0]); // 只取中文名稱
                 }
+            }
+
+            if (detectedRegions.length > 0) {
+                // 若文字有大區，檢查是否和航班的大區重疊
+                const hasValidRegion = detectedRegions.some(dr => {
+                    // check if ANY validRegions starts with dr
+                    return Array.from(validRegions).some(vr => vr.startsWith(dr));
+                });
+                
+                if (!hasValidRegion) {
+                    isConflict = true;
+                    conflictReason = `飯店似乎在「${detectedRegions.join('、')}」地區，不在您的航線範圍內`;
+                }
+            } else {
+                // 2. 若無大區 (只填細節如 "新宿區")，檢查有無命中「合法次級字」
+                const hasValidLocal = validLocalKeywords.some(kw => text.includes(kw.toLowerCase()));
+                if (!hasValidLocal) {
+                    // 連合法次級字都沒有，那有沒有命中「其他」不相干的次級字？
+                    const hasOtherLocal = ALL_LOCAL_WORDS.some(kw => text.includes(kw.toLowerCase()));
+                    if (hasOtherLocal) {
+                        isConflict = true;
+                        conflictReason = `飯店地點似乎與您的機場目的地矛盾`;
+                    }
+                }
+            }
+
+            if (isConflict) {
+                warns.push(`⚠️ 地點矛盾：「${h.name}」- ${conflictReason}`);
             }
         });
     }
