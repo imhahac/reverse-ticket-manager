@@ -38,27 +38,106 @@ export function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
+// Global state for Google Maps API loading
+let googleMapsApiLoaded = false;
+let googleMapsApiLoadPromise = null;
+
+/**
+ * Dynamically loads the Google Maps JavaScript API.
+ * Ensures the API is loaded only once and handles multiple concurrent requests.
+ * @param {string} apiKey Your Google Maps API Key.
+ * @returns {Promise<void>} A promise that resolves when the API is loaded.
+ */
+function loadGoogleMapsApi(apiKey) {
+    if (googleMapsApiLoaded) {
+        return Promise.resolve();
+    }
+
+    if (googleMapsApiLoadPromise) {
+        return googleMapsApiLoadPromise; // Return existing promise if already loading
+    }
+
+    googleMapsApiLoadPromise = new Promise((resolve, reject) => {
+        // Check if the script tag already exists to prevent duplicates
+        const existingScript = document.querySelector(`script[src*="maps.googleapis.com/maps/api/js"]`);
+        if (existingScript) {
+            // If script exists, assume it's loading or loaded.
+            // We need to wait for the global `window.google.maps` object to be available.
+            const checkGoogleMapsInterval = setInterval(() => {
+                if (window.google && window.google.maps) {
+                    clearInterval(checkGoogleMapsInterval);
+                    googleMapsApiLoaded = true;
+                    resolve();
+                }
+            }, 100); // Check every 100ms
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMapsApi`;
+        script.async = true;
+        script.defer = true;
+        
+        // Define a global callback function that Google Maps API will call
+        window.initGoogleMapsApi = () => {
+            googleMapsApiLoaded = true;
+            resolve();
+            delete window.initGoogleMapsApi; // Clean up global callback
+        };
+
+        script.onerror = (e) => {
+            console.error("Google Maps API script failed to load:", e);
+            googleMapsApiLoadPromise = null; // Reset promise on error
+            reject(e);
+        };
+        document.head.appendChild(script);
+    });
+
+    return googleMapsApiLoadPromise;
+}
+
 export async function geocodeAddress(address) {
     if (!address) return null;
     const mapboxKey = import.meta.env.VITE_MAPBOX_API_KEY;
     const googleKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
-    // 1. 優先使用 Google Maps
+    // 1. 優先使用 Google Maps JavaScript API 的 Geocoder 服務
     if (googleKey) {
         try {
-            const googleUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${googleKey}`;
-            const res = await fetch(googleUrl);
-            const data = await res.json();
-            if (data.results && data.results.length > 0) {
-                const { lat, lng } = data.results[0].geometry.location;
+            // 確保 Google Maps API 已經載入
+            await loadGoogleMapsApi(googleKey);
+
+            // 檢查 window.google.maps 是否存在
+            if (!window.google || !window.google.maps || !window.google.maps.Geocoder) {
+                throw new Error("Google Maps Geocoder not available after loading API.");
+            }
+
+            const geocoder = new window.google.maps.Geocoder();
+            const response = await new Promise((resolve, reject) => {
+                geocoder.geocode({ address: address }, (results, status) => {
+                    if (status === window.google.maps.GeocoderStatus.OK && results && results.length > 0) {
+                        resolve(results[0]);
+                    } else if (status === window.google.maps.GeocoderStatus.ZERO_RESULTS) {
+                        resolve(null); // 沒有找到結果
+                    } else {
+                        // Reject with the status for better error handling
+                        reject(new Error(`Google Geocoding failed with status: ${status}`));
+                    }
+                });
+            });
+
+            if (response) {
+                const lat = response.geometry.location.lat();
+                const lng = response.geometry.location.lng();
                 return { lat, lng, source: 'google' };
             }
         } catch (e) {
-            console.warn('Google Maps geocoding failed:', e);
+            console.warn('Google Maps Geocoding (JavaScript API) failed:', e);
         }
     }
 
     // 2. Google Maps 失敗或無結果時，退回使用 Mapbox
+    // 由於您目前沒有 Mapbox Key，這段會被跳過
     if (mapboxKey) {
         try {
             const mapboxUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${mapboxKey}&limit=1`;
