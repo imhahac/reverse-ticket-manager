@@ -41,29 +41,32 @@ const isTaiwan = (regionStr) => {
     return TW_CODES.some(code => regionStr.includes(code));
 };
 
-const TOKYO_WARDS = ['chiyoda', '千代田', 'chuo', '中央', 'minato', '港區', '港区', 'shinjuku', '新宿', 'bunkyo', '文京', 'taito', '台東', 'sumida', '墨田', 'koto', '江東', 'shinagawa', '品川', 'meguro', '目黑', '目黒', 'ota', '大田', 'setagaya', '世田谷', 'shibuya', '涉谷', '澀谷', '渋谷', 'nakano', '中野', 'suginami', '杉並', 'toshima', '豐島', '豊島', 'kita', '北區', '北区', 'arakawa', '荒川', 'itabashi', '板橋', 'nerima', '練馬', 'adachi', '足立', 'katsushika', '葛飾', 'edogawa', '江戶川', '江戸川'];
-const OSAKA_CITIES = ['sakai', '堺', 'suita', '吹田', 'toyonaka', '豐中', '豊中', 'moriguchi', '守口', 'hirakata', '枚方', 'izumisano', '泉佐野', 'higashiosaka', '東大阪', 'takatsuki', '高槻', 'ibaraki', '茨木', 'yao', '八尾', 'neyagawa', '寢屋川', '寝屋川', 'kishiwada', '岸和田', 'izumi', '和泉', 'minoo', '箕面', 'matsubara', '松原', 'daito', '大東', 'kadoma', '門真', 'settsu', '攝津', '摂津', 'takaishi', '高石', 'fujiidera', '藤井寺', 'shijonawate', '四條畷', 'katano', '交野', 'osakasayama', '大阪狹山', '大阪狭山', 'hannan', '阪南'];
-
-const CITY_MAPPINGS = {
-    'NRT': ['tokyo', '東京', 'nrt', '成田', '千葉', 'chiba', 'ueno', '上野', 'asakusa', '淺草', 'ginza', '銀座', ...TOKYO_WARDS],
-    'HND': ['tokyo', '東京', 'hnd', '羽田', 'ueno', '上野', 'asakusa', '淺草', 'ginza', '銀座', ...TOKYO_WARDS],
-    'KIX': ['osaka', '大阪', 'kix', '關西', 'kansai', 'namba', '難波', 'umeda', '梅田', 'shinsaibashi', '心齋橋', 'kyoto', '京都', 'nara', '奈良', 'kobe', '神戶', ...OSAKA_CITIES],
-    'ITM': ['osaka', '大阪', 'itm', '伊丹', 'namba', '難波', 'umeda', '梅田', 'kyoto', '京都', 'nara', '奈良', 'kobe', '神戶', ...OSAKA_CITIES],
-    'NGO': ['nagoya', '名古屋', 'ngo', '中部'],
-    'CTS': ['sapporo', '札幌', 'cts', '新千歲', 'hokkaido', '北海道', 'otaru', '小樽'],
-    'HKD': ['hakodate', '函館', 'hkd', 'hokkaido', '北海道'],
-    'FUK': ['fukuoka', '福岡', 'fuk', '博多', 'hakata', 'kyushu', '九州', 'tenjin', '天神'],
-    'OKA': ['okinawa', '沖繩', 'oka', '那霸', 'naha'],
-    'BKK': ['bangkok', '曼谷', 'bkk', 'thailand', '泰國'],
-    'DMK': ['bangkok', '曼谷', 'dmk', 'thailand', '泰國'],
-    'SIN': ['singapore', '新加坡', 'sin', 'changi', '樟宜'],
-    'HKG': ['hong kong', '香港', 'hkg', 'hongkong'],
-    'ICN': ['seoul', '首爾', 'icn', '仁川', 'korea', '韓國', 'myeongdong', '明洞'],
-    'GMP': ['seoul', '首爾', 'gmp', '金浦', 'korea', '韓國', 'myeongdong', '明洞'],
-    'PUS': ['busan', '釜山', 'pus']
+const AIRPORT_COORDINATES = {
+    'TPE': { lat: 25.0797, lng: 121.2342 }, 'TSA': { lat: 25.0697, lng: 121.5526 },
+    'KHH': { lat: 22.5771, lng: 120.3500 }, 'RMQ': { lat: 24.2646, lng: 120.6209 },
+    'NRT': { lat: 35.7647, lng: 140.3863 }, 'HND': { lat: 35.5494, lng: 139.7798 },
+    'KIX': { lat: 34.4320, lng: 135.2304 }, 'ITM': { lat: 34.7855, lng: 135.4382 },
+    'NGO': { lat: 34.8583, lng: 136.8054 }, 'CTS': { lat: 42.7849, lng: 141.6708 },
+    'HKD': { lat: 41.7735, lng: 140.8166 }, 'FUK': { lat: 33.5859, lng: 130.4507 },
+    'OKA': { lat: 26.1958, lng: 127.6525 }, 'BKK': { lat: 13.6900, lng: 100.7501 },
+    'DMK': { lat: 13.9126, lng: 100.6068 }, 'CNX': { lat: 18.7668, lng: 98.9626 },
+    'HKT': { lat: 8.1111, lng: 98.3065 },   'SIN': { lat: 1.3644, lng: 103.9915 },
+    'HKG': { lat: 22.3080, lng: 113.9185 }, 'MFM': { lat: 22.1496, lng: 113.5915 },
+    'ICN': { lat: 37.4602, lng: 126.4407 }, 'GMP': { lat: 37.5619, lng: 126.8010 },
+    'PUS': { lat: 35.1732, lng: 128.9463 }, 'CJU': { lat: 33.5113, lng: 126.4930 }
 };
-const ALL_KNOWN_KEYWORDS = Object.values(CITY_MAPPINGS).flat();
-const getCityKeywords = (iataCode) => CITY_MAPPINGS[iataCode] || [];
+
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+    const R = 6371;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+              Math.sin(dLon/2) * Math.sin(dLon/2); 
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    return R * c;
+}
 
 const calculateTripDays = (startDate, endDate) => {
     if (!startDate || !endDate) return null;
@@ -199,50 +202,24 @@ function getHotelWarnings(trip, allHotels) {
         .filter(code => code && !isTaiwan(code));
     
     if (uniqueCodes.length > 0 && valid.length > 0) {
-        // 彙整合法的大區與次級關鍵字
-        const validRegions = new Set();
-        uniqueCodes.forEach(code => (AIRPORT_REGIONS[code] || []).forEach(r => validRegions.add(r)));
-        const validLocalKeywords = uniqueCodes.flatMap(code => AIRPORT_LOCAL_WORDS[code] || []);
-
         valid.forEach(h => {
-            const text = ((h.name || '') + ' ' + (h.address || '')).toLowerCase();
-            let isConflict = false;
-            let conflictReason = '';
-
-            // 1. 先掃描飯店文字具備的所有「大區」
-            const detectedRegions = [];
-            for (const [regionName, keywords] of Object.entries(MAJOR_REGIONS)) {
-                if (keywords.some(kw => text.includes(kw.toLowerCase()))) {
-                    detectedRegions.push(regionName.split(' ')[0]); // 只取中文名稱
-                }
-            }
-
-            if (detectedRegions.length > 0) {
-                // 若文字有大區，檢查是否和航班的大區重疊
-                const hasValidRegion = detectedRegions.some(dr => {
-                    // check if ANY validRegions starts with dr
-                    return Array.from(validRegions).some(vr => vr.startsWith(dr));
-                });
-                
-                if (!hasValidRegion) {
-                    isConflict = true;
-                    conflictReason = `飯店似乎在「${detectedRegions.join('、')}」地區，不在您的航線範圍內`;
-                }
-            } else {
-                // 2. 若無大區 (只填細節如 "新宿區")，檢查有無命中「合法次級字」
-                const hasValidLocal = validLocalKeywords.some(kw => text.includes(kw.toLowerCase()));
-                if (!hasValidLocal) {
-                    // 連合法次級字都沒有，那有沒有命中「其他」不相干的次級字？
-                    const hasOtherLocal = ALL_LOCAL_WORDS.some(kw => text.includes(kw.toLowerCase()));
-                    if (hasOtherLocal) {
-                        isConflict = true;
-                        conflictReason = `飯店地點似乎與您的機場目的地矛盾`;
+            // 精確經緯度距離比對 (大於 120km 警告)
+            if (h.lat && h.lng) {
+                let minDistance = Infinity;
+                let nearestAirport = null;
+                uniqueCodes.forEach(code => {
+                    const coords = AIRPORT_COORDINATES[code];
+                    if (coords) {
+                        const dist = getDistanceFromLatLonInKm(h.lat, h.lng, coords.lat, coords.lng);
+                        if (dist !== null && dist < minDistance) {
+                            minDistance = dist;
+                            nearestAirport = code;
+                        }
                     }
+                });
+                if (minDistance !== Infinity && minDistance > 120) {
+                    warns.push(`⚠️ 地點落差警告：「${h.name}」距離最近的機場 (${nearestAirport}) 達 ${Math.round(minDistance)} 公里，請確認是否訂錯國家或城市`);
                 }
-            }
-
-            if (isConflict) {
-                warns.push(`⚠️ 地點矛盾：「${h.name}」- ${conflictReason}`);
             }
         });
     }
