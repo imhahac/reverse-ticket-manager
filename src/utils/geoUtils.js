@@ -77,6 +77,7 @@ function loadGoogleMapsApi(apiKey) {
         script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=initGoogleMapsApi`;
         script.async = true;
         script.defer = true;
+        script.setAttribute('loading', 'async');
         
         // Define a global callback function that Google Maps API will call
         window.initGoogleMapsApi = () => {
