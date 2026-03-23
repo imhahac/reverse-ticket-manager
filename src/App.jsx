@@ -41,6 +41,7 @@ import { useTripOverrides } from './hooks/useTripOverrides';
 import { useHotels } from './features/hotels/hooks/useHotels';
 
 // ── UI Components ──────────────────────────────────────────────────────────
+import { geocodeAddress } from './utils/geoUtils';
 import Instructions from './components/Instructions';
 import Dashboard from './components/Dashboard';
 import TripCalendar from './components/TripCalendar';
@@ -282,7 +283,21 @@ function App() {
     const handleCancelEdit = () => setEditingTicket(null);
 
     // ── 飯店 CRUD ─────────────────────────────────────────────────────────────
-    const handleSaveHotel = (hotel) => {
+    const handleSaveHotel = async (hotel) => {
+        // 組合飯店名稱與地址，呼叫 Google Maps API 取得經緯度
+        const query = `${hotel.name || ''} ${hotel.address || ''}`.trim();
+        if (query) {
+            try {
+                const geoResult = await geocodeAddress(query);
+                if (geoResult) {
+                    hotel.lat = geoResult.lat;
+                    hotel.lng = geoResult.lng;
+                }
+            } catch (e) {
+                console.error('Failed to geocode address:', e);
+            }
+        }
+
         if (editingHotel) {
             updateHotel(hotel);
         } else {
