@@ -48,6 +48,7 @@ import TripCalendar from './components/TripCalendar';
 import TicketForm from './components/TicketForm';
 import TicketList from './components/TicketList';
 import TripTimeline from './components/TripTimeline';
+import TripMap from './components/TripMap';
 import HotelForm from './features/hotels/components/HotelForm';
 import HotelList from './features/hotels/components/HotelList';
 
@@ -60,6 +61,7 @@ function App() {
     const [activeTab, setActiveTab] = useState('timeline');
     const [editingTicket, setEditingTicket] = useState(null);
     const [editingHotel, setEditingHotel] = useState(null);
+    const [isSavingHotel, setIsSavingHotel] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all'); // all, upcoming, warning
     const fileInputRef = useRef(null);
@@ -284,14 +286,18 @@ function App() {
 
     // ── 飯店 CRUD ─────────────────────────────────────────────────────────────
     const handleSaveHotel = async (hotel) => {
+        setIsSavingHotel(true); // 啟用 Loading 狀態
         // 組合飯店名稱與地址，呼叫 Google Maps API 取得經緯度
         const query = `${hotel.name || ''} ${hotel.address || ''}`.trim();
+        let geoSuccess = false;
+
         if (query) {
             try {
                 const geoResult = await geocodeAddress(query);
                 if (geoResult) {
                     hotel.lat = geoResult.lat;
                     hotel.lng = geoResult.lng;
+                    geoSuccess = true;
                 }
             } catch (e) {
                 console.error('Failed to geocode address:', e);
@@ -304,6 +310,21 @@ function App() {
             addHotel(hotel);
         }
         setEditingHotel(null);
+        setIsSavingHotel(false); // 解除 Loading 狀態
+
+        // ── 依據 Geocoding 結果顯示 UI 提示 ──
+        import('sonner').then(({ toast }) => {
+            if (geoSuccess || (hotel.lat && hotel.lng)) {
+                toast.success('飯店已成功儲存！', { description: '已成功取得精確地圖座標。' });
+            } else if (query) {
+                toast.warning('飯店已儲存，但無法解析地圖座標', {
+                    description: '無法找到該地址的地圖位置，這將無法為您計算地點落差警告。請檢查拼寫。',
+                    duration: 6000
+                });
+            } else {
+                toast.success('飯店已成功儲存！');
+            }
+        });
     };
     const handleEditHotel = (hotel) => { setEditingHotel(hotel); window.scrollTo({ top: 0, behavior: 'smooth' }); };
     const handleDeleteHotel = (id) => {
@@ -364,6 +385,7 @@ function App() {
         { key: 'list',     label: '🎟️ 機票管理' },
         { key: 'hotels',   label: '🏨 飯店管理' },
         { key: 'calendar', label: '📅 月曆' },
+        { key: 'map',      label: '🗺️ 地圖' },
     ];
 
     // ── Render (Nuclear Protection Mode) ─────────────────────────────────────
@@ -513,6 +535,7 @@ function App() {
                         editingHotel={editingHotel}
                         onCancelEdit={() => setEditingHotel(null)}
                         exchangeRates={exchangeRates}
+                    isSaving={isSavingHotel}
                     />
                 ) : null}
 
@@ -566,6 +589,7 @@ function App() {
                             />
                         )}
                         {activeTab === 'calendar' && <TripCalendar trips={itinerary} tripLabels={tripLabels} />}
+                    {activeTab === 'map' && <TripMap itinerary={filteredItinerary} hotels={filteredHotels} />}
                     </div>
                 </div>
 

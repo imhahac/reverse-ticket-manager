@@ -48,7 +48,7 @@ let googleMapsApiLoadPromise = null;
  * @param {string} apiKey Your Google Maps API Key.
  * @returns {Promise<void>} A promise that resolves when the API is loaded.
  */
-function loadGoogleMapsApi(apiKey) {
+export function loadGoogleMapsApi(apiKey) {
     if (googleMapsApiLoaded) {
         return Promise.resolve();
     }
