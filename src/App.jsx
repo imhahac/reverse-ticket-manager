@@ -61,6 +61,7 @@ function App() {
     const [activeTab, setActiveTab] = useState('timeline');
     const [editingTicket, setEditingTicket] = useState(null);
     const [editingHotel, setEditingHotel] = useState(null);
+    const [selectedTripIdForMap, setSelectedTripIdForMap] = useState(null); // 新增：地圖選中的行程 ID
     const [isSavingHotel, setIsSavingHotel] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all'); // all, upcoming, warning
@@ -78,6 +79,16 @@ function App() {
     const { hotels = [], rawHotels = [], addHotel, updateHotel, deleteHotel, updateHotelCalendarIds, setHotels } = useHotels();
 
     // ── Google Sync ──────────────────────────────────────────────────────────
+    // 處理地圖選取單一行程
+    const handleSelectTripForMap = (tripId) => {
+        setSelectedTripIdForMap(tripId);
+        setActiveTab('map'); // 自動切換到地圖 Tab
+    };
+
+    const handleClearSelectedTripForMap = () => {
+        setSelectedTripIdForMap(null);
+    };
+
     const { isSyncing, handleSyncToDrive, handleLoadFromDrive, handleSyncToCalendar } = useGoogleSync({
         accessToken, accessTokenState, trySilentRefresh, logout,
         tickets, tripLabels, setTickets, setTripLabels,
@@ -273,6 +284,23 @@ function App() {
             });
         } catch (e) { console.error('Filter itinerary error:', e); return Array.isArray(itinerary) ? itinerary : []; }
     }, [itinerary, searchTerm, filterStatus, tripLabels, searchLower]);
+
+    // ── 針對地圖顯示的行程與飯店 (考慮單一行程選取) ──────────────────────────
+    const itineraryForMap = useMemo(() => {
+        if (selectedTripIdForMap) {
+            return filteredItinerary.filter(trip => trip.id === selectedTripIdForMap);
+        }
+        return filteredItinerary;
+    }, [filteredItinerary, selectedTripIdForMap]);
+
+    const hotelsForMap = useMemo(() => {
+        if (selectedTripIdForMap && itineraryForMap.length > 0) {
+            const tripHotelIds = new Set(itineraryForMap[0].matchedHotels.map(h => h.id));
+            return filteredHotels.filter(hotel => tripHotelIds.has(hotel.id));
+        }
+        return filteredHotels;
+    }, [filteredHotels, selectedTripIdForMap, itineraryForMap]);
+
 
     // ── 機票 CRUD ─────────────────────────────────────────────────────────────
     const handleSaveTicket = (ticket) => {
@@ -567,6 +595,7 @@ function App() {
                                 onRestoreSegment={restoreSegment}
                                 onMoveSegmentToTrip={moveSegmentToTrip}
                                 onClearAllOverrides={clearAllOverrides}
+                                onSelectTripForMap={handleSelectTripForMap} // 傳遞給 TripTimeline
                             />
                         )}
                         {activeTab === 'list' && (
@@ -588,8 +617,15 @@ function App() {
                                 onDelete={handleDeleteHotel}
                             />
                         )}
-                        {activeTab === 'calendar' && <TripCalendar trips={itinerary} tripLabels={tripLabels} />}
-                    {activeTab === 'map' && <TripMap itinerary={filteredItinerary} hotels={filteredHotels} />}
+                        {activeTab === 'calendar' && <TripCalendar trips={itineraryForMap} tripLabels={tripLabels} />}
+                    {activeTab === 'map' && (
+                        <TripMap
+                            itinerary={itineraryForMap}
+                            hotels={hotelsForMap}
+                            onClearSelectedTrip={handleClearSelectedTripForMap} // 傳遞給 TripMap
+                            selectedTripId={selectedTripIdForMap} // 傳遞選中的行程ID
+                        />
+                    )}
                     </div>
                 </div>
 

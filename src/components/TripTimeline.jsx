@@ -33,6 +33,7 @@ function TripCard({
     onSaveLabel,
     onCancelEditing,
     // 拖曳（父元件共用）
+    onSelectTripForMap, // 新增：在地圖上查看單一行程
     dragOverTripId,
     setDragOverTripId,
     onSegDragStart,
@@ -268,6 +269,13 @@ function TripCard({
                                                 從趟次移除
                                             </button>
                                             <label className="text-[11px] font-bold text-slate-500">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onSelectTripForMap?.(comboKey)}
+                                                    className="px-2 py-1 rounded border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700"
+                                                >
+                                                    在地圖上查看
+                                                </button>
                                                 移到
                                                 <select
                                                     className="ml-2 text-[11px] font-bold px-2 py-1
@@ -351,6 +359,7 @@ export default function TripTimeline({
     onRemoveSegment,
     onRestoreSegment,
     onMoveSegmentToTrip,
+    onSelectTripForMap, // 接收 onSelectTripForMap
     onClearAllOverrides,
 }) {
     // ── 所有 useState 必須在 early return 之前宣告（React Hooks 規則） ──
@@ -450,6 +459,7 @@ export default function TripTimeline({
         onSegDragStart:   handleSegDragStart,
         onTripDragOver:   handleTripDragOver,
         onTripDrop:       handleTripDrop,
+        onSelectTripForMap, // 傳遞給 TripCard
         getDepartDate,
         getArrivalDate,
         formatDuration,

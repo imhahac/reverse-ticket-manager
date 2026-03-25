@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AIRPORT_COORDINATES, loadGoogleMapsApi } from '../utils/geoUtils';
 
-export default function TripMap({ itinerary, hotels }) {
+export default function TripMap({ itinerary, hotels, onClearSelectedTrip, selectedTripId }) {
     const mapRef = useRef(null);
     const [mapInstance, setMapInstance] = useState(null);
     const [error, setError] = useState(null);
@@ -146,10 +146,21 @@ export default function TripMap({ itinerary, hotels }) {
     return (
         <div className="flex flex-col h-full space-y-4">
             <div className="flex items-center justify-between px-2">
-                <h2 className="text-lg font-extrabold text-slate-800 flex items-center"><span className="mr-2">🗺️</span> 旅程分佈地圖</h2>
+                <h2 className="text-lg font-extrabold text-slate-800 flex items-center">
+                    <span className="mr-2">🗺️</span>
+                    {selectedTripId ? '單一行程地圖檢視' : '旅程分佈地圖'}
+                </h2>
                 <div className="flex space-x-3 text-xs font-bold text-slate-500">
                     <span className="flex items-center"><span className="w-3 h-3 bg-blue-500 rounded-full mr-1"></span> 機場</span>
                     <span className="flex items-center"><span className="w-3 h-3 bg-red-500 rounded-full mr-1"></span> 飯店</span>
+                    {selectedTripId && (
+                        <button
+                            onClick={onClearSelectedTrip}
+                            className="ml-4 px-3 py-1 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors"
+                        >
+                            顯示所有行程
+                        </button>
+                    )}
                 </div>
             </div>
             <div className="w-full h-[500px] bg-slate-100 rounded-2xl overflow-hidden shadow-inner border border-slate-200 relative">
