@@ -118,39 +118,16 @@ export const loadFromDrive = async (accessToken) => {
     }
 };
 
+import { addHours, format } from 'date-fns';
+
 /**
  * 將 "YYYY-MM-DDTHH:MM:SS" 字串加上 N 小時，回傳相同格式
  * （不含 offset/timezone，讓 Google Calendar 用 timeZone 欄位解析）
  */
 function addHoursToLocalStr(localStr, hours) {
-    // localStr: "2025-06-15T13:40:00"
-    const [datePart, timePart] = localStr.split('T');
-    const [h, m, s] = timePart.split(':').map(Number); // 解析出秒數 s
-    
-    // 計算總分鐘數，處理分鐘溢出與跨日
-    let totalMinutes = (h * 60) + m + (hours * 60);
-    const overflowDays = Math.floor(totalMinutes / (24 * 60));
-    
-    // 確保計算後的分鐘數落在 0~1439 區間內
-    let remainingMinutes = totalMinutes % (24 * 60);
-    if (remainingMinutes < 0) remainingMinutes += 24 * 60;
-
-    const newH = Math.floor(remainingMinutes / 60);
-    const newM = remainingMinutes % 60;
-    
-    let endDatePart = datePart;
-    if (overflowDays !== 0) {
-        const [yy, mm, dd] = datePart.split('-').map(Number);
-        const d = new Date(yy, mm - 1, dd);
-        d.setDate(d.getDate() + overflowDays);
-        const y = d.getFullYear();
-        const m2 = String(d.getMonth() + 1).padStart(2, '0');
-        const d2 = String(d.getDate()).padStart(2, '0');
-        endDatePart = `${y}-${m2}-${d2}`;
-    }
-    
-    // 秒數(s) 沿用原始值，不參與計算
-    return `${endDatePart}T${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    const date = new Date(localStr);
+    const resultDate = addHours(date, hours);
+    return format(resultDate, "yyyy-MM-dd'T'HH:mm:ss");
 }
 
 /**
@@ -195,21 +172,9 @@ function getIanaTimeZone(seg) {
  * @param {Array}  hotels      - 飯店住宿資料
  * @param {string} accessToken
  */
-export const syncToCalendar = async (tickets, hotels = [], accessToken) => {
+export const syncToCalendar = async (segments, hotels = [], activities = [], accessToken) => {
     try {
-        const allSegments = [];
-        
-        tickets.forEach(t => {
-            if (t.type === 'normal') {
-                if(t.outboundDate) allSegments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', arrivalDate: t.outboundArrivalDate || '', arrivalTime: t.outboundArrivalTime || '', flightNo: t.outboundFlightNo || '', from: t.departRegion, to: t.returnRegion, airline: t.airline });
-                if(t.inboundDate) allSegments.push({ id: t.id + '-2', ticket: t, date: t.inboundDate, time: t.inboundTime || '', arrivalDate: t.inboundArrivalDate || '', arrivalTime: t.inboundArrivalTime || '', flightNo: t.inboundFlightNo || '', from: t.returnRegion, to: t.departRegion, airline: t.airline });
-            } else if (t.type === 'reverse') {
-                if(t.outboundDate) allSegments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', arrivalDate: t.outboundArrivalDate || '', arrivalTime: t.outboundArrivalTime || '', flightNo: t.outboundFlightNo || '', from: t.returnRegion, to: t.departRegion, airline: t.airline });
-                if(t.inboundDate) allSegments.push({ id: t.id + '-2', ticket: t, date: t.inboundDate, time: t.inboundTime || '', arrivalDate: t.inboundArrivalDate || '', arrivalTime: t.inboundArrivalTime || '', flightNo: t.inboundFlightNo || '', from: t.departRegion, to: t.returnRegion, airline: t.airline });
-            } else {
-                if(t.outboundDate) allSegments.push({ id: t.id + '-1', ticket: t, date: t.outboundDate, time: t.outboundTime || '', arrivalDate: t.outboundArrivalDate || '', arrivalTime: t.outboundArrivalTime || '', flightNo: t.outboundFlightNo || '', from: t.departRegion, to: t.returnRegion, airline: t.airline });
-            }
-        });
+        const allSegments = segments || [];
 
         const calendarId = 'primary';
         let errorLog = '';
@@ -230,10 +195,12 @@ export const syncToCalendar = async (tickets, hotels = [], accessToken) => {
             const calendarEvents = orphanData.items || [];
             const activeSegIds = new Set(allSegments.map(s => s.id));
             const activeHotelIds = new Set(hotels.map(h => h.id));
+            const activeActivityIds = new Set(activities.map(a => a.id));
 
             for (const ev of calendarEvents) {
                 const segId = ev.extendedProperties?.private?.reverseTicketSegId;
                 const hotelId = ev.extendedProperties?.private?.reverseTicketHotelId;
+                const activityId = ev.extendedProperties?.private?.reverseTicketActivityId;
 
                 // 檢查是否為航班孤兒
                 if (segId && !activeSegIds.has(segId)) {
@@ -260,6 +227,19 @@ export const syncToCalendar = async (tickets, hotels = [], accessToken) => {
                         errorLog += `刪除飯店孤兒事件失敗 (${ev.summary}): [${delRes.status}]\n`;
                     }
                 }
+
+                // 檢查是否為活動孤兒
+                if (activityId && !activeActivityIds.has(activityId)) {
+                    const delRes = await fetch(
+                        `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${ev.id}`,
+                        { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } }
+                    );
+                    if (delRes.ok || delRes.status === 204 || delRes.status === 410) {
+                        deletedCount++;
+                    } else {
+                        errorLog += `刪除活動/票卷孤兒事件失敗 (${ev.summary}): [${delRes.status}]\n`;
+                    }
+                }
             }
         }
         // ──────────────────────────────────────────────────────────────
@@ -270,7 +250,8 @@ export const syncToCalendar = async (tickets, hotels = [], accessToken) => {
 
         for (const seg of allSegments) {
             const tz = getIanaTimeZone(seg);
-            const flightLabel = seg.flightNo ? `${seg.airline} (${seg.flightNo})` : seg.airline;
+            const airline = seg.ticket?.airline || '';
+            const flightLabel = seg.flightNo ? `${airline} (${seg.flightNo})` : airline;
             const eventSummary = `[航班] ${flightLabel} ${seg.from}✈️${seg.to}`;
             
             // 🔧 時區修正：純本地時間字串 + timeZone，不手動拼 +08:00
@@ -326,7 +307,7 @@ export const syncToCalendar = async (tickets, hotels = [], accessToken) => {
 
             const body = {
                 summary: eventSummary,
-                description: `由航班反向票管理系統自動建立。\n航線：${seg.from} 到 ${seg.to}\n航空公司：${seg.airline}${seg.flightNo ? `\n航班編號：${seg.flightNo}\n追蹤航班: https://flightaware.com/live/flight/${seg.flightNo}` : ''}`,
+                description: `由航班反向票管理系統自動建立。\n航線：${seg.from} 到 ${seg.to}\n航空公司：${airline}${seg.flightNo ? `\n航班編號：${seg.flightNo}\n追蹤航班: https://flightaware.com/live/flight/${seg.flightNo}` : ''}`,
                 start: startObj,
                 end: endObj,
                 // 🔧 孤兒清理標記
@@ -420,7 +401,83 @@ export const syncToCalendar = async (tickets, hotels = [], accessToken) => {
             }
         }
 
-        return { success: addedCount > 0 || errorLog === '', count: addedCount, deletedCount, error: errorLog, updatedCalendarIds, updatedHotelCalendarIds };
+        // ── 活動/票卷 事件 ──────────────────────────────
+        const updatedActivityCalendarIds = {};
+        for (const activity of activities) {
+            if (!activity.startDate) continue;
+
+            const syncSingleActivityEvent = async (activity, existingEventId) => {
+                let startObj, endObj;
+
+                if (activity.time) {
+                    // Specific time specified, treat as 2-hour event
+                    const dtStr = `${activity.startDate}T${activity.time}:00`;
+                    const eDtStr = addHoursToLocalStr(dtStr, 2);
+                    // Fallback to local timezone since activities might not be tied to an airport easily
+                    // This implies the local browser time representation will be interpreted by Google Calendar as user's current TZ
+                    // We can attempt to attach the activity to the trip context, but keeping it simple for now.
+                    startObj = { dateTime: dtStr };
+                    endObj   = { dateTime: eDtStr };
+                } else {
+                    // Full day event
+                    const dt = new Date(activity.startDate + 'T00:00:00');
+                    // if endDate exists, use it + 1 day, else startDate + 1 day
+                    const endDtStr = activity.endDate || activity.startDate;
+                    const endDt = new Date(endDtStr + 'T00:00:00');
+                    endDt.setDate(endDt.getDate() + 1);
+                    
+                    const endY = endDt.getFullYear();
+                    const endM = String(endDt.getMonth() + 1).padStart(2, '0');
+                    const endD = String(endDt.getDate()).padStart(2, '0');
+                    
+                    startObj = { date: activity.startDate };
+                    endObj   = { date: `${endY}-${endM}-${endD}` };
+                }
+
+                const body = {
+                    summary: `[活動] ${activity.title}`,
+                    description: `分類: ${activity.category || '未分類'}${activity.location ? `\n地點: ${activity.location}` : ''}${activity.notes ? `\n\n備註: ${activity.notes}` : ''}`,
+                    start: startObj,
+                    end: endObj,
+                    extendedProperties: {
+                        private: { reverseTicketApp: 'true', reverseTicketActivityId: activity.id, reverseTicketActivityType: 'activity' }
+                    }
+                };
+                
+                let evId = existingEventId;
+                if (evId) {
+                    const chk = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${evId}`, {
+                        headers: { Authorization: `Bearer ${accessToken}` }
+                    });
+                    if (!chk.ok) evId = null;
+                }
+                const method = evId ? 'PUT' : 'POST';
+                const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events${evId ? `/${evId}` : ''}`;
+                
+                const r = await fetch(url, {
+                    method,
+                    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                if (r.ok) {
+                    const d = await r.json();
+                    addedCount++;
+                    return d.id;
+                } else if (r.status === 401) {
+                    return null;
+                }
+                return null;
+            };
+
+            const activityEventId = await syncSingleActivityEvent(activity, activity.calendarId);
+            
+            if (activityEventId) {
+                updatedActivityCalendarIds[activity.id] = activityEventId;
+            }
+        }
+
+        return { success: addedCount > 0 || errorLog === '', count: addedCount, deletedCount, error: errorLog, updatedCalendarIds, updatedHotelCalendarIds, updatedActivityCalendarIds };
     } catch (e) {
         console.error(e);
         return { success: false, count: 0, deletedCount: 0, error: e.message };

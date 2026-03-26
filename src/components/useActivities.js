@@ -15,5 +15,9 @@ export function useActivities() {
         setActivities(prev => prev.filter(a => a.id !== id));
     };
 
-    return { activities, setActivities, addActivity, updateActivity, deleteActivity };
+    const updateActivityCalendarId = (id, calendarId) => {
+        setActivities(prev => prev.map(a => a.id === id ? { ...a, calendarId } : a));
+    };
+
+    return { activities, setActivities, addActivity, updateActivity, deleteActivity, updateActivityCalendarId };
 }

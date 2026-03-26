@@ -35,9 +35,11 @@ export function useGoogleSync({
     hotels = [],
     rawHotels = [],
     activities = [],
+    segments = [],
     setHotels,
     setActivities,
     updateHotelCalendarIds,
+    updateActivityCalendarId,
 }) {
     const [isSyncing, setIsSyncing] = useState(false);
 
@@ -129,7 +131,7 @@ export function useGoogleSync({
         if (!accessToken) return toast.error('請先登入 Google');
         setIsSyncing(true);
         const toastId = toast.loading('正在同步至 Google Calendar…');
-        let res = await syncToCalendar(tickets, hotels, accessToken);
+        let res = await syncToCalendar(segments, hotels, activities, accessToken);
         setIsSyncing(false);
 
         const showCalendarSuccess = (result) => {
@@ -158,13 +160,19 @@ export function useGoogleSync({
                     updateHotelCalendarIds(hotelId, ids.checkInId, ids.checkOutId);
                 });
             }
+            // 將活動日曆 ID 回寫
+            if (res.updatedActivityCalendarIds && updateActivityCalendarId) {
+                Object.entries(res.updatedActivityCalendarIds).forEach(([activityId, calendarId]) => {
+                    updateActivityCalendarId(activityId, calendarId);
+                });
+            }
             showCalendarSuccess(res);
         } else {
             if (res.expired) {
                 const ok = await trySilentRefresh();
                 if (ok) {
                     setIsSyncing(true);
-                    res = await syncToCalendar(tickets, hotels, getCurrentToken());
+                    res = await syncToCalendar(segments, hotels, activities, getCurrentToken());
                     setIsSyncing(false);
                     if (res.success) {
                         toast.dismiss(toastId);
