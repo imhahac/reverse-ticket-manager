@@ -14,6 +14,7 @@ export default function TripCalendar({ trips = [], tripLabels = {} }) {
     // 展平所有航段與住宿
     const allSegments = trips.flatMap(t => t.segments || []);
     const allHotels   = trips.flatMap(t => t.matchedHotels || []);
+    const allActivities = trips.flatMap(t => t.matchedActivities || []);
 
     const getDaysInMonth  = (y, m) => new Date(y, m + 1, 0).getDate();
 
@@ -50,6 +51,16 @@ export default function TripCalendar({ trips = [], tripLabels = {} }) {
         return allHotels.filter(h => {
             if (!h.checkIn || !h.checkOut) return false;
             return dateStr >= h.checkIn && dateStr < h.checkOut;
+        });
+    };
+
+    const getActivitiesForDay = (day) => {
+        const dateStr = toDateStr(day);
+        return allActivities.filter(a => {
+            if (!a.startDate) return false;
+            const start = a.startDate;
+            const end = a.endDate || a.startDate;
+            return dateStr >= start && dateStr <= end;
         });
     };
 
@@ -100,6 +111,9 @@ export default function TripCalendar({ trips = [], tripLabels = {} }) {
                 <span className="flex items-center gap-1">
                     <span className="w-3 h-3 rounded-sm bg-teal-300 inline-block" />Check-in/out
                 </span>
+                <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-sm bg-orange-100 border border-orange-300 inline-block" />活動/票卷
+                </span>
             </div>
 
             {/* 週表頭 */}
@@ -120,10 +134,12 @@ export default function TripCalendar({ trips = [], tripLabels = {} }) {
 
                     const flights    = getFlightsForDay(day);
                     const stayHotels = getHotelsForDay(day);
+                    const dayActivities = getActivitiesForDay(day);
                     const dStr       = toDateStr(day);
                     const hasCheckIn  = allHotels.some(h => h.checkIn  === dStr);
                     const hasCheckOut = allHotels.some(h => h.checkOut === dStr);
                     const hasStay    = stayHotels.length > 0;
+                    const hasActivity = dayActivities.length > 0;
                     const isFocus    = isToday(day);
 
                     return (
@@ -132,7 +148,7 @@ export default function TripCalendar({ trips = [], tripLabels = {} }) {
                             className={`min-h-[100px] p-1.5 transition-colors ${
                                 isFocus
                                     ? 'bg-indigo-50'
-                                    : hasStay || hasCheckIn || hasCheckOut
+                                    : hasStay || hasCheckIn || hasCheckOut || hasActivity
                                     ? 'bg-teal-50'
                                     : 'bg-white hover:bg-slate-50'
                             }`}
@@ -153,6 +169,12 @@ export default function TripCalendar({ trips = [], tripLabels = {} }) {
                                         <span className="text-[9px] font-bold text-teal-600
                                             bg-teal-100 px-1 rounded">
                                             🏨
+                                        </span>
+                                    )}
+                                    {hasActivity && (
+                                        <span className="text-[9px] font-bold text-orange-600
+                                            bg-orange-100 px-1 rounded">
+                                            🎫
                                         </span>
                                     )}
                                 </div>
@@ -177,6 +199,25 @@ export default function TripCalendar({ trips = [], tripLabels = {} }) {
                                             {isIn  && <span className="text-[9px] bg-teal-500 text-white rounded px-0.5 mr-0.5">IN</span>}
                                             {isOut && <span className="text-[9px] bg-teal-600 text-white rounded px-0.5 mr-0.5">OUT</span>}
                                             <span className="truncate block">{h.name}</span>
+                                        </div>
+                                    );
+                                })}
+
+                                {/* 活動 */}
+                                {dayActivities.map((act, i) => {
+                                    const isStart = act.startDate === dStr;
+                                    const isEnd = (act.endDate || act.startDate) === dStr;
+                                    const isMulti = act.endDate && act.endDate !== act.startDate;
+
+                                    return (
+                                        <div key={`act-${i}`} className={`p-1 rounded border text-[10px] font-bold leading-tight ${
+                                            isMulti 
+                                                ? (isEnd && !isStart ? 'bg-orange-100 border-orange-300 text-orange-900' : 'bg-orange-50 border-orange-200 text-orange-800')
+                                                : 'bg-orange-100 border-orange-200 text-orange-800'
+                                        }`}>
+                                            {isMulti && isStart && <span className="text-[9px] bg-orange-500 text-white rounded px-0.5 mr-0.5">起</span>}
+                                            {isMulti && isEnd && <span className="text-[9px] bg-orange-600 text-white rounded px-0.5 mr-0.5">迄</span>}
+                                            <span className="truncate block">🎫 {act.title}</span>
                                         </div>
                                     );
                                 })}

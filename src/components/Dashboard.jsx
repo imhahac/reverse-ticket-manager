@@ -20,16 +20,19 @@ export default function Dashboard({
     ticketCount,
     tripCount,
     hotelCount = 0,
+    activityCount = 0,
     totalPriceTWD,
     totalHotelTWD = 0,
+    totalActivityTWD = 0,
     futureCostTWD,
     pastCostTWD,
     sunkCostTWD,
     totalTripDays = 0,
 }) {
-    const grandTotal = totalPriceTWD + totalHotelTWD;
+    const grandTotal = totalPriceTWD + totalHotelTWD + totalActivityTWD;
     const flightRatio = grandTotal > 0 ? (totalPriceTWD / grandTotal) * 100 : 0;
     const hotelRatio = grandTotal > 0 ? (totalHotelTWD / grandTotal) * 100 : 0;
+    const activityRatio = grandTotal > 0 ? (totalActivityTWD / grandTotal) * 100 : 0;
 
     return (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -52,6 +55,7 @@ export default function Dashboard({
                     <p className="text-3xl font-extrabold">{tripCount} 趟</p>
                     <div className="text-[10px] text-emerald-100 mt-2 flex items-center gap-3">
                         {hotelCount > 0 && <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> {hotelCount} 筆住宿</span>}
+                        {activityCount > 0 && <span className="flex items-center gap-1">🎫 {activityCount} 項活動</span>}
                         {totalTripDays > 0 && <span className="flex items-center gap-1">🗓️ 共 {totalTripDays} 天</span>}
                     </div>
                 </div>
@@ -78,6 +82,7 @@ export default function Dashboard({
                         <div className="flex justify-between text-[10px] mb-1.5 font-bold">
                             <span className="text-indigo-300">✈️ 機票 ({Math.round(flightRatio)}%)</span>
                             <span className="text-teal-300">🏨 住宿 ({Math.round(hotelRatio)}%)</span>
+                            <span className="text-orange-300">🎫 活動 ({Math.round(activityRatio)}%)</span>
                         </div>
                         <div className="h-2.5 w-full bg-slate-700 rounded-full overflow-hidden flex shadow-inner">
                             <div 
@@ -87,6 +92,10 @@ export default function Dashboard({
                             <div 
                                 className="h-full bg-teal-400 transition-all duration-1000 shadow-[0_0_10px_rgba(45,212,191,0.5)]" 
                                 style={{ width: `${hotelRatio}%` }}
+                            ></div>
+                            <div 
+                                className="h-full bg-orange-400 transition-all duration-1000 shadow-[0_0_10px_rgba(251,146,60,0.5)]" 
+                                style={{ width: `${activityRatio}%` }}
                             ></div>
                         </div>
                     </div>

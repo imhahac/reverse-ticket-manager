@@ -10,7 +10,7 @@
 import React, { useMemo, useState } from 'react';
 import {
     AlertTriangle, ArrowRight, Edit3, Check, X,
-    PlaneTakeoff, PlaneLanding, Clock, CheckCircle2, Plane,
+    PlaneTakeoff, PlaneLanding, Clock, CheckCircle2, Plane, Ticket, Tag
 } from 'lucide-react';
 import { formatDateWithDay } from '../utils/dateHelpers';
 import HotelStayCard from '../features/hotels/components/HotelStayCard';
@@ -18,6 +18,13 @@ import HotelStayCard from '../features/hotels/components/HotelStayCard';
 // ─────────────────────────────────────────────────────────────────────────────
 // TripCard：單一趟次卡片（純展示，狀態由父元件管理）
 // ─────────────────────────────────────────────────────────────────────────────
+const categoryIcon = {
+    attraction: '🎢',
+    transport: '🚆',
+    dining: '🍽️',
+    voucher: '🎫'
+};
+
 function TripCard({
     trip,
     index,
@@ -66,6 +73,8 @@ function TripCard({
     const isExternalOnly  = trip.isExternalOnly;
     const customLabel     = tripLabels[comboKey] || `Trip ${index + 1}`;
     const matchedHotels   = trip.matchedHotels      ?? [];
+    const matchedActivities = trip.matchedActivities || [];
+    const multiDayVouchers = matchedActivities.filter(a => a.endDate && a.endDate !== a.startDate);
     const hotelWarns      = trip.hotelWarnings       || [];
 
     // ── 外觀 ──────────────────────────────────────────────────────────────
@@ -87,6 +96,41 @@ function TripCard({
     const BadgeIcon = (isExternalOnly || (trip.isComplete && !isOpenJaw))
         ? <CheckCircle2 className="w-3 h-3 mr-1" />
         : <AlertTriangle className="w-3 h-3 mr-1" />;
+
+    // ── 計算轉機時間 (全域預先計算) ───────────────────────────────────────
+    const layovers = {};
+    segments.forEach((seg, i) => {
+        const arrival = getArrivalDate(seg);
+        const nextDepart = i < segments.length - 1 ? getDepartDate(segments[i + 1]) : null;
+        const layoverMs = arrival && nextDepart ? nextDepart - arrival : null;
+        if (layoverMs !== null && layoverMs >= 0) {
+            layovers[seg.id] = { text: formatDuration(layoverMs), code: (seg.to || '').split(' ')[0] || '' };
+        }
+    });
+
+    // ── Day-by-Day 分組邏輯 ───────────────────────────────────────────────
+    const dateSet = new Set([
+        ...segments.map(s => s.date),
+        ...segments.map(s => s.arrivalDate).filter(Boolean),
+        ...matchedHotels.map(h => h.checkIn).filter(Boolean),
+        ...matchedHotels.map(h => h.checkOut).filter(Boolean),
+        ...matchedActivities.filter(a => !a.endDate || a.endDate === a.startDate).map(a => a.startDate).filter(Boolean)
+    ]);
+    const sortedDates = Array.from(dateSet).sort();
+    const minDate = sortedDates.length > 0 ? new Date(sortedDates[0]) : null;
+
+    const schedule = sortedDates.map(dateStr => {
+        const currDate = new Date(dateStr);
+        const diffTime = Math.abs(currDate - minDate);
+        const dayNum = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        return {
+            dateStr, dayNum,
+            flights: segments.filter(s => s.date === dateStr),
+            checkIns: matchedHotels.filter(h => h.checkIn === dateStr),
+            checkOuts: matchedHotels.filter(h => h.checkOut === dateStr),
+            activities: matchedActivities.filter(a => a.startDate === dateStr && (!a.endDate || a.endDate === a.startDate))
+        };
+    });
 
     return (
         <div
@@ -191,19 +235,58 @@ function TripCard({
                     </div>
                 )}
 
-                {/* 航段列 */}
-                {segments.map((seg, i) => {
-                    const arrival    = getArrivalDate(seg);
-                    const nextDepart = i < segments.length - 1
-                        ? getDepartDate(segments[i + 1]) : null;
-                    const layoverMs  = arrival && nextDepart ? nextDepart - arrival : null;
-                    const layoverText = (layoverMs !== null && layoverMs >= 0)
-                        ? formatDuration(layoverMs) : null;
-                    const layoverCode = (seg?.to || '').split(' ')[0] || '';
+                {/* 期間通用票卷 (跨日) */}
+                {multiDayVouchers.length > 0 && (
+                    <div className="p-3 bg-orange-50/80 border border-orange-200 rounded-xl space-y-2 shadow-sm mb-2">
+                        <div className="text-xs font-bold text-orange-800 uppercase flex items-center tracking-wider">
+                            <Ticket className="w-4 h-4 mr-1"/> 期間通用票卷
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {multiDayVouchers.map(v => (
+                                <div key={v.id} className="flex flex-col text-sm font-bold text-orange-900 bg-white p-2.5 rounded-lg border border-orange-100 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span title={v.category}>{categoryIcon[v.category] || '🎫'}</span>
+                                        <span className="truncate">{v.title}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs">
+                                        <span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-mono shrink-0">
+                                            {formatDateWithDay(v.startDate)} ~ {formatDateWithDay(v.endDate)}
+                                        </span>
+                                        {v.notes && <span className="text-orange-400 truncate flex-1">{v.notes}</span>}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
-                    return (
-                        <React.Fragment key={seg.id || i}>
-                            {/* 航段卡片 */}
+                {/* ── Day-by-Day Timeline ── */}
+                <div className="mt-2 space-y-0">
+                    {schedule.map(day => (
+                        <div key={day.dateStr} className="relative pl-6 md:pl-8 py-4 border-l-2 border-indigo-100 last:border-transparent">
+                            <div className="absolute -left-[9px] top-5 w-4 h-4 rounded-full bg-indigo-500 border-[3px] border-white shadow-sm" />
+                            
+                            <div className="flex items-baseline gap-2 mb-4">
+                                <h4 className="text-lg font-black text-indigo-900">Day {day.dayNum}</h4>
+                                <span className="text-sm font-bold text-slate-500">{formatDateWithDay(day.dateStr)}</span>
+                            </div>
+
+                            <div className="space-y-3">
+                                {/* 退房 */}
+                                {day.checkOuts.map(h => (
+                                    <div key={`out-${h.id}`} className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 shadow-sm">
+                                        <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">OUT</span>
+                                        辦理退房：{h.name}
+                                    </div>
+                                ))}
+
+                                {/* 航班 */}
+                                {day.flights.map((seg) => {
+                                    const isFirst = seg.id === segments[0].id;
+                                    const isLast = seg.id === segments[segments.length - 1].id;
+                                    const layover = layovers[seg.id];
+                                    return (
+                                        <React.Fragment key={seg.id}>
                             <div
                                 draggable
                                 onDragStart={e => onSegDragStart(e, seg.id)}
@@ -220,9 +303,9 @@ function TripCard({
                                         group-hover:bg-indigo-100 transition-colors flex items-center
                                         justify-center shrink-0 border border-slate-300
                                         group-hover:border-indigo-200 shadow-inner">
-                                        {i === 0 ? (
+                                        {isFirst ? (
                                             <PlaneTakeoff className="w-5 h-5 text-slate-600 group-hover:text-indigo-600" />
-                                        ) : i === segments.length - 1 ? (
+                                        ) : isLast ? (
                                             <PlaneLanding className="w-5 h-5 text-slate-600 group-hover:text-indigo-600" />
                                         ) : (
                                             <ArrowRight className="w-5 h-5 text-slate-600 group-hover:text-indigo-600" />
@@ -319,36 +402,51 @@ function TripCard({
                                 </div>
                             </div>
 
-                            {/* 轉機停留時間 */}
-                            {layoverText && (
+                                            {layover && (
                                 <div className="flex items-center justify-center gap-2 py-1.5 px-4
-                                    -mt-1 bg-amber-50 border border-dashed border-amber-300
+                                                    my-1 bg-amber-50 border border-dashed border-amber-300
                                     rounded-xl text-amber-700 text-[12px] font-bold">
                                     <Plane className="w-3.5 h-3.5 rotate-90 shrink-0" />
-                                    {layoverCode || '転機'} 轉機 {layoverText}
+                                                    {layover.code || '轉機'} 轉機 {layover.text}
                                 </div>
                             )}
                         </React.Fragment>
                     );
                 })}
 
-                {/* ── 住宿卡片區 ─────────────────────────────────────────── */}
-                {matchedHotels.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-teal-100 space-y-2">
-                        <div className="text-xs font-bold text-teal-600 uppercase
-                            tracking-wider mb-1 flex items-center gap-1">
-                            🏨 住宿安排
+                                {/* 活動 */}
+                                {day.activities.map(act => (
+                                    <div key={act.id} className="flex items-start gap-3 p-3 bg-orange-50/50 rounded-xl border border-orange-100 shadow-sm">
+                                        <div className="text-xl mt-0.5" title={act.category}>{categoryIcon[act.category] || '🎫'}</div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-bold text-orange-900 text-base">{act.title}</div>
+                                            {(act.time || act.location || act.notes) && (
+                                                <div className="text-xs text-orange-700 mt-1.5 flex flex-wrap gap-2 items-center">
+                                                    {act.time && <span className="font-mono bg-orange-100/80 border border-orange-200 px-1.5 py-0.5 rounded flex items-center"><Clock className="w-3 h-3 mr-1" />{act.time}</span>}
+                                                    {act.location && <span className="truncate max-w-[200px]">📍 {act.location}</span>}
+                                                    {act.notes && <span className="text-orange-500 truncate max-w-[200px] flex items-center border-l border-orange-200 pl-2"><Tag className="w-3 h-3 mr-1"/>{act.notes}</span>}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {/* 入住 */}
+                                {day.checkIns.map(h => (
+                                    <div key={`in-${h.id}`} className="flex flex-col p-3 bg-teal-50 rounded-xl border border-teal-100 shadow-sm group hover:bg-teal-100/50 transition-colors cursor-pointer" onClick={() => onSelectHotelForMap?.(h.id, comboKey)}>
+                                        <div className="flex items-center gap-2 font-bold text-teal-900 mb-2">
+                                            <span className="bg-teal-500 text-white px-1.5 py-0.5 rounded text-[10px]">IN</span>
+                                            辦理入住：{h.name}
+                                        </div>
+                                        <div className="pointer-events-none">
+                                            <HotelStayCard hotel={h} />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                        {matchedHotels.map(h => (
-                            <button
-                                type="button"
-                                onClick={() => onSelectHotelForMap?.(h.id, comboKey)} // 傳遞飯店 ID 和行程 ID
-                                className="block w-full text-left group p-2 -m-2 rounded-lg hover:bg-teal-50 transition-colors" // 增加點擊區域和 hover 效果
-                                title={`在地圖上查看 ${h.name}`}
-                            ><HotelStayCard key={h.id} hotel={h} /></button>
-                        ))}
-                    </div>
-                )}
+                    ))}
+                </div>
             </div>
         </div>
     );

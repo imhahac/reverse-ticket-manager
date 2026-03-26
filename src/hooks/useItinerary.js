@@ -24,12 +24,12 @@ const isTaiwan = (regionStr) => {
     return TW_CODES.some(code => regionStr.includes(code));
 };
 
-export function useItinerary(decoratedTrips, hotels) {
+export function useItinerary(decoratedTrips, hotels, activities = []) {
     return useMemo(() => {
         return decoratedTrips.map(trip => {
             const segs = trip.segments || [];
-            if (!segs.length || !hotels.length) {
-                return { ...trip, matchedHotels: [], totalHotelCostTWD: 0, hotelWarnings: [], hasWarning: false };
+            if (!segs.length) {
+                return { ...trip, matchedHotels: [], matchedActivities: [], totalHotelCostTWD: 0, hotelWarnings: [], hasWarning: false };
             }
 
             const tripStartDate = segs[0]?.date;
@@ -46,7 +46,7 @@ export function useItinerary(decoratedTrips, hotels) {
             }
 
             if (!tripStartDate || !tripEndDate) {
-                return { ...trip, matchedHotels: [], totalHotelCostTWD: 0, hotelWarnings: [], hasWarning: false };
+                return { ...trip, matchedHotels: [], matchedActivities: [], totalHotelCostTWD: 0, hotelWarnings: [], hasWarning: false };
             }
 
             // ── 核心修正：雙端嚴格比較，避免跨趟次邊界誤配 ──────────────
@@ -60,6 +60,19 @@ export function useItinerary(decoratedTrips, hotels) {
             const totalHotelCostTWD = matchedHotels.reduce(
                 (s, h) => s + (h.priceTWD || 0), 0
             );
+
+            // ── 配對活動與票卷 (支援單日與跨日) ───────────────────────────
+            const matchedActivities = activities.filter(a => {
+                if (!a.startDate) return false;
+                const aStart = a.startDate;
+                const aEnd = a.endDate || a.startDate;
+                
+                // 只要活動區間與趟次區間有任何重疊，就歸屬給這個趟次
+                return aStart <= tripEndDate && aEnd >= tripStartDate;
+            }).sort((a, b) => {
+                if (a.startDate !== b.startDate) return a.startDate.localeCompare(b.startDate);
+                return (a.time || '').localeCompare(b.time || '');
+            });
 
             // ── 住宿警告：缺口 / 重疊 / 地點矛盾 ────────────────────────────────
             const hotelWarnings = (() => {
@@ -130,7 +143,7 @@ export function useItinerary(decoratedTrips, hotels) {
 
             const hasWarning = hotelWarnings.length > 0 || trip.isOpenJaw;
 
-            return { ...trip, matchedHotels, totalHotelCostTWD, hotelWarnings, hasWarning };
+            return { ...trip, matchedHotels, matchedActivities, totalHotelCostTWD, hotelWarnings, hasWarning };
         });
-    }, [decoratedTrips, hotels]);
+    }, [decoratedTrips, hotels, activities]);
 }

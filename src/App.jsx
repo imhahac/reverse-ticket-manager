@@ -39,6 +39,7 @@ import { applyTripOverrides } from './utils/tripOverrides';
 import { useTrips } from './hooks/useTrips';
 import { useTripOverrides } from './hooks/useTripOverrides';
 import { useHotels } from './features/hotels/hooks/useHotels';
+import { useActivities } from './features/activities/hooks/useActivities';
 
 // ── UI Components ──────────────────────────────────────────────────────────
 import { geocodeAddress } from './utils/geoUtils';
@@ -51,6 +52,8 @@ import TripTimeline from './components/TripTimeline';
 import TripMap from './components/TripMap';
 import HotelForm from './features/hotels/components/HotelForm';
 import HotelList from './features/hotels/components/HotelList';
+import ActivityForm from './features/activities/components/ActivityForm';
+import ActivityList from './features/activities/components/ActivityList';
 
 function App() {
     // ── 持久化資料 ───────────────────────────────────────────────────────────
@@ -61,9 +64,11 @@ function App() {
     const [activeTab, setActiveTab] = useState('timeline');
     const [editingTicket, setEditingTicket] = useState(null);
     const [editingHotel, setEditingHotel] = useState(null);
+    const [editingActivity, setEditingActivity] = useState(null);
     const [selectedHotelIdForMap, setSelectedHotelIdForMap] = useState(null); // 新增：地圖選中的飯店 ID
     const [selectedTripIdForMap, setSelectedTripIdForMap] = useState(null); // 新增：地圖選中的行程 ID
     const [isSavingHotel, setIsSavingHotel] = useState(false);
+    const [isSavingActivity, setIsSavingActivity] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all'); // all, upcoming, warning
     const fileInputRef = useRef(null);
@@ -78,6 +83,9 @@ function App() {
 
     // ── Hotels Hook ──────────────────────────────────────────────────────────
     const { hotels = [], rawHotels = [], addHotel, updateHotel, deleteHotel, updateHotelCalendarIds, setHotels } = useHotels();
+
+    // ── Activities Hook ──────────────────────────────────────────────────────
+    const { activities = [], setActivities, addActivity, updateActivity, deleteActivity } = useActivities();
 
     // ── Google Sync ──────────────────────────────────────────────────────────
     // 處理地圖選取單一行程
@@ -100,7 +108,9 @@ function App() {
         accessToken, accessTokenState, trySilentRefresh, logout,
         tickets, tripLabels, setTickets, setTripLabels,
         hotels, rawHotels,
+        activities,
         setHotels,
+        setActivities,
         updateHotelCalendarIds,
     });
 
@@ -111,14 +121,16 @@ function App() {
     );
 
     // ── 衍生資料預運算 (極度防呆版) ─────────────────────────────────────────────
-    const { decoratedTrips, totalPriceTWD, totalHotelTWD, pastCostTWD, futureCostTWD, totalTripDays, sunkCostTWD, renderError, safeTickets, safeHotels } = useMemo(() => {
+    const { decoratedTrips, totalPriceTWD, totalHotelTWD, totalActivityTWD, pastCostTWD, futureCostTWD, totalTripDays, sunkCostTWD, renderError, safeTickets, safeHotels, safeActivities } = useMemo(() => {
         try {
             const safeTickets = Array.isArray(tickets) ? tickets : [];
             const safeHotels = Array.isArray(hotels) ? hotels : [];
+            const safeActivities = Array.isArray(activities) ? activities : [];
 
             // 1. 基本費用
             const _totalPriceTWD = safeTickets.reduce((s, t) => s + (Number(t?.priceTWD || t?.price || 0)), 0);
             const _totalHotelTWD = safeHotels.reduce((s, h) => s + (Number(h?.priceTWD || 0)), 0);
+            const _totalActivityTWD = safeActivities.reduce((s, a) => s + (Number(a?.priceTWD || 0)), 0);
 
             // 2. 裝飾趟次
             const getSegs = (trip) => {
@@ -181,29 +193,32 @@ function App() {
                 decoratedTrips: _decoratedTrips,
                 totalPriceTWD: _totalPriceTWD,
                 totalHotelTWD: _totalHotelTWD,
+                totalActivityTWD: _totalActivityTWD,
                 pastCostTWD: _past,
                 futureCostTWD: _future,
                 totalTripDays: _days,
                 sunkCostTWD: _sunk,
                 renderError: null,
                 safeTickets,
-                safeHotels
+                safeHotels,
+                safeActivities
             };
         } catch (e) {
             console.error("Critical calculation error:", e);
             return { 
-                decoratedTrips: [], totalPriceTWD: 0, totalHotelTWD: 0, 
+                decoratedTrips: [], totalPriceTWD: 0, totalHotelTWD: 0, totalActivityTWD: 0,
                 pastCostTWD: 0, futureCostTWD: 0, totalTripDays: 0, 
                 sunkCostTWD: 0, renderError: e.message,
-                safeTickets: [], safeHotels: []
+                safeTickets: [], safeHotels: [], safeActivities: []
             };
         }
-    }, [tickets, hotels, trips, tripOverrides]);
+    }, [tickets, hotels, activities, trips, tripOverrides]);
 
     // ── itinerary = decoratedTrips + 每個 trip 注入 matchedHotels ────────────
     const itinerary = useItinerary(
         Array.isArray(decoratedTrips) ? decoratedTrips : [],
-        Array.isArray(hotels) ? hotels : []
+        Array.isArray(hotels) ? hotels : [],
+        Array.isArray(activities) ? activities : []
     );
 
     // ── 智慧搜尋與篩選引擎 ──────────────────────────────────────────────────
@@ -260,6 +275,26 @@ function App() {
             });
         } catch (e) { console.error('Filter hotels error:', e); return Array.isArray(hotels) ? hotels : []; }
     }, [hotels, searchTerm, filterStatus, searchLower]);
+
+    const filteredActivities = useMemo(() => {
+        try {
+            const safeActs = Array.isArray(activities) ? activities : [];
+            return safeActs.filter(a => {
+                if (!a || typeof a !== 'object') return false;
+                let matchesSearch = true;
+                if (searchTerm) {
+                    const fields = [a.title, a.location, a.notes, a.category];
+                    matchesSearch = fields.some(f => safeMatch(f, searchLower));
+                }
+                if (filterStatus === 'upcoming') {
+                    if (!a.startDate) return false;
+                    const d = new Date(a.startDate);
+                    return matchesSearch && !isNaN(d) && d.getTime() >= new Date().setHours(0,0,0,0);
+                }
+                return matchesSearch;
+            });
+        } catch (e) { console.error('Filter activities error:', e); return Array.isArray(activities) ? activities : []; }
+    }, [activities, searchTerm, filterStatus, searchLower]);
 
     const filteredItinerary = useMemo(() => {
         try {
@@ -372,9 +407,60 @@ function App() {
         );
     };
 
+    // ── 票卷與活動 CRUD ─────────────────────────────────────────────────────────────
+    const handleSaveActivity = async (activity) => {
+        setIsSavingActivity(true);
+        const query = `${activity.title || ''} ${activity.location || ''}`.trim();
+        let geoSuccess = false;
+
+        if (query) {
+            try {
+                const geoResult = await geocodeAddress(query);
+                if (geoResult) {
+                    activity.lat = geoResult.lat;
+                    activity.lng = geoResult.lng;
+                    geoSuccess = true;
+                }
+            } catch (e) {
+                console.error('Failed to geocode address:', e);
+            }
+        }
+
+        if (editingActivity) {
+            updateActivity(activity);
+        } else {
+            addActivity(activity);
+        }
+        setEditingActivity(null);
+        setIsSavingActivity(false);
+
+        import('sonner').then(({ toast }) => {
+            if (geoSuccess || (activity.lat && activity.lng)) {
+                toast.success('活動已成功儲存！', { description: '已成功取得精確地圖座標。' });
+            } else if (query) {
+                toast.warning('活動已儲存，但無法解析地圖座標', {
+                    description: '無法找到該地點的地圖位置，這將無法為您計算地點落差警告。請檢查拼寫。',
+                    duration: 6000
+                });
+            } else {
+                toast.success('活動已成功儲存！');
+            }
+        });
+    };
+    const handleEditActivity = (activity) => { setEditingActivity(activity); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    const handleDeleteActivity = (id) => {
+        import('sonner').then(({ toast }) =>
+            toast('確定要刪除這筆活動/票卷記錄嗎？', {
+                action: { label: '確認刪除', onClick: () => deleteActivity(id) },
+                cancel: { label: '取消', onClick: () => {} },
+                duration: 8000,
+            })
+        );
+    };
+
     // ── 本地 JSON 匯出入 ──────────────────────────────────────────────────────
     const handleExport = () => {
-        const blob = new Blob([JSON.stringify({ tickets, tripLabels, hotels: rawHotels }, null, 2)], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify({ tickets, tripLabels, hotels: rawHotels, activities }, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         Object.assign(document.createElement('a'), {
             href: url,
@@ -393,13 +479,15 @@ function App() {
                 const newTickets = Array.isArray(data) ? data : (data.tickets || []);
                 const newLabels  = data.tripLabels || {};
                 const newHotels  = data.hotels || [];
+                const newActivities = data.activities || [];
                 if (!newTickets.length || !newTickets[0]?.id) throw new Error('Invalid format');
                 import('sonner').then(({ toast }) =>
-                    toast(`成功讀取 ${newTickets.length} 筆機票、${newHotels.length} 筆住宿`, {
+                    toast(`成功讀取 ${newTickets.length} 筆機票、${newHotels.length} 筆住宿、${newActivities.length} 筆活動`, {
                         action: { label: '確認覆寫', onClick: () => {
                             setTickets(newTickets);
                             setTripLabels(newLabels);
                             if (newHotels.length > 0) setHotels(newHotels);
+                            if (newActivities.length > 0) setActivities(newActivities);
                             toast.success('匯入成功！');
                         }},
                         cancel: { label: '取消', onClick: () => {} },
@@ -419,6 +507,7 @@ function App() {
         { key: 'timeline', label: '📆 行程 Timeline' },
         { key: 'list',     label: '🎟️ 機票管理' },
         { key: 'hotels',   label: '🏨 飯店管理' },
+        { key: 'activities', label: '🎫 票卷與活動' },
         { key: 'calendar', label: '📅 月曆' },
         { key: 'map',      label: '🗺️ 地圖' },
     ];
@@ -515,8 +604,10 @@ function App() {
                     ticketCount={safeTickets.length}
                     tripCount={trips.length}
                     hotelCount={safeHotels.length}
+                    activityCount={safeActivities.length}
                     totalPriceTWD={totalPriceTWD}
                     totalHotelTWD={totalHotelTWD}
+                    totalActivityTWD={totalActivityTWD}
                     futureCostTWD={futureCostTWD}
                     pastCostTWD={pastCostTWD}
                     sunkCostTWD={sunkCostTWD}
@@ -572,6 +663,14 @@ function App() {
                         exchangeRates={exchangeRates}
                     isSaving={isSavingHotel}
                     />
+                ) : activeTab === 'activities' ? (
+                    <ActivityForm
+                        onSaveActivity={handleSaveActivity}
+                        editingActivity={editingActivity}
+                        onCancelEdit={() => setEditingActivity(null)}
+                        exchangeRates={exchangeRates}
+                        isSaving={isSavingActivity}
+                    />
                 ) : null}
 
                 {/* ── 主視覺 Tab (Desktop) ─────────────────────────────────────────── */}
@@ -623,6 +722,13 @@ function App() {
                                 hotels={filteredHotels}
                                 onEdit={handleEditHotel}
                                 onDelete={handleDeleteHotel}
+                            />
+                        )}
+                        {activeTab === 'activities' && (
+                            <ActivityList
+                                activities={filteredActivities}
+                                onEdit={handleEditActivity}
+                                onDelete={handleDeleteActivity}
                             />
                         )}
                         {activeTab === 'calendar' && <TripCalendar trips={itineraryForMap} tripLabels={tripLabels} />}

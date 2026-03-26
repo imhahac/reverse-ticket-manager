@@ -132,6 +132,30 @@ export default function TripMap({ itinerary, hotels, onClearSelectedTrip, select
             }
         });
 
+        // 3. 繪製活動位置
+        itinerary.forEach(trip => {
+            trip.matchedActivities?.forEach(act => {
+                if (act.lat && act.lng) {
+                    const coords = { lat: act.lat, lng: act.lng };
+                    const marker = new window.google.maps.Marker({
+                        position: coords, map: mapInstance, title: act.title,
+                        icon: { url: 'https://maps.google.com/mapfiles/ms/icons/orange-dot.png' },
+                        zIndex: 4
+                    });
+                    const infoWindow = new window.google.maps.InfoWindow({
+                        content: `<div style="padding: 4px; min-width: 120px; font-family: sans-serif;">
+                            <strong style="color: #ea580c;">🎫 ${act.title}</strong>
+                            <div style="font-size: 12px; margin-top: 4px; color: #4b5563;">${act.location || ''}</div>
+                        </div>`
+                    });
+                    marker.addListener('click', () => infoWindow.open(mapInstance, marker));
+                    markersRef.current.push(marker);
+                    bounds.extend(coords);
+                    hasPoints = true;
+                }
+            });
+        });
+
         // 調整視野以包含所有點
         if (hasPoints) {
             mapInstance.fitBounds(bounds);
@@ -162,6 +186,7 @@ export default function TripMap({ itinerary, hotels, onClearSelectedTrip, select
                 <div className="flex space-x-3 text-xs font-bold text-slate-500">
                     <span className="flex items-center"><span className="w-3 h-3 bg-blue-500 rounded-full mr-1"></span> 機場</span>
                     <span className="flex items-center"><span className="w-3 h-3 bg-red-500 rounded-full mr-1"></span> 飯店</span>
+                    <span className="flex items-center"><span className="w-3 h-3 bg-orange-500 rounded-full mr-1"></span> 活動</span>
                     {selectedTripId && (
                         <button
                             onClick={onClearSelectedTrip}
