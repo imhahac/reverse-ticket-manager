@@ -1,4 +1,4 @@
-# 航班反向票購買管理系統 (Reverse Ticket Manager) v7.0
+# 航班反向票購買管理系統 (Reverse Ticket Manager) v7.1
 
 這是一個純前端的靜態網頁應用程式，專為喜愛利用「反向機票」策略節省費用、或是頻繁往返兩地，並需要整合「機票與住宿」複雜邏輯的旅客所設計。
 
@@ -17,12 +17,12 @@
 | 🎟️ **機票訂單管理** | 支援正/反/單程票。支援多幣別 (TWD/JPY/USD) 即時匯率計算。 |
 | ⚡ **即時航班自動帶入**| 內建 AviationStack 與 AirLabs 的雙引擎備援 API。輸入航班號後，一鍵自動抓取起降時間（含紅眼航班自動 +1 天判斷）並快取 7 天。 |
 | ✈️ **智慧趟次配對** | 以台灣機場為邊界，自動配對出門、回程趟次；完美支援外站轉機、不同點進出 (Open-Jaw)。 |
-| 🏨 **住宿防呆與整合** | 可管理全球飯店清單。若趟次內住宿日期有「缺口」或「重疊」，系統會自動紅字警告。 |
-| 📊 **預算深度分析** | 首頁 Dashboard 自動剖析「機票 / 住宿佔比」，統整未來待出行、歷史已實現、未配對沉沒成本。每趟行程皆動態計算「每日平均花費 (CP值)」。 |
+| 🏨 **住宿與活動防呆** | 可管理全球飯店及活動票卷。若趟次內住宿或活動日期有「缺口」或「重疊」，系統會自動紅字警告。 |
+| 📊 **預算深度分析** | 首頁 Dashboard 自動剖析「機票 / 住宿 / 活動佔比」，統整未來待出行、歷史已實現、未配對沉沒成本。每趟行程皆動態計算「每日平均花費 (CP值)」。 |
 | 🛡️ **核彈級資料防護** | 全局 React Error Boundary 保護，遭遇極端資料毀損時，系統不僅不會死當白畫面，更能優雅導向「安全模式介面」供一鍵重設。支援跨舊版 iOS 瀏覽器 (ES2015 Target)。 |
 | ☁️ **全客戶端運行** | 100% 離線優先架構 (LocalStorage)。點擊右上角可授權將資料備份至個人 Google Drive。 |
-| 📅 **Google 日曆智慧推送**| 機票精準同步時分；跨日住宿自動轉為「連續多天全天事件」並自動清理過期行程。 |
-| 🔍 **全局智慧搜尋** | 頂端可快速過濾機場代碼 (如 NRT)、航班、飯店關鍵字或自訂的 Trip 標籤。 |
+| 📅 **Google 日曆智慧推送**| 航班精準同步時分；飯店住宿轉為單一連續事件；新支援活動票卷同步並自動清理過期行程。 |
+| 🔍 **全局智慧搜尋** | 頂端可快速過濾機場代碼 (如 NRT, LAX, LHR)、航班、飯店、活動關鍵字或自訂的 Trip 標籤。 |
 
 ---
 
@@ -47,12 +47,13 @@
 前端 (React + Vite + Tailwind CSS)
 ├── 數據匯流 (useLocalStorage)
 │   ├── Tickets (機票流) ──>【useTrips】拆票 → 排序 → 台灣邊界配對成 "Trips"
-│   └── Hotels (住宿流) ──>【useHotels】 CRUD 與衍生屬性
+│   ├── Hotels (住宿流) ──>【useHotels】 CRUD 與衍生屬性
+│   └── Activities (活動流) ──>【useActivities】 CRUD 管理
 │
-├── 衍生計算層 (useMemo)
-│   ├── displayTrips      套用手動重組 (Overrides)
-│   ├── decoratedTrips    計算航班成本、總天數、Open-Jaw 判定
-│   └── itinerary         【useItinerary】注入 matchedHotels 與住宿警告
+├── 衍生計算層 (Hooks)
+│   ├── useDecoratedTrips   計算航班成本、總天數、Open-Jaw 判定 (原 App.jsx 邏輯抽出)
+│   ├── useFilteredItems    統一處理 Tickets/Hotels/Activities/Itinerary 的搜尋過濾
+│   └── useItinerary        注入 matchedHotels / matchedActivities 與住宿警告
 │
 └── 呈現層 (UI & Routing)
         全局 ErrorBoundary 守護渲染安全
