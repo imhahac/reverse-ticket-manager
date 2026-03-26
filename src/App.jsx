@@ -61,6 +61,7 @@ function App() {
     const [activeTab, setActiveTab] = useState('timeline');
     const [editingTicket, setEditingTicket] = useState(null);
     const [editingHotel, setEditingHotel] = useState(null);
+    const [selectedHotelIdForMap, setSelectedHotelIdForMap] = useState(null); // 新增：地圖選中的飯店 ID
     const [selectedTripIdForMap, setSelectedTripIdForMap] = useState(null); // 新增：地圖選中的行程 ID
     const [isSavingHotel, setIsSavingHotel] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -81,8 +82,14 @@ function App() {
     // ── Google Sync ──────────────────────────────────────────────────────────
     // 處理地圖選取單一行程
     const handleSelectTripForMap = (tripId) => {
+        setSelectedHotelIdForMap(null); // 清除任何特定的飯店選取
         setSelectedTripIdForMap(tripId);
         setActiveTab('map'); // 自動切換到地圖 Tab
+    };
+    // 處理地圖選取單一飯店
+    const handleSelectHotelForMap = (hotelId, tripId) => {
+        setSelectedHotelIdForMap(hotelId);
+        handleSelectTripForMap(tripId); // 同時選取該飯店所屬的行程
     };
 
     const handleClearSelectedTripForMap = () => {
@@ -595,6 +602,7 @@ function App() {
                                 onRestoreSegment={restoreSegment}
                                 onMoveSegmentToTrip={moveSegmentToTrip}
                                 onClearAllOverrides={clearAllOverrides}
+                                onSelectHotelForMap={handleSelectHotelForMap} // 傳遞給 TripTimeline
                                 onSelectTripForMap={handleSelectTripForMap} // 傳遞給 TripTimeline
                             />
                         )}
@@ -623,6 +631,7 @@ function App() {
                             itinerary={itineraryForMap}
                             hotels={hotelsForMap}
                             onClearSelectedTrip={handleClearSelectedTripForMap} // 傳遞給 TripMap
+                            selectedHotelId={selectedHotelIdForMap} // 傳遞選中的飯店ID
                             selectedTripId={selectedTripIdForMap} // 傳遞選中的行程ID
                         />
                     )}

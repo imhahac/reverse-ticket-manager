@@ -33,6 +33,7 @@ function TripCard({
     onSaveLabel,
     onCancelEditing,
     // 拖曳（父元件共用）
+    onSelectHotelForMap, // 新增：在地圖上查看單一飯店
     onSelectTripForMap, // 新增：在地圖上查看單一行程
     dragOverTripId,
     setDragOverTripId,
@@ -339,7 +340,12 @@ function TripCard({
                             🏨 住宿安排
                         </div>
                         {matchedHotels.map(h => (
-                            <HotelStayCard key={h.id} hotel={h} />
+                            <button
+                                type="button"
+                                onClick={() => onSelectHotelForMap?.(h.id, comboKey)} // 傳遞飯店 ID 和行程 ID
+                                className="block w-full text-left group p-2 -m-2 rounded-lg hover:bg-teal-50 transition-colors" // 增加點擊區域和 hover 效果
+                                title={`在地圖上查看 ${h.name}`}
+                            ><HotelStayCard key={h.id} hotel={h} /></button>
                         ))}
                     </div>
                 )}
@@ -359,6 +365,7 @@ export default function TripTimeline({
     onRemoveSegment,
     onRestoreSegment,
     onMoveSegmentToTrip,
+    onSelectHotelForMap, // 接收 onSelectHotelForMap
     onSelectTripForMap, // 接收 onSelectTripForMap
     onClearAllOverrides,
 }) {
@@ -459,6 +466,7 @@ export default function TripTimeline({
         onSegDragStart:   handleSegDragStart,
         onTripDragOver:   handleTripDragOver,
         onTripDrop:       handleTripDrop,
+        onSelectHotelForMap, // 傳遞給 TripCard
         onSelectTripForMap, // 傳遞給 TripCard
         getDepartDate,
         getArrivalDate,

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AIRPORT_COORDINATES, loadGoogleMapsApi } from '../utils/geoUtils';
 
-export default function TripMap({ itinerary, hotels, onClearSelectedTrip, selectedTripId }) {
+export default function TripMap({ itinerary, hotels, onClearSelectedTrip, selectedTripId, selectedHotelId }) {
     const mapRef = useRef(null);
     const [mapInstance, setMapInstance] = useState(null);
     const [error, setError] = useState(null);
@@ -135,10 +135,19 @@ export default function TripMap({ itinerary, hotels, onClearSelectedTrip, select
         // 調整視野以包含所有點
         if (hasPoints) {
             mapInstance.fitBounds(bounds);
-            // 避免如果只有一個點時放得太大
-            const listener = window.google.maps.event.addListener(mapInstance, "idle", () => {
-                if (mapInstance.getZoom() > 10) mapInstance.setZoom(10);
-                window.google.maps.event.removeListener(listener);
+            // 如果有選中的飯店，則將地圖中心移到該飯店並放大
+            if (selectedHotelId) {
+                const targetHotel = hotels.find(h => h.id === selectedHotelId);
+                if (targetHotel && targetHotel.lat && targetHotel.lng) {
+                    mapInstance.setCenter({ lat: targetHotel.lat, lng: targetHotel.lng });
+                    mapInstance.setZoom(14); // 放大到一個合適的級別
+                }
+            } else {
+                // 避免如果只有一個點時放得太大
+                const listener = window.google.maps.event.addListener(mapInstance, "idle", () => {
+                    if (mapInstance.getZoom() > 10) mapInstance.setZoom(10);
+                    window.google.maps.event.removeListener(listener);
+                });
             });
         }
     }, [mapInstance, itinerary, hotels]);
