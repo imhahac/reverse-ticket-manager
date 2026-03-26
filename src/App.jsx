@@ -39,7 +39,7 @@ import { applyTripOverrides } from './utils/tripOverrides';
 import { useTrips } from './hooks/useTrips';
 import { useTripOverrides } from './hooks/useTripOverrides';
 import { useHotels } from './features/hotels/hooks/useHotels';
-import { useActivities } from './features/activities/hooks/useActivities';
+import { useActivities } from './components/useActivities';
 
 // ── UI Components ──────────────────────────────────────────────────────────
 import { geocodeAddress } from './utils/geoUtils';
@@ -52,8 +52,8 @@ import TripTimeline from './components/TripTimeline';
 import TripMap from './components/TripMap';
 import HotelForm from './features/hotels/components/HotelForm';
 import HotelList from './features/hotels/components/HotelList';
-import ActivityForm from './features/activities/components/ActivityForm';
-import ActivityList from './features/activities/components/ActivityList';
+import ActivityForm from './components/ActivityForm';
+import ActivityList from './components/ActivityList';
 
 function App() {
     // ── 持久化資料 ───────────────────────────────────────────────────────────
