@@ -17,18 +17,7 @@
  */
 
 import { useMemo } from 'react';
-
-// ── 台灣機場 IATA 代碼清單 ──────────────────────────────────────────────────
-// 若日後要新增機場（如 TTT 台東），在這裡加入即可。
-const TW_CODES = ['TPE', 'TSA', 'KHH', 'RMQ'];
-
-/**
- * 判斷機場字串是否屬於台灣機場。
- * @param {string} regionStr - 例如 "TPE (台北桃園)" 或純 IATA "TPE"
- * @returns {boolean}
- */
-const isTaiwan = (regionStr) =>
-    TW_CODES.some(code => regionStr.includes(code));
+import { isTaiwan } from '../utils/airportUtils';
 
 /**
  * 主要 Hook：將 tickets 陣列計算出 segments 與 trips。

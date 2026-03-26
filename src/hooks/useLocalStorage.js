@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 
 /**
  * useLocalStorage ── 帶持久化的 useState
@@ -25,26 +25,27 @@ export function useLocalStorage(key, initialValue) {
         }
     });
 
-    const setValue = (value) => {
+    const setValue = useCallback((value) => {
         try {
-            const valueToStore =
-                value instanceof Function ? value(storedValue) : value;
+            setStoredValue((prevStoredValue) => {
+                const valueToStore = value instanceof Function ? value(prevStoredValue) : value;
 
-            setStoredValue(valueToStore);
-
-            if (typeof window !== "undefined") {
-                if (valueToStore === null || valueToStore === undefined) {
-                    // null 表示「清除」，直接移除 key，
-                    // 下次初始化會乾淨地回傳 initialValue
-                    window.localStorage.removeItem(key);
-                } else {
-                    window.localStorage.setItem(key, JSON.stringify(valueToStore));
+                if (typeof window !== "undefined") {
+                    if (valueToStore === null || valueToStore === undefined) {
+                        // null 表示「清除」，直接移除 key，
+                        // 下次初始化會乾淨地回傳 initialValue
+                        window.localStorage.removeItem(key);
+                    } else {
+                        window.localStorage.setItem(key, JSON.stringify(valueToStore));
+                    }
                 }
-            }
+                
+                return valueToStore;
+            });
         } catch (error) {
             console.warn(`Error setting localStorage key "${key}":`, error);
         }
-    };
+    }, [key]);
 
     return [storedValue, setValue];
 }

@@ -17,12 +17,7 @@
  */
 import { useMemo } from 'react';
 import { AIRPORT_COORDINATES, getDistanceFromLatLonInKm } from '../utils/geoUtils';
-
-const TW_CODES = ['TPE', 'TSA', 'KHH', 'RMQ'];
-const isTaiwan = (regionStr) => {
-    if (!regionStr) return false;
-    return TW_CODES.some(code => regionStr.includes(code));
-};
+import { isTaiwan } from '../utils/airportUtils';
 
 export function useItinerary(decoratedTrips, hotels, activities = []) {
     return useMemo(() => {
@@ -79,17 +74,50 @@ export function useItinerary(decoratedTrips, hotels, activities = []) {
                 const warns = [];
                 const tripDays = trip.tripDays || 0;
 
-                // 若動態範圍發現當天去當天回（如 10/1到 10/1走），不需住宿
-                if (reqStart >= reqEnd) return warns;
+                // ── 新增：將地點落差偵測獨立出來，以便在各種情境都能檢查 ──
+                const checkLocationWarnings = (validHotels) => {
+                    const locWarns = [];
+                    const uniqueCodes = [...new Set(segs.flatMap(s => [s.from?.split(' ')[0], s.to?.split(' ')[0]]))]
+                        .filter(code => code && !isTaiwan(code));
+
+                    if (uniqueCodes.length > 0 && validHotels.length > 0) {
+                        validHotels.forEach(h => {
+                            // 精確經緯度距離比對 (大於 120km 警告)
+                            if (h.lat && h.lng) {
+                                let minDistance = Infinity;
+                                let nearestAirport = null;
+
+                                uniqueCodes.forEach(code => {
+                                    const coords = AIRPORT_COORDINATES[code];
+                                    if (coords) {
+                                        const dist = getDistanceFromLatLonInKm(h.lat, h.lng, coords.lat, coords.lng);
+                                        if (dist !== null && dist < minDistance) {
+                                            minDistance = dist;
+                                            nearestAirport = code;
+                                        }
+                                    }
+                                });
+
+                                if (minDistance !== Infinity && minDistance > 120) {
+                                    locWarns.push(`⚠️ 地點落差警告：「${h.name}」距離最近的機場 (${nearestAirport}) 達 ${Math.round(minDistance)} 公里，請確認是否訂錯國家或城市`);
+                                }
+                            }
+                        });
+                    }
+                    return locWarns;
+                };
+
+                const valid = [...matchedHotels]
+                    .filter(h => h.checkIn && h.checkOut)
+                    .sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+
+                // 若動態範圍發現當天去當天回（如 10/1到 10/1走），不需住宿，但若有誤配仍要檢查地點跨國等問題
+                if (reqStart >= reqEnd) return checkLocationWarnings(valid);
 
                 if (tripDays > 1 && matchedHotels.length === 0) {
                     warns.push('⚠️ 此趟次尚未安排任何住宿');
                     return warns;
                 }
-
-                const valid = [...matchedHotels]
-                    .filter(h => h.checkIn && h.checkOut)
-                    .sort((a, b) => a.checkIn.localeCompare(b.checkIn));
 
                 for (let i = 0; i < valid.length - 1; i++) {
                     const a = valid[i], b = valid[i + 1];
@@ -109,36 +137,7 @@ export function useItinerary(decoratedTrips, hotels, activities = []) {
                     }
                 }
 
-                // ── 地點感知 (Multi-Location Aware Matching) ────────────
-                const uniqueCodes = [...new Set(segs.flatMap(s => [s.from?.split(' ')[0], s.to?.split(' ')[0]]))]
-                    .filter(code => code && !isTaiwan(code));
-
-                if (uniqueCodes.length > 0 && valid.length > 0) {
-                    valid.forEach(h => {
-                        // 精確經緯度距離比對 (大於 120km 警告)
-                        if (h.lat && h.lng) {
-                            let minDistance = Infinity;
-                            let nearestAirport = null;
-
-                            uniqueCodes.forEach(code => {
-                                const coords = AIRPORT_COORDINATES[code];
-                                if (coords) {
-                                    const dist = getDistanceFromLatLonInKm(h.lat, h.lng, coords.lat, coords.lng);
-                                    if (dist !== null && dist < minDistance) {
-                                        minDistance = dist;
-                                        nearestAirport = code;
-                                    }
-                                }
-                            });
-
-                            if (minDistance !== Infinity && minDistance > 120) {
-                                warns.push(`⚠️ 地點落差警告：「${h.name}」距離最近的機場 (${nearestAirport}) 達 ${Math.round(minDistance)} 公里，請確認是否訂錯國家或城市`);
-                            }
-                        }
-                    });
-                }
-
-                return warns;
+                return [...warns, ...checkLocationWarnings(valid)];
             })();
 
             const hasWarning = hotelWarnings.length > 0 || trip.isOpenJaw;

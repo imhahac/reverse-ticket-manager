@@ -34,7 +34,9 @@ export function useGoogleSync({
     setTripLabels,
     hotels = [],
     rawHotels = [],
+    activities = [],
     setHotels,
+    setActivities,
     updateHotelCalendarIds,
 }) {
     const [isSyncing, setIsSyncing] = useState(false);
@@ -50,7 +52,7 @@ export function useGoogleSync({
         if (!accessToken) return toast.error('請先登入 Google');
         setIsSyncing(true);
         const toastId = toast.loading('正在備份至 Google Drive…');
-        let res = await syncToDrive(tickets, tripLabels, rawHotels, accessToken);
+        let res = await syncToDrive(tickets, tripLabels, rawHotels, accessToken, activities);
         setIsSyncing(false);
 
         if (res.success) {
@@ -63,7 +65,7 @@ export function useGoogleSync({
                 const ok = await trySilentRefresh();
                 if (ok) {
                     setIsSyncing(true);
-                    res = await syncToDrive(tickets, tripLabels, rawHotels, getCurrentToken());
+                    res = await syncToDrive(tickets, tripLabels, rawHotels, getCurrentToken(), activities);
                     setIsSyncing(false);
                     if (res.success) {
                         return toast.success('雲端備份成功！', { id: toastId, description: `資料已備份至 Google Drive。(檔案 ID: ${res.fileId})` });

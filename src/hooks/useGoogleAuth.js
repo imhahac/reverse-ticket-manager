@@ -75,8 +75,13 @@ export function useGoogleAuth() {
      * trySilentRefresh：嘗試靜默更新，回傳 Promise<boolean>。
      * 超過 8 秒視為失敗，避免永久 hang。
      */
-    const trySilentRefresh = () =>
-        new Promise((resolve) => {
+    const trySilentRefresh = () => {
+        // 競態 guard：若已有進行中的 refresh，直接回傳 false，
+        // 避免覆蓋舊 resolver 導致舊 Promise 永遠 hang 到 8 秒 timeout。
+        if (refreshResolverRef.current) {
+            return Promise.resolve(false);
+        }
+        return new Promise((resolve) => {
             refreshResolverRef.current = resolve;
             silentLogin();
             setTimeout(() => {
@@ -86,6 +91,7 @@ export function useGoogleAuth() {
                 }
             }, 8000);
         });
+    };
 
     // ── 背景 interval：token 剩 10 分鐘時自動嘗試更新 ─────────────────────
     useEffect(() => {

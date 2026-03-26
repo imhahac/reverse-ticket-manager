@@ -28,6 +28,14 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { Plane, Calendar, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn } from 'lucide-react';
 
+// ── 模組頂層純函式（不隨 render 重建）────────────────────────────────────────
+const safeMatch = (val, search) => {
+    try {
+        if (val === null || val === undefined) return false;
+        return String(val).toLowerCase().includes(search);
+    } catch (e) { return false; }
+};
+
 // ── Hooks ──────────────────────────────────────────────────────────────────
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
@@ -115,6 +123,7 @@ function App() {
     });
 
     // ── 衍生資料：displayTrips → decoratedTrips → itinerary ─────────────────
+    // 注意：displayTrips 在此統一計算，避免在 decoratedTrips useMemo 內重複計算
     const displayTrips = useMemo(
         () => applyTripOverrides(trips, tripOverrides),
         [trips, tripOverrides]
@@ -145,7 +154,6 @@ function App() {
                 return list.filter(s => s && typeof s === 'object' && s.date);
             };
 
-            const displayTrips = applyTripOverrides(trips || [], tripOverrides || {});
             const _decoratedTrips = displayTrips.map(trip => {
                 try {
                     if (!trip) return null;
@@ -212,7 +220,7 @@ function App() {
                 safeTickets: [], safeHotels: [], safeActivities: []
             };
         }
-    }, [tickets, hotels, activities, trips, tripOverrides]);
+    }, [displayTrips, tickets, hotels, activities]);
 
     // ── itinerary = decoratedTrips + 每個 trip 注入 matchedHotels ────────────
     const itinerary = useItinerary(
@@ -223,14 +231,6 @@ function App() {
 
     // ── 智慧搜尋與篩選引擎 ──────────────────────────────────────────────────
     const searchLower = (searchTerm || '').toLowerCase();
-    
-    // 超級防呆的字串比對輔助函式
-    const safeMatch = (val, search) => {
-        try {
-            if (val === null || val === undefined) return false;
-            return String(val).toLowerCase().includes(search);
-        } catch(e) { return false; }
-    };
 
     const filteredTickets = useMemo(() => {
         try {
@@ -337,7 +337,7 @@ function App() {
 
     const hotelsForMap = useMemo(() => {
         if (selectedTripIdForMap && itineraryForMap.length > 0) {
-            const tripHotelIds = new Set(itineraryForMap[0].matchedHotels.map(h => h.id));
+            const tripHotelIds = new Set((itineraryForMap[0].matchedHotels ?? []).map(h => h.id));
             return filteredHotels.filter(hotel => tripHotelIds.has(hotel.id));
         }
         return filteredHotels;
@@ -361,12 +361,13 @@ function App() {
         const query = `${hotel.name || ''} ${hotel.address || ''}`.trim();
         let geoSuccess = false;
 
+        let enrichedHotel = { ...hotel };
+
         if (query) {
             try {
                 const geoResult = await geocodeAddress(query);
                 if (geoResult) {
-                    hotel.lat = geoResult.lat;
-                    hotel.lng = geoResult.lng;
+                    enrichedHotel = { ...enrichedHotel, lat: geoResult.lat, lng: geoResult.lng };
                     geoSuccess = true;
                 }
             } catch (e) {
@@ -375,9 +376,9 @@ function App() {
         }
 
         if (editingHotel) {
-            updateHotel(hotel);
+            updateHotel(enrichedHotel);
         } else {
-            addHotel(hotel);
+            addHotel(enrichedHotel);
         }
         setEditingHotel(null);
         setIsSavingHotel(false); // 解除 Loading 狀態
@@ -413,12 +414,13 @@ function App() {
         const query = `${activity.title || ''} ${activity.location || ''}`.trim();
         let geoSuccess = false;
 
+        let enrichedActivity = { ...activity };
+
         if (query) {
             try {
                 const geoResult = await geocodeAddress(query);
                 if (geoResult) {
-                    activity.lat = geoResult.lat;
-                    activity.lng = geoResult.lng;
+                    enrichedActivity = { ...enrichedActivity, lat: geoResult.lat, lng: geoResult.lng };
                     geoSuccess = true;
                 }
             } catch (e) {
@@ -427,9 +429,9 @@ function App() {
         }
 
         if (editingActivity) {
-            updateActivity(activity);
+            updateActivity(enrichedActivity);
         } else {
-            addActivity(activity);
+            addActivity(enrichedActivity);
         }
         setEditingActivity(null);
         setIsSavingActivity(false);
@@ -480,7 +482,16 @@ function App() {
                 const newLabels  = data.tripLabels || {};
                 const newHotels  = data.hotels || [];
                 const newActivities = data.activities || [];
-                if (!newTickets.length || !newTickets[0]?.id) throw new Error('Invalid format');
+                
+                // 更嚴謹的驗證：確保 tickets 必須是陣列，且內部每個元素都有 id
+                if (!Array.isArray(newTickets)) throw new Error('Tickets 資料必須是陣列 (Array) 格式');
+                if (newTickets.length > 0) {
+                    const isValid = newTickets.every(t => t && typeof t === 'object' && t.id);
+                    if (!isValid) throw new Error('部分機票資料遺漏了必要的 id 欄位，或者資料結構不正確');
+                } else if (!data.tickets && !Array.isArray(data)) {
+                    throw new Error('無法識別的檔案格式：找不到 tickets 資料');
+                }
+
                 import('sonner').then(({ toast }) =>
                     toast(`成功讀取 ${newTickets.length} 筆機票、${newHotels.length} 筆住宿、${newActivities.length} 筆活動`, {
                         action: { label: '確認覆寫', onClick: () => {

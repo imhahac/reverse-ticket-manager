@@ -1,7 +1,4 @@
-const isTaiwan = (regionStr) => {
-    const twCodes = ['TPE', 'TSA', 'KHH', 'RMQ'];
-    return twCodes.some(code => (regionStr || '').includes(code));
-};
+import { isTaiwan } from './airportUtils';
 
 function toLocalDateTime(seg) {
     if (seg?.dateTime instanceof Date && !isNaN(seg.dateTime.getTime())) return seg.dateTime;

@@ -7,7 +7,7 @@
  * @param {Array}  hotels     - 飯店住宿資料
  * @param {string} accessToken
  */
-export const syncToDrive = async (tickets, tripLabels, hotels = [], accessToken) => {
+export const syncToDrive = async (tickets, tripLabels, hotels = [], accessToken, activities = []) => {
     try {
         const query = encodeURIComponent(`name="reverse-tickets.json" and trashed=false`);
         const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive`, {
@@ -20,7 +20,7 @@ export const syncToDrive = async (tickets, tripLabels, hotels = [], accessToken)
         const searchData = await searchRes.json();
         const existingFile = searchData.files && searchData.files.length > 0 ? searchData.files[0] : null;
 
-        const fileContent = { tickets, tripLabels, hotels };
+        const fileContent = { tickets, tripLabels, hotels, activities };
 
         let uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=media';
         let method = 'POST';
@@ -125,14 +125,21 @@ export const loadFromDrive = async (accessToken) => {
 function addHoursToLocalStr(localStr, hours) {
     // localStr: "2025-06-15T13:40:00"
     const [datePart, timePart] = localStr.split('T');
-    const [h, m, s] = timePart.split(':').map(Number);
-    let totalMinutes = h * 60 + m + hours * 60;
-    const newH = Math.floor(totalMinutes / 60) % 24;
-    const newM = totalMinutes % 60;
-    // If hours overflow to next day, adjust date
-    const overflowDays = Math.floor((h * 60 + m + hours * 60) / (24 * 60));
+    const [h, m, s] = timePart.split(':').map(Number); // 解析出秒數 s
+    
+    // 計算總分鐘數，處理分鐘溢出與跨日
+    let totalMinutes = (h * 60) + m + (hours * 60);
+    const overflowDays = Math.floor(totalMinutes / (24 * 60));
+    
+    // 確保計算後的分鐘數落在 0~1439 區間內
+    let remainingMinutes = totalMinutes % (24 * 60);
+    if (remainingMinutes < 0) remainingMinutes += 24 * 60;
+
+    const newH = Math.floor(remainingMinutes / 60);
+    const newM = remainingMinutes % 60;
+    
     let endDatePart = datePart;
-    if (overflowDays > 0) {
+    if (overflowDays !== 0) {
         const [yy, mm, dd] = datePart.split('-').map(Number);
         const d = new Date(yy, mm - 1, dd);
         d.setDate(d.getDate() + overflowDays);
@@ -141,6 +148,8 @@ function addHoursToLocalStr(localStr, hours) {
         const d2 = String(d.getDate()).padStart(2, '0');
         endDatePart = `${y}-${m2}-${d2}`;
     }
+    
+    // 秒數(s) 沿用原始值，不參與計算
     return `${endDatePart}T${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
@@ -296,8 +305,9 @@ export const syncToCalendar = async (tickets, hotels = [], accessToken) => {
 
             // Fallback: text searching
             if (!existingEventId) {
-                const minTime = encodeURIComponent(new Date(`${seg.date}T00:00:00Z`).toISOString());
-                const maxTime = encodeURIComponent(new Date(`${seg.date}T23:59:59Z`).toISOString());
+                // 🔧 使用本地日期範圍（不加 Z），避免 UTC 偏移導致跨日查不到航班事件
+                const minTime = encodeURIComponent(new Date(`${seg.date}T00:00:00`).toISOString());
+                const maxTime = encodeURIComponent(new Date(`${seg.date}T23:59:59`).toISOString());
                 
                 const checkRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events?timeMin=${minTime}&timeMax=${maxTime}&singleEvents=true`, {
                     headers: { Authorization: `Bearer ${accessToken}` }
