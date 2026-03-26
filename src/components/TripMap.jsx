@@ -148,7 +148,7 @@ export default function TripMap({ itinerary, hotels, onClearSelectedTrip, select
                     if (mapInstance.getZoom() > 10) mapInstance.setZoom(10);
                     window.google.maps.event.removeListener(listener);
                 });
-            });
+            }
         }
     }, [mapInstance, itinerary, hotels]);
 
