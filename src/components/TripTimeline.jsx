@@ -8,8 +8,9 @@
  *  3. [細節] 防呆：seg.ticket?.airline 改用可選鏈，避免孤兒段 crash
  */
 import React, { useMemo, useState } from 'react';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 import {
-    AlertTriangle, ArrowRight, Edit3, Check, X,
+    AlertTriangle, ArrowRight, Edit3, Check, X, Hotel, Eye, EyeOff,
     PlaneTakeoff, PlaneLanding, Clock, CheckCircle2, Plane, Ticket, Tag
 } from 'lucide-react';
 import { formatDateWithDay } from '../utils/dateHelpers';
@@ -41,6 +42,7 @@ function TripCard({
     onCancelEditing,
     // 拖曳（父元件共用）
     onSelectHotelForMap, // 新增：在地圖上查看單一飯店
+    displayOptions, // 新增：接收顯示選項
     onSelectTripForMap, // 新增：在地圖上查看單一行程
     dragOverTripId,
     setDragOverTripId,
@@ -236,7 +238,7 @@ function TripCard({
                 )}
 
                 {/* 期間通用票卷 (跨日) */}
-                {multiDayVouchers.length > 0 && (
+                {displayOptions.activities && multiDayVouchers.length > 0 && (
                     <div className="p-3 bg-orange-50/80 border border-orange-200 rounded-xl space-y-2 shadow-sm mb-2">
                         <div className="text-xs font-bold text-orange-800 uppercase flex items-center tracking-wider">
                             <Ticket className="w-4 h-4 mr-1"/> 期間通用票卷
@@ -273,7 +275,7 @@ function TripCard({
 
                             <div className="space-y-3">
                                 {/* 退房 */}
-                                {day.checkOuts.map(h => (
+                                {displayOptions.hotels && day.checkOuts.map(h => (
                                     <div key={`out-${h.id}`} className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 shadow-sm">
                                         <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">OUT</span>
                                         辦理退房：{h.name}
@@ -281,7 +283,7 @@ function TripCard({
                                 ))}
 
                                 {/* 航班 */}
-                                {day.flights.map((seg) => {
+                                {displayOptions.flights && day.flights.map((seg) => {
                                     const isFirst = seg.id === segments[0].id;
                                     const isLast = seg.id === segments[segments.length - 1].id;
                                     const layover = layovers[seg.id];
@@ -415,7 +417,7 @@ function TripCard({
                 })}
 
                                 {/* 活動 */}
-                                {day.activities.map(act => (
+                                {displayOptions.activities && day.activities.map(act => (
                                     <div key={act.id} className="flex items-start gap-3 p-3 bg-orange-50/50 rounded-xl border border-orange-100 shadow-sm">
                                         <div className="text-xl mt-0.5" title={act.category}>{categoryIcon[act.category] || '🎫'}</div>
                                         <div className="flex-1 min-w-0">
@@ -432,7 +434,7 @@ function TripCard({
                                 ))}
 
                                 {/* 入住 */}
-                                {day.checkIns.map(h => (
+                                {displayOptions.hotels && day.checkIns.map(h => (
                                     <div key={`in-${h.id}`} className="flex flex-col p-3 bg-teal-50 rounded-xl border border-teal-100 shadow-sm group hover:bg-teal-100/50 transition-colors cursor-pointer" onClick={() => onSelectHotelForMap?.(h.id, comboKey)}>
                                         <div className="flex items-center gap-2 font-bold text-teal-900 mb-2">
                                             <span className="bg-teal-500 text-white px-1.5 py-0.5 rounded text-[10px]">IN</span>
@@ -471,8 +473,13 @@ export default function TripTimeline({
     const [editingLabelId, setEditingLabelId] = useState(null);
     const [editLabelValue, setEditLabelValue] = useState('');
     const [dragOverTripId, setDragOverTripId] = useState(null);
-    const [showFuture, setShowFuture]         = useState(true);   // ← 已移至頂層
-    const [showPast,   setShowPast]           = useState(true);   // ← 已移至頂層
+    const [showFuture, setShowFuture]         = useLocalStorage('timeline-show-future', true);
+    const [showPast,   setShowPast]           = useLocalStorage('timeline-show-past', true);
+    const [displayOptions, setDisplayOptions] = useLocalStorage('timeline-display-options', {
+        flights: true,
+        hotels: true,
+        activities: true,
+    });
 
     // ── 衍生資料 ──────────────────────────────────────────────────────────
     const tripIdOptions = useMemo(() => (trips || []).map(t => t.id), [trips]);
@@ -481,6 +488,22 @@ export default function TripTimeline({
         Object.keys(overrideState?.segTripId || {}).length ||
         (overrideState?.removedSegIds || []).length
     );
+
+    const toggleOption = (option) => {
+        setDisplayOptions(prev => ({ ...prev, [option]: !prev[option] }));
+    };
+
+    const displayOptionsConfig = [
+        { key: 'flights', label: '航班', icon: Plane },
+        { key: 'hotels', label: '住宿', icon: Hotel },
+        { key: 'activities', label: '票卷', icon: Ticket },
+    ];
+
+    const getOptionClass = (key) => {
+        return displayOptions[key]
+            ? 'bg-white text-indigo-700 shadow-sm'
+            : 'bg-transparent text-slate-500 hover:bg-slate-200/50 hover:text-slate-700';
+    };
 
     const futureTrips = (trips || []).filter(t => !t.isPast);
     const pastTrips   = (trips || []).filter(t =>  t.isPast);
@@ -564,6 +587,7 @@ export default function TripTimeline({
         onSegDragStart:   handleSegDragStart,
         onTripDragOver:   handleTripDragOver,
         onTripDrop:       handleTripDrop,
+        displayOptions, // 傳遞給 TripCard
         onSelectHotelForMap, // 傳遞給 TripCard
         onSelectTripForMap, // 傳遞給 TripCard
         getDepartDate,
@@ -596,6 +620,23 @@ export default function TripTimeline({
                     >
                         清除手動重組
                     </button>
+                </div>
+            )}
+
+            {/* ── 顯示選項篩選器 ─────────────────────────────────────────── */}
+            {trips && trips.length > 0 && (
+                <div className="flex items-center justify-center gap-1 bg-slate-100 p-1.5 rounded-xl sticky top-2 z-30 shadow-sm border border-slate-200">
+                    {displayOptionsConfig.map(({ key, label, icon: Icon }) => (
+                        <button
+                            key={key}
+                            onClick={() => toggleOption(key)}
+                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${getOptionClass(key)}`}
+                        >
+                            <Icon className="w-4 h-4" />
+                            <span>{label}</span>
+                            {displayOptions[key] ? <Eye className="w-4 h-4 text-green-500" /> : <EyeOff className="w-4 h-4 text-slate-400" />}
+                        </button>
+                    ))}
                 </div>
             )}
 
