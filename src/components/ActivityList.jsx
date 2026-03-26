@@ -1,6 +1,6 @@
 import React from 'react';
 import { Trash2, Calendar, MapPin, Edit2, Tag } from 'lucide-react';
-import { formatDateWithDay } from '../../../utils/dateHelpers';
+import { formatDateWithDay } from '../utils/dateHelpers';
 
 export default function ActivityList({ activities, onDelete, onEdit }) {
     if (activities.length === 0) return (

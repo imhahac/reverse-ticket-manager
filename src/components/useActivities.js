@@ -1,4 +1,4 @@
-import { useLocalStorage } from '../../../hooks/useLocalStorage';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 export function useActivities() {
     const [activities, setActivities] = useLocalStorage('reverse-activities', []);
