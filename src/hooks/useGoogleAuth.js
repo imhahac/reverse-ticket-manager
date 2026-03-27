@@ -109,9 +109,9 @@ export function useGoogleAuth() {
 
     // ── 背景 interval：token 剩 10 分鐘時自動嘗試更新 ─────────────────────
     useEffect(() => {
-        if (!accessToken || !accessTokenExpiresAt) return;
+        if (!accessToken) return;
         const interval = setInterval(() => {
-            if (accessTokenExpiresAt - Date.now() < 10 * 60 * 1000) {
+            if (!accessTokenExpiresAt || accessTokenExpiresAt - Date.now() < 10 * 60 * 1000) {
                 trySilentRefresh();
             }
         }, 5 * 60 * 1000);
