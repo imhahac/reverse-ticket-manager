@@ -19,7 +19,7 @@ export default function Instructions() {
             >
                 <span className="flex items-center text-lg font-bold">
                     <BookOpen className="w-5 h-5 mr-2" />
-                    使用說明與操作指南 v7.1
+                    使用說明與操作指南 v8.0
                 </span>
                 <span className="text-sm font-medium">{isOpen ? '收起 ▴' : '展開 ▾'}</span>
             </button>
@@ -39,9 +39,11 @@ export default function Instructions() {
                             </p>
                             <ul className="list-disc list-inside text-sm space-y-1.5">
                                 <li><strong>正/反向與單程票</strong>：支援複雜票種邏輯，自動判定出發與抵達的相對關係。</li>
-                                <li><strong>⚡ 航班 API 自動帶入</strong>：輸入航班編號與日期後，點擊「⚡」即可自動連線 AviationStack / AirLabs 抓取確切時刻表（支援紅眼航班自動 +1 天）。</li>
+                                <li><strong>⚡ 航班 API 與 Proxy 備援</strong>：輸入航班編號與日期後，點擊「⚡」即可連線。系統內建多重 Proxy 轉發邏輯，大幅提升連線成功率。</li>
+                                <li><strong>🛡️ 系統配置自動校驗</strong>：若您的 Google Client ID 或 API Key 尚未設定正確，頁面上方會出現醒目警告橫幅。</li>
+                                <li><strong>⌛ 業務邏輯防呆</strong>：自動檢測「時限悖論」（如抵達日期早於出發日期），在核心引擎即時標記異常。</li>
                                 <li><strong>🗺️ 全球機場支援</strong>：內建擴充的國際機場座標資料庫，精準計算跨國旅行的地點矛盾警告。</li>
-                                <li><strong>全局保險機制</strong>：系統具備核彈級防護。若遭遇資料毀損，不再出現萬年白畫面，而是提供獨立的安全模式介面讓您一鍵重設。</li>
+                                <li><strong>🌡️ 專案穩定性護航</strong>：全域 Error Boundary 保護。若資料損毀，會自動進入「安全模式介面」供重設。</li>
                             </ul>
                         </div>
 
