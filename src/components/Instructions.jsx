@@ -1,90 +1,48 @@
-/**
- * Instructions.jsx ── 頁面頂部可折疊的「使用說明與操作指南」元件。
- *
- * ・預設展開（isOpen = true），使用者可點擊標題列收合。
- * ・說明文字隨功能迭代需同步更新（最後更新：v7.1）。
- */
-import React, { useState } from 'react';
-import { BookOpen, AlertCircle, CheckCircle2, Banknote, Plane } from 'lucide-react';
+import React, from 'react';
 
 export default function Instructions() {
-    const [isOpen, setIsOpen] = useState(true);
-
     return (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl mb-8 overflow-hidden shadow-sm transition-all duration-300">
-            {/* ── 標題列（點擊可收合） ──────────────────────────────────────── */}
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between p-4 bg-blue-100/50 hover:bg-blue-100 text-blue-900 transition-colors"
-            >
-                <span className="flex items-center text-lg font-bold">
-                    <BookOpen className="w-5 h-5 mr-2" />
-                    使用說明與操作指南 v8.0
-                </span>
-                <span className="text-sm font-medium">{isOpen ? '收起 ▴' : '展開 ▾'}</span>
-            </button>
-
-            {/* ── 說明內容（可折疊） ─────────────────────────────────────────── */}
-            {isOpen && (
-                <div className="p-5 text-blue-900">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                        {/* 左欄：系統運作邏輯 */}
-                        <div>
-                            <h3 className="font-bold flex items-center mb-2">
-                                <AlertCircle className="w-4 h-4 mr-1" /> 系統運作邏輯
-                            </h3>
-                            <p className="text-sm mb-2 leading-relaxed">
-                                本系統專門處理解決「混買來回票」造成的日期混淆與成本計算難題。系統會自動拆解訂單並按照<strong>時間順序重新堆疊</strong>，精準拼湊出你實際的出行趟次。
-                            </p>
-                            <ul className="list-disc list-inside text-sm space-y-1.5">
-                                <li><strong>正/反向與單程票</strong>：支援複雜票種邏輯，自動判定出發與抵達的相對關係。</li>
-                                <li><strong>⚡ 航班 API 與 Proxy 備援</strong>：輸入航班編號與日期後，點擊「⚡」即可連線。系統內建多重 Proxy 轉發邏輯，大幅提升連線成功率。</li>
-                                <li><strong>🛡️ 系統配置自動校驗</strong>：若您的 Google Client ID 或 API Key 尚未設定正確，頁面上方會出現醒目警告橫幅。</li>
-                                <li><strong>⌛ 業務邏輯防呆</strong>：自動檢測「時限悖論」（如抵達日期早於出發日期），在核心引擎即時標記異常。</li>
-                                <li><strong>🗺️ 全球機場支援</strong>：內建擴充的國際機場座標資料庫，精準計算跨國旅行的地點矛盾警告。</li>
-                                <li><strong>🌡️ 專案穩定性護航</strong>：全域 Error Boundary 保護。若資料損毀，會自動進入「安全模式介面」供重設。</li>
-                            </ul>
-                        </div>
-
-                        {/* 右欄：操作步驟 */}
-                        <div>
-                            <h3 className="font-bold flex items-center mb-2">
-                                <CheckCircle2 className="w-4 h-4 mr-1" /> 操作步驟
-                            </h3>
-                            <ol className="list-decimal list-inside text-sm space-y-2 leading-relaxed">
-                                <li>在 <strong>機票與住宿管理</strong> 區塊輸入訂單，支援多幣別換算，航班更可一鍵連線 API 生成時間。</li>
-                                <li>在 <strong>「實際飛行配對」</strong> 中，查看系統精算出的所有趟次（可拖曳航段、自訂趟次名稱）。若住宿或活動安排有缺口或重疊，系統會紅字警示！</li>
-                                <li>利用頂部 <strong>搜尋列</strong> 輕鬆過濾特定的機場、航班、飯店、活動名稱或標籤。</li>
-                                <li><strong>【Dashboard 預算分析】</strong>：首頁圖表自動剖析機票/住宿/活動的費用佔比，且每趟行程皆會計算「每日 CP 值」。</li>
-                                <li><strong>【雲端備份與日曆】</strong>：登入 Google 授權後，一鍵將資料完整備份至 Drive，或將所有航班、住宿及<strong>活動票卷</strong>無縫同步至行事曆！</li>
-                            </ol>
-                        </div>
-                    </div>
-
-                    {/* ── 費用統計說明 ──────────────────────────────────────────── */}
-                    <div className="mt-4 pt-3 border-t border-blue-200/60">
-                        <h3 className="font-bold flex items-center mb-2 text-sm">
-                            <Banknote className="w-4 h-4 mr-1" /> 費用統計說明
-                        </h3>
-                        <ul className="list-disc list-inside text-xs text-blue-800 space-y-1 leading-relaxed">
-                            <li><strong>機票與住宿佔比</strong>：一目了然旅費的資源配置。</li>
-                            <li><strong>未來待出行</strong>：尚未出發的趟次分攤成本；每張來回票費用平均分給兩段航班。</li>
-                            <li><strong>已實現與沉沒成本</strong>：歷史趟次成本總結，以及未被配對的孤兒機票（標橘色）警示。</li>
-                        </ul>
-                    </div>
-
-                    {/* ── 底部隱私說明 + 狀態徽章 ──────────────────────────────── */}
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-blue-700">
-                        <span className="bg-blue-100 flex items-center px-2 py-1 rounded shadow-sm">
-                            🛡️ 100% 隱私保證：離線優先架構，資料預設僅存於本機瀏覽器
-                        </span>
-                        <span className="bg-blue-100 flex items-center px-2 py-1 rounded shadow-sm">
-                            <Plane className="w-3 h-3 mr-1" /> 完美支援 Open-Jaw (不同點進出) 與跨日轉機計算
-                        </span>
-                    </div>
+        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 mb-8 mt-2 text-indigo-900 shadow-sm">
+            <h2 className="text-xl font-extrabold mb-4 flex items-center">
+                <span className="text-indigo-600 mr-2 text-2xl">✨</span> 系統使用指南 (v8.0)
+            </h2>
+            
+            <div className="space-y-6">
+                <div>
+                    <h3 className="font-bold text-lg mb-2 text-indigo-800">什麼是反向機票？</h3>
+                    <p className="text-sm leading-relaxed text-indigo-700">
+                        當您頻繁往返兩地，有時候購買「去程起點為外站的機票（例如：東京發、回東京）」會比「台北發、回台北」便宜許多。
+                        這套系統能將您東拼西湊的「正向來回機票」、「反向來回機票」或是「單程票」，透過大數據運算，自動重構成您<strong className="text-indigo-900 bg-indigo-200 px-1 rounded mx-1">實際出門到回家</strong>的「完整旅程 (Trip)」。
+                    </p>
                 </div>
-            )}
+
+                <div>
+                    <h3 className="font-bold text-lg mb-2 text-indigo-800">核心亮點功能</h3>
+                    <ul className="list-disc pl-5 space-y-2 text-sm text-indigo-700">
+                        <li>
+                            <strong>✈️ 智慧航班自動帶入</strong>：只需輸入航班代碼 (如 CI101)，這系統不僅支援自動爬取，更內建了 API 配備 Multi-Proxy 備援演算法來克服網路封鎖，精準載入航班時間。
+                        </li>
+                        <li>
+                            <strong>🗺️ 即時地圖與防呆機制</strong>：自動為您加上飯店與活動的地點。系統會運用您的航班到達時間與預定入住處的地理坐標，若在短時間內需要跨越大幅度距離 (例如東京飛到福岡，卻訂了札幌的飯店)，系統將觸發智慧警告 (Warning Filters)。
+                        </li>
+                        <li>
+                            <strong>📊 獨立預算儀表板</strong>：【首頁 Dashboard】會將您每趟的交通、住宿與票卷成本根據即時匯率做總額拆分，並為您精算「每日平均開銷 (CP值)」。
+                        </li>
+                        <li>
+                            <strong>☁️ 雲端無縫整合</strong>：不需要繁瑣的手動下載與匯入。只要登入 Google，可一鍵將所有的機票行程「打卡」成為 Google Calendar 具備精確時間與時區的事件，並安全地同步資料庫至 Google Drive，隨時切換裝置不流失！
+                        </li>
+                    </ul>
+                </div>
+
+                <div className="bg-white p-4 rounded-lg border border-indigo-100">
+                    <h3 className="font-bold mb-3 text-indigo-800">🚀 新手上路三部曲</h3>
+                    <ol className="list-decimal pl-5 space-y-2 text-sm text-indigo-700">
+                        <li><strong>新增機票</strong>：切換到「🎟️ 機票管理」分頁，輸入您買的航班並新增。支援外站與 Open-Jaw 的複雜行程。</li>
+                        <li><strong>加入住宿與活動</strong>：切換至「🏨 飯店管理」或「🎫 票卷活動」，輸入訂房資料或票卷。即使幣值不同也不用擔心，匯率將即刻幫您轉換！</li>
+                        <li><strong>檢視視覺化行程</strong>：於「📆 行程 Timeline」與「🗺️ 地圖」中，用上帝視角俯瞰您優雅的旅行計畫，任何時間重疊或地點落差都能立刻浮現！</li>
+                    </ol>
+                </div>
+            </div>
         </div>
     );
 }

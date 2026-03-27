@@ -1,76 +1,85 @@
-# 航班反向票購買管理系統 (Reverse Ticket Manager) v8.0
+# ✈️ 航班反向票購買管理系統 (Reverse Ticket Manager) v8.0
 
-這是一個純前端的靜態網頁應用程式，專為喜愛利用「反向機票」策略節省費用、或是頻繁往返兩地，並需要整合「機票與住宿」複雜邏輯的旅客所設計。
+這是一個純前端的靜態 React 網頁應用程式，專為喜愛利用「反向機票」策略節省費用，或是頻繁往返兩地並需要整合「機票、住宿與活動票卷」複雜邏輯的進階旅客所設計。
 
-系統能將多張不同方向的來回機票（正向票與反向票）自動解構，並依照時間軸重新配對成你實際出發的飛行「趟次」，清楚顯示每一趟的機票、飯店與每日平均成本 (CP 值)，並具備極致的離線穩定性與自動備援機制。
+系統具備強大的演算法，能將您東拼西湊的多張「單程票」、「來回機票」自動解構，依照時間軸重新配對成您**實際出門到回家**的飛行「趟次 (Trips)」。搭配住宿與活動管理，幫助您無痛防呆，清楚預覽每一趟旅程的總成本與時間線。
 
-## 線上 Demo
-
-[https://imhahac.github.io/reverse-ticket-manager/](https://imhahac.github.io/reverse-ticket-manager/)
+🔗 **[線上體驗 Demo](https://imhahac.github.io/reverse-ticket-manager/)**
 
 ---
 
-## 🌟 核心功能 (v8.0)
+## 🌟 核心功能亮點 (v8.0)
 
-| 功能 | 說明 |
-|---|---|
-| 🎟️ **機票訂單管理** | 支援正/反/單程票。支援多幣別 (TWD/JPY/USD) 即時匯率計算。 |
-| ⚡ **智慧航班自動帶入** | 內建 AviationStack 與 AirLabs 雙引擎，並整合 **多重 Proxy (corsproxy.io / allorigins)** 備援，提升在 GitHub Pages 環境下的 API 穩定性。 |
-| ✈️ **智慧趟次配對** | 以台灣機場為邊界，自動配對出門、回程趟次；完美支援外站轉機、不同點進出 (Open-Jaw) 與進階時間悖論校驗。 |
-| 🏨 **住宿與活動防呆** | 可管理全球飯店及活動票卷。若趟次內住宿有「地點落差」或時間「重疊」，系統將根據核心座標資料庫自動警示。 |
-| 📊 **預算深度分析** | Dashboard 自動剖析「機票 / 住宿 / 活動佔比」。每張來回票費用平均分給兩段航班，並動態計算每趟行程的「每日平均花費 (CP值)」。 |
-| 🛡️ **系統配置與安全性** | 內建環境變數自動校驗 UI。提供全局 Error Boundary 保護，遭遇資料損毀時可進入「安全模式介面」一鍵重設。 |
-| ☁️ **全客戶端運行** | 100% 離線優先架構 (LocalStorage)。支援授權備份至個人 Google Drive。 |
-| 📅 **Google 日曆智慧推送**| 航班精準同步；飯店住宿轉為單一連續事件；支援活動票卷同步並自動處理 OAuth 靜默更新。 |
-| 🔍 **全局智慧搜尋** | 頂端可快速過濾機場代碼 (如 NRT, LAX, CDG)、航班、飯店、活動關鍵字或自訂的 Trip 標籤。 |
+- 🎟️ **智慧趟次配對演算**：輸入任意機票，系統以台灣機場 (TPE, TSA, KHH, RMQ) 為基準出發地，自動為您計算趟次。完美支援外站轉機、不同點進出 (Open-Jaw) 與進階時間防呆校驗。
+- 🏩 **跨維度行程防呆 (Geolocation & Overlap Checks)**：結合航班到達時間與住宿/活動的真實經緯度，當發現「地點落差巨大」(例如東京飛到福岡，卻訂了札幌的飯店) 或「活動時間重疊」，會立刻在行事曆與地圖上標示紅燈警告。
+- ⚡ **航班時刻自動爬取 (Auto-Fill)**：雙引擎 (`AviationStack` & `AirLabs`) 整合，輸入航班代碼自動抓取確切出發與抵達時間。內建 Multi-Proxy 反代機制，大幅減少被跨域阻擋的可能。
+- 📊 **預算儀表板 (Dashboard)**：即時視覺化機票、住宿、活動的花費佔比，並精準計算該趟旅程的「每日平均花費 (CP值)」。
+- ☁️ **無縫 Google 生態整合**：
+  - **Drive 備份**：完全支援個人 Google Drive 雲端上傳與載入，免除手動匯出的麻煩。
+  - **Calendar 推播**：一鍵將航班轉換為 Calendar 事件，並自動將「飯店連住」轉為全天事件，不怕漏掉行程。
 
 ---
 
-## 🏗️ 系統架構
+## 🏗️ 系統架構與技術棧
 
+此專案為純前端架構 (100% Client-Side)，以最大化隱私與靜態網頁可攜性：
+
+- **核心**：`React 18` + `Vite`
+- **樣式**：`Tailwind CSS` + `Lucide React` (Icon)
+- **地圖與定位**：`Mapbox GL JS` + `Google Maps Geocoding API`
+- **狀態管理**：自建 `useLocalStorage` 與各類實體 `useEntityManager` Custom Hooks。
+- **架構特點**：在 v8 編構中進行了大幅模組化 (Modularization)，將大型 UI 拆分為獨立的 Component (如 `TicketForm` 提取 `FlightSegmentInput`)，並將 CRUD 邏輯封裝，極大化提升開發與擴充體驗。
+
+---
+
+## 🛠️ 本地開發與部署指南
+
+### 第一步：申請第三方金鑰
+
+您必須申請以下免費金鑰才能驅動完整的地圖與同步功能：
+1. **Google OAuth Client ID**：於 [Google Cloud Console](https://console.cloud.google.com/) 建立 Web Client，並啟用 `Drive API` 與 `Calendar API`。
+2. **Google Maps API Key**：啟用 `Geocoding API` 用於地址轉座標。
+3. **Mapbox API Key**：用於渲染世界地圖。
+4. **航班查詢 API (選配)**：[AviationStack](https://aviationstack.com/) 或 [AirLabs](https://airlabs.co/)。
+
+### 第二步：建立本地 `.env`
+在專案根目錄建立 `.env.local` 檔案：
+```env
+VITE_GOOGLE_CLIENT_ID=your_google_client_id
+VITE_GOOGLE_MAPS_API_KEY=your_google_maps_key
+VITE_MAPBOX_API_KEY=your_mapbox_key
+
+# 航班搜群 API (此為危險操作，請詳閱下方安全通告)
+VITE_AVIATIONSTACK_API_KEY=your_aviation_key
+VITE_AIRLABS_API_KEY=your_airlabs_key
 ```
-前端 (React + Vite + Tailwind CSS)
-├── 基礎配置 (src/constants/config.js) ── 統一管理 Env 變數與 UI 警告
-├── 數據持久化 (useLocalStorage)
-│   ├── Tickets (機票) ──>【useTrips】拆票 → 排序 → 業務邏輯校驗 → 配對 Trips
-│   ├── Hotels (住宿)  ──>【useHotels】 CRUD 與座標衍生屬性
-│   └── Activities (活動)
-│
-├── 服務層 (Services / Utils)
-│   ├── flightService     雙 API 引擎 + Multi-Proxy 請求轉發
-│   ├── googleSync        Drive JSON 備份 + Calendar 事件推撥
-│   └── entityUtils       封裝 Geocoding 與 UI 副作用的純函式
-│
-└── 呈現層 (UI Components)
-        Dashboard / TripTimeline / TicketList / HotelList / TripCalendar
-        PropTypes 完整型別驗證 (v8.0 強化)
+
+### 第三步：安裝與執行
+```bash
+npm install
+npm run dev
 ```
 
 ---
 
-## 🛠️ 安裝與部署指南
+## 🚨 嚴重安全性通告 (Security Warning)
 
-### 第一步：申請金鑰
+由於本系統設計為**完全無後端**的架構（直接部屬在 GitHub Pages 等靜態伺服器上），這意味著 **寫在 `.env` 中所有以 `VITE_` 開頭的變數都會完全暴露給終端使用者**。
 
-1. **Google OAuth**：於 [Google Cloud Console](https://console.cloud.google.com/) 建立 OAuth Web Client 憑證，並取得 `VITE_GOOGLE_CLIENT_ID`。
-2. **航班 API**：註冊 [AviationStack](https://aviationstack.com/) 或 [AirLabs](https://airlabs.co/) 取得 API Key。
+- **安全的金鑰**：`VITE_GOOGLE_CLIENT_ID` (這是設計給前端使用的，沒有風險)、`VITE_MAPBOX_API_KEY` (可在後台綁定 Domain 白名單，安全)。
+- **危險的金鑰**：`VITE_AVIATIONSTACK_API_KEY` 與 `VITE_AIRLABS_API_KEY` 等航班查詢 API。若您將金鑰放上線，**任何人只要打開瀏覽器開發者工具 (F12)，都能輕易看到並盜用您的額度**。
 
-### 第二步：部署到 GitHub Pages
+### 🛡️ 強烈建議的防護方案 (Serverless Proxy)
 
-系統已內建 `.github/workflows/deploy.yml`。請在 GitHub Repo 設定中的 `Settings > Secrets and variables > Actions` 建立以下 Secrets：
+請**絕對不要**在生產環境的靜態前端直接呼叫這些有額度限制或需付費的 API。
+建議使用 **Cloudflare Workers** 或 **Vercel Functions** 架設一個極簡易的 Proxy 服務：
 
-| Secret 名稱 | 說明 | 必填 |
-|---|---|---|
-| `GOOGLE_CLIENT_ID` | Google OAuth Client ID | 是 |
-| `AVIATIONSTACK_API_KEY` | AviationStack API Key | 否 |
-| `AIRLABS_API_KEY` | AirLabs API Key | 否 |
+1. 開發一個 Cloudflare Worker 接收來自您前端的請求。
+2. 在 Cloudflare 後台將 API Key 設為環境變數 (Secrets)。
+3. Worker 收到請求後，**由 Worker 附帶金鑰去打 AviationStack**。
+4. 將結果返回給前端。
 
-### 第三步：設定 LINE Bot 每日推播 (`line-bot-cron.yml`)
-
-若需 LINE 每日行程推播，需另外設定：
-- `GOOGLE_SERVICE_ACCOUNT_CREDENTIALS`: Google 服務帳戶 JSON 金鑰。
-- `LINE_CHANNEL_ACCESS_TOKEN`: LINE Messaging API Token。
-- `LINE_USER_ID`: 接收端的 LINE ID。
+這樣前端只會看到您自訂的 Proxy URL，而真正的 `AviationStack API Key` 會安全地藏在 Cloudflare 伺服器內。
 
 ---
 

@@ -40,7 +40,7 @@ import { applyTripOverrides } from './utils/tripOverrides';
 import { useTrips } from './hooks/useTrips';
 import { useTripOverrides } from './hooks/useTripOverrides';
 import { useHotels } from './features/hotels/hooks/useHotels';
-import { useActivities } from './components/useActivities';
+import { useActivities } from './hooks/useActivities';
 
 import { useDecoratedTrips } from './hooks/useDecoratedTrips';
 import { useFilteredItems } from './hooks/useFilteredItems';
