@@ -83,7 +83,7 @@ const tryAviationStack = async (flightNo, flightDate) => {
     let sourceLabel = 'AviationStack';
 
     if (proxyUrl) {
-        // 優先：使用自建安全 Proxy
+        // 【最高優先】使用自建安全 Proxy
         try {
             const _url = new URL(proxyUrl);
             _url.searchParams.set('api', 'aviationstack');
@@ -98,12 +98,11 @@ const tryAviationStack = async (flightNo, flightDate) => {
                 console.warn(`[Proxy] AviationStack returned status ${res.status}`);
             }
         } catch (e) {
-            console.warn('AviationStack self-hosted proxy failed:', e);
+            console.error('AviationStack self-hosted proxy failed:', e);
         }
-    }
-
-    if (!data && avKey) {
-        // 次之：使用前端金鑰 + 公共 Proxy (較不安全，但提供相容性)
+        // 注意：若已設定 Proxy 但失敗，不再嘗試直連金鑰以防洩漏
+    } else if (avKey) {
+        // 【次之】僅在未設定 Proxy 時才嘗試前端金鑰 (Direct Key)
         const targetUrl = `http://api.aviationstack.com/v1/flights?access_key=${avKey}&flight_iata=${flightNo}`;
         data = await fetchWithPublicProxy(targetUrl);
         sourceLabel = 'AviationStack (Direct Key)';
@@ -143,6 +142,7 @@ const tryAirLabs = async (flightNo) => {
     let sourceLabel = 'AirLabs';
 
     if (proxyUrl) {
+        // 【最高優先】使用自建安全 Proxy
         try {
             const _url = new URL(proxyUrl);
             _url.searchParams.set('api', 'airlabs');
@@ -157,11 +157,11 @@ const tryAirLabs = async (flightNo) => {
                 console.warn(`[Proxy] AirLabs returned status ${res.status}`);
             }
         } catch (e) {
-            console.warn('AirLabs self-hosted proxy failed:', e);
+            console.error('AirLabs self-hosted proxy failed:', e);
         }
-    }
-
-    if (!data && alKey) {
+        // 為了安全，若已設定 Proxy 但失敗，不再嘗試直連金鑰
+    } else if (alKey) {
+        // 【次之】僅在未設定 Proxy 時才嘗試前端金鑰 (Direct Key)
         const targetUrl = `https://airlabs.co/api/v9/routes?api_key=${alKey}&flight_iata=${flightNo}`;
         // AirLabs 是 https，優先嘗試直接連線
         try {
