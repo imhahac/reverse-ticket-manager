@@ -85,14 +85,20 @@ const tryAviationStack = async (flightNo, flightDate) => {
     if (proxyUrl) {
         // 優先：使用自建安全 Proxy
         try {
-            const targetUrl = `${proxyUrl}?api=aviationstack&flight=${flightNo}`;
+            const _url = new URL(proxyUrl);
+            _url.searchParams.set('api', 'aviationstack');
+            _url.searchParams.set('flight', flightNo);
+            const targetUrl = _url.toString();
+            
             const res = await fetch(targetUrl);
             if (res.ok) {
                 data = await res.json();
                 sourceLabel = 'AviationStack (Proxy)';
+            } else {
+                console.warn(`[Proxy] AviationStack returned status ${res.status}`);
             }
         } catch (e) {
-            console.warn('AviationStack self-hosted proxy failed, checking fallback keys...');
+            console.warn('AviationStack self-hosted proxy failed:', e);
         }
     }
 
@@ -138,14 +144,20 @@ const tryAirLabs = async (flightNo) => {
 
     if (proxyUrl) {
         try {
-            const targetUrl = `${proxyUrl}?api=airlabs&flight=${flightNo}`;
+            const _url = new URL(proxyUrl);
+            _url.searchParams.set('api', 'airlabs');
+            _url.searchParams.set('flight', flightNo);
+            const targetUrl = _url.toString();
+
             const res = await fetch(targetUrl);
             if (res.ok) {
                 data = await res.json();
                 sourceLabel = 'AirLabs (Proxy)';
+            } else {
+                console.warn(`[Proxy] AirLabs returned status ${res.status}`);
             }
         } catch (e) {
-            console.warn('AirLabs self-hosted proxy failed, checking fallback keys...');
+            console.warn('AirLabs self-hosted proxy failed:', e);
         }
     }
 
