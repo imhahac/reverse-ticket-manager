@@ -5,6 +5,13 @@
 
 import { CONFIG } from '../constants/config';
 
+/**
+ * SECURITY NOTE: 
+ * Because this is a static project (GitHub Pages), API keys are stored in environment variables 
+ * and used client-side. For maximum security in a production environment with a backend, 
+ * these calls should be proxied through a server to hide the keys from the browser.
+ */
+
 // Caching Setup
 const CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 1 week
 

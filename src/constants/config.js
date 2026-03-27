@@ -25,8 +25,5 @@ export const validateConfig = () => {
     if (!CONFIG.googleClientId) warnings.push('遺失 VITE_GOOGLE_CLIENT_ID：Google 登入與日曆同步將無法使用。');
     if (!CONFIG.aviationStackKey && !CONFIG.airLabsKey) warnings.push('遺失航班 API Keys (AviationStack/AirLabs)：航班自動填寫功能將無法使用。');
     
-    if (warnings.length > 0) {
-        console.warn('⚠️ [系統配置警告]\n' + warnings.join('\n'));
-    }
     return warnings;
 };

@@ -436,6 +436,32 @@ function TripCard({
     );
 }
 
+TripCard.propTypes = {
+    trip: PropTypes.object.isRequired,
+    index: PropTypes.number.isRequired,
+    tripLabels: PropTypes.object,
+    tripIdOptions: PropTypes.array,
+    onRemoveSegment: PropTypes.func,
+    onMoveSegmentToTrip: PropTypes.func,
+    editingLabelId: PropTypes.string,
+    editLabelValue: PropTypes.string,
+    setEditLabelValue: PropTypes.func,
+    onStartEditing: PropTypes.func,
+    onSaveLabel: PropTypes.func,
+    onCancelEditing: PropTypes.func,
+    onSelectHotelForMap: PropTypes.func,
+    displayOptions: PropTypes.object,
+    onSelectTripForMap: PropTypes.func,
+    dragOverTripId: PropTypes.string,
+    setDragOverTripId: PropTypes.func,
+    onSegDragStart: PropTypes.func,
+    onTripDragOver: PropTypes.func,
+    onTripDrop: PropTypes.func,
+    getDepartDate: PropTypes.func,
+    getArrivalDate: PropTypes.func,
+    formatDuration: PropTypes.func
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TripTimeline（主元件）
 // ─────────────────────────────────────────────────────────────────────────────

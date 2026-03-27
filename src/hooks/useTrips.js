@@ -54,17 +54,27 @@ export const useTrips = (tickets) => {
             }
 
             // 共用欄位建構 helper，避免重複程式碼
-            const buildSeg = (suffix, date, time, arrDate, arrTime, flightNo, dt, from, to) => ({
-                id: t.id + suffix,
-                ticket: t,
-                date, time,
-                arrivalDate: arrDate || '',
-                arrivalTime: arrTime || '',
-                flightNo: flightNo || '',
-                dateTime: dt,
-                from,
-                to,
-            });
+            const buildSeg = (suffix, date, time, arrDate, arrTime, flightNo, dt, from, to) => {
+                const arrTimeStr = arrTime ? `T${arrTime}:00` : 'T00:00:00';
+                const arrDt = arrDate ? new Date(`${arrDate}${arrTimeStr}`) : null;
+                
+                // 業務邏輯驗證：抵達時間不可早於出發時間
+                const isLogical = (arrDt && dt && dt.getTime() > 0) ? (arrDt >= dt) : true;
+
+                return {
+                    id: t.id + suffix,
+                    ticket: t,
+                    date, time,
+                    arrivalDate: arrDate || '',
+                    arrivalTime: arrTime || '',
+                    flightNo: flightNo || '',
+                    dateTime: dt,
+                    arrivalDateTime: arrDt,
+                    isLogical,
+                    from,
+                    to,
+                };
+            };
 
             if (t.type === 'normal') {
                 // 正向票：第 1 段 出發地→目的地，第 2 段 目的地→出發地

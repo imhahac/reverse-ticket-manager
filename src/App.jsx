@@ -26,7 +26,8 @@
  *   📅 月曆
  */
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Plane, Calendar, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn } from 'lucide-react';
+import { Plane, Calendar, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 
 // ── Hooks ──────────────────────────────────────────────────────────────────
 import { useLocalStorage } from './hooks/useLocalStorage';
@@ -77,6 +78,7 @@ function App() {
     const [isSavingActivity, setIsSavingActivity] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all'); // all, upcoming, warning
+    const [configWarnings, setConfigWarnings] = useState([]);
     const fileInputRef = useRef(null);
 
     // ── Auth & Sync Hooks ────────────────────────────────────────────────────
@@ -95,7 +97,8 @@ function App() {
 
     // ── 組件掛載初始化 ────────────────────────────────────────────────────────
     useEffect(() => {
-        validateConfig();
+        const warnings = validateConfig();
+        setConfigWarnings(warnings);
     }, []);
 
     // ── Google Sync ──────────────────────────────────────────────────────────
@@ -196,18 +199,16 @@ function App() {
         setEditingFn(null);
         setIsSavingFn(false);
 
-        import('sonner').then(({ toast }) => {
-            if (geoSuccess || (item.lat && item.lng)) {
-                toast.success(`${itemName}已成功儲存！`, { description: '已成功取得精確地圖座標。' });
-            } else if (query) {
-                toast.warning(`${itemName}已儲存，但無法解析地圖座標`, {
-                    description: '無法找到該地點的地圖位置，這將無法為您計算地點落差警告。請檢查拼寫。',
-                    duration: 6000
-                });
-            } else {
-                toast.success(`${itemName}已成功儲存！`);
-            }
-        });
+        if (geoSuccess || (item.lat && item.lng)) {
+            toast.success(`${itemName}已成功儲存！`, { description: '已成功取得精確地圖座標。' });
+        } else if (query) {
+            toast.warning(`${itemName}已儲存，但無法解析地圖座標`, {
+                description: '無法找到該地點的地圖位置，這將無法為您計算地點落差警告。請檢查拼寫。',
+                duration: 6000
+            });
+        } else {
+            toast.success(`${itemName}已成功儲存！`);
+        }
     };
 
     const handleSaveHotel = async (hotel) => {
@@ -320,9 +321,31 @@ function App() {
     }
 
     return (
-        <div className="min-h-screen p-4 md:p-8 bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900 pb-24 md:pb-8">
-            <div className="max-w-5xl mx-auto">
+        <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
+            {/* 系統配置警告橫幅 */}
+            {configWarnings.length > 0 && (
+                <div className="bg-amber-50 border-b border-amber-200 p-3 shadow-sm">
+                    <div className="container mx-auto px-4 flex items-center gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+                        <div className="flex-1">
+                            <p className="text-xs font-bold text-amber-800">
+                                系統配置未完成：
+                                <span className="font-normal ml-1">
+                                    {configWarnings.join(' ')}
+                                </span>
+                            </p>
+                        </div>
+                        <button 
+                            onClick={() => setConfigWarnings([])}
+                            className="text-amber-400 hover:text-amber-600 transition"
+                        >
+                            <span className="text-xl">&times;</span>
+                        </button>
+                    </div>
+                </div>
+            )}
 
+            <div className="max-w-5xl mx-auto p-4 md:p-8">
                 {/* ── Header ─────────────────────────────────────────────── */}
                 <header className="mb-8 pt-4 flex flex-col md:flex-row justify-between items-center gap-4">
                     <div>
