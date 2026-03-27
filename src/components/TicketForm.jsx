@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import { toast } from 'sonner';
-import { Plane, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import { Plane, ChevronDown, ChevronUp } from 'lucide-react';
 import { lookupFlight, getOffsetDate } from '../services/flightService';
-import { CONFIG } from '../constants/config';
 import { buildLocalDateTimeStr, autoFixArrival } from '../utils/formUtils';
-import FlightSegmentInput from './FlightSegmentInput';
+
+// 匯入子組件
+import FlightSegmentInput from './ticket/FlightSegmentInput';
+import PriceInputSection from './ticket/PriceInputSection';
+import AirportInputSection from './ticket/AirportInputSection';
 
 const AIRPORTS = [
     'TPE (台北桃園)', 'TSA (台北松山)', 'KHH (高雄小港)', 'RMQ (台中清泉崗)',
@@ -56,16 +59,6 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
             return;
         }
 
-        const avKey = CONFIG.aviationStackKey;
-        const alKey = CONFIG.airLabsKey;
-
-        if (!avKey && !alKey) {
-            toast.error('尚未設定 API 金鑰', {
-                description: '請在 GitHub Secrets 或 .env 中加入對應的金鑰。'
-            });
-            return;
-        }
-
         setIsFetchingFlight(true);
         const toastId = toast.loading(`正在查詢航班 ${flightNo.toUpperCase()} ...`);
 
@@ -108,7 +101,11 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
 
         try {
             const flightData = await lookupFlight(flightNo, flightDate);
-            applyData(flightData, flightData.sourceLabel);
+            if (flightData) {
+                applyData(flightData, flightData.source);
+            } else {
+                toast.error('查無航班資訊或查詢失敗', { id: toastId });
+            }
         } catch (err) {
             toast.error(`查詢失敗：${err.message}`, { id: toastId });
         } finally {
@@ -133,7 +130,7 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
         const outDateTimeStr = buildLocalDateTimeStr(formData.outboundDate, formData.outboundTime);
         const inDateTimeStr = buildLocalDateTimeStr(formData.inboundDate, formData.inboundTime);
 
-        if (formData.type !== 'oneway' && new Date(inDateTimeStr) < new Date(outDateTimeStr)) {
+        if (formData.type !== 'oneway' && inDateTimeStr && outDateTimeStr && new Date(inDateTimeStr) < new Date(outDateTimeStr)) {
             toast.error('同一張發票中，回程段的日期時間不能早於去程段喔！');
             return;
         }
@@ -193,175 +190,111 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
                 <div className="p-4 sm:p-6 pt-0 border-t border-slate-100 bg-slate-50/50">
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mt-4">
 
-                <div className="col-span-1 md:col-span-2 lg:col-span-1">
-                    <label className="block text-sm font-bold text-gray-700 mb-1">票種設定</label>
-                    <div className="flex p-1 bg-gray-100 rounded-lg">
-                        <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, type: 'normal' })}
-                            className={`flex-1 text-sm py-1.5 rounded-l-md font-medium transition-colors ${formData.type === 'normal' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            正向 (台灣出發)
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, type: 'reverse' })}
-                            className={`flex-1 text-sm py-1.5 font-medium transition-colors ${formData.type === 'reverse' ? 'bg-white shadow-sm text-purple-600' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            反向 (外站出發)
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, type: 'oneway' })}
-                            className={`flex-1 text-sm py-1.5 rounded-r-md font-medium transition-colors border-l border-gray-200 ${formData.type === 'oneway' ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            單程
-                        </button>
-                    </div>
-                </div>
+                        <div className="col-span-1 md:col-span-2 lg:col-span-1">
+                            <label className="block text-sm font-bold text-gray-700 mb-1">票種設定</label>
+                            <div className="flex p-1 bg-gray-100 rounded-lg">
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, type: 'normal' })}
+                                    className={`flex-1 text-sm py-1.5 rounded-l-md font-medium transition-colors ${formData.type === 'normal' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    正向 (台灣出發)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, type: 'reverse' })}
+                                    className={`flex-1 text-sm py-1.5 font-medium transition-colors ${formData.type === 'reverse' ? 'bg-white shadow-sm text-purple-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    反向 (外站出發)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, type: 'oneway' })}
+                                    className={`flex-1 text-sm py-1.5 rounded-r-md font-medium transition-colors border-l border-gray-200 ${formData.type === 'oneway' ? 'bg-white shadow-sm text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    單程
+                                </button>
+                            </div>
+                        </div>
 
-                <datalist id="airports-list">
-                    {AIRPORTS.map(ap => <option key={ap} value={ap} />)}
-                </datalist>
+                        <datalist id="airports-list">
+                            {AIRPORTS.map(ap => <option key={ap} value={ap} />)}
+                        </datalist>
 
-                <div className="col-span-1 md:col-span-2 lg:col-span-1">
-                    <label className="block text-sm font-bold text-gray-700 mb-1">航空公司 / 備註</label>
-                    <input
-                        type="text"
-                        placeholder="例如: 長榮 BR192"
-                        className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                        value={formData.airline}
-                        onChange={e => setFormData({ ...formData, airline: e.target.value })}
-                    />
-                </div>
-                <div className="col-span-1 md:col-span-2 lg:col-span-2 grid grid-cols-3 gap-2">
-                    <div className="col-span-1">
-                        <label className="block text-sm font-bold text-gray-700 mb-1">幣別</label>
-                        <select
-                            className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                            value={formData.currency}
-                            onChange={e => {
-                                const newCurrency = e.target.value;
-                                setFormData({
-                                    ...formData,
-                                    currency: newCurrency,
-                                    exchangeRate: newCurrency === 'TWD' ? '1'
-                                        : newCurrency === 'JPY' ? String(exchangeRates.JPY)
-                                        : newCurrency === 'USD' ? String(exchangeRates.USD)
-                                        : formData.exchangeRate
-                                });
-                            }}
-                        >
-                            <option value="TWD">TWD 台幣</option>
-                            <option value="JPY">JPY 日幣</option>
-                            <option value="USD">USD 美金</option>
-                        </select>
-                    </div>
-                    <div className="col-span-1">
-                        <label className="block text-sm font-bold text-gray-700 mb-1">
-                            匯率(對台幣)
-                            {formData.currency !== 'TWD' && (
-                                <span className="text-xs font-normal text-emerald-600 ml-1">即時</span>
+                        <div className="col-span-1 md:col-span-2 lg:col-span-1">
+                            <label className="block text-sm font-bold text-gray-700 mb-1">航空公司 / 備註</label>
+                            <input
+                                type="text"
+                                placeholder="例如: 長榮 BR192"
+                                className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
+                                value={formData.airline}
+                                onChange={e => setFormData({ ...formData, airline: e.target.value })}
+                            />
+                        </div>
+
+                        <PriceInputSection 
+                            formData={formData} 
+                            setFormData={setFormData}
+                            exchangeRates={exchangeRates}
+                        />
+
+                        <AirportInputSection 
+                            departRegion={formData.departRegion}
+                            returnRegion={formData.returnRegion}
+                            onChangeDepart={val => setFormData({ ...formData, departRegion: val })}
+                            onChangeReturn={val => setFormData({ ...formData, returnRegion: val })}
+                        />
+
+                        {/* Row 3: Segment Dates & Times with adaptive labels based on type */}
+                        <div className="col-span-1 md:col-span-2 lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                            <FlightSegmentInput
+                                labelTitle={formData.type === 'oneway' ? '出發日期與時間' : '第 1 段航班出發時間'}
+                                routeText={`(${isReverse ? formData.returnRegion : formData.departRegion} ✈️ ${isReverse ? formData.departRegion : formData.returnRegion})`}
+                                date={formData.outboundDate}
+                                time={formData.outboundTime}
+                                arrivalDate={formData.outboundArrivalDate}
+                                arrivalTime={formData.outboundArrivalTime}
+                                flightNo={formData.outboundFlightNo}
+                                onDateChange={val => setFormData({ ...formData, outboundDate: val })}
+                                onTimeChange={val => setFormData({ ...formData, outboundTime: val })}
+                                onArrivalDateChange={val => setFormData({ ...formData, outboundArrivalDate: val })}
+                                onArrivalTimeChange={val => setFormData({ ...formData, outboundArrivalTime: val })}
+                                onFlightNoChange={val => setFormData({ ...formData, outboundFlightNo: val })}
+                                onAutofill={() => handleAutofill('outbound')}
+                                isFetchingFlight={isFetchingFlight}
+                            />
+
+                            {formData.type !== 'oneway' && (
+                                <FlightSegmentInput
+                                    labelTitle="第 2 段航班出發時間"
+                                    routeText={`(${isReverse ? formData.departRegion : formData.returnRegion} ✈️ ${isReverse ? formData.returnRegion : formData.departRegion})`}
+                                    date={formData.inboundDate}
+                                    time={formData.inboundTime}
+                                    arrivalDate={formData.inboundArrivalDate}
+                                    arrivalTime={formData.inboundArrivalTime}
+                                    flightNo={formData.inboundFlightNo}
+                                    onDateChange={val => setFormData({ ...formData, inboundDate: val })}
+                                    onTimeChange={val => setFormData({ ...formData, inboundTime: val })}
+                                    onArrivalDateChange={val => setFormData({ ...formData, inboundArrivalDate: val })}
+                                    onArrivalTimeChange={val => setFormData({ ...formData, inboundArrivalTime: val })}
+                                    onFlightNoChange={val => setFormData({ ...formData, inboundFlightNo: val })}
+                                    onAutofill={() => handleAutofill('inbound')}
+                                    isFetchingFlight={isFetchingFlight}
+                                />
                             )}
-                        </label>
-                        <input
-                            type="number" step="0.001"
-                            disabled={formData.currency === 'TWD'}
-                            className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 disabled:opacity-50"
-                            value={formData.exchangeRate}
-                            onChange={e => setFormData({ ...formData, exchangeRate: e.target.value })}
-                        />
-                    </div>
-                    <div className="col-span-1">
-                        <label className="block text-sm font-bold text-gray-700 mb-1">原幣總價</label>
-                        <input
-                            type="number"
-                            placeholder="例如: 16000"
-                            className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                            value={formData.price}
-                            onChange={e => setFormData({ ...formData, price: e.target.value })}
-                        />
-                    </div>
-                </div>
-
-                <div className="col-span-1 md:col-span-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">航點設定 (支援 IATA 代碼)</div>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                        <div className="flex-1">
-                            <label className="block text-xs font-bold text-gray-600 mb-1">您的出發地 (Home)</label>
-                            <input
-                                autoComplete="off"
-                                list="airports-list"
-                                type="text"
-                                className="w-full p-2 border border-gray-300 rounded bg-white text-gray-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                value={formData.departRegion}
-                                onChange={e => setFormData({ ...formData, departRegion: e.target.value })}
-                            />
                         </div>
-                        <div className="flex-1">
-                            <label className="block text-xs font-bold text-gray-600 mb-1">國外目的地 (Away)</label>
-                            <input
-                                autoComplete="off"
-                                list="airports-list"
-                                type="text"
-                                className="w-full p-2 border border-gray-300 rounded bg-white text-gray-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                value={formData.returnRegion}
-                                onChange={e => setFormData({ ...formData, returnRegion: e.target.value })}
-                            />
-                        </div>
-                    </div>
-                </div>
 
-                {/* Row 3: Segment Dates & Times with adaptive labels based on type */}
-                <div className="col-span-1 md:col-span-2 lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                    <FlightSegmentInput
-                        labelTitle={formData.type === 'oneway' ? '出發日期與時間' : '第 1 段航班出發時間'}
-                        routeText={`(${isReverse ? formData.returnRegion : formData.departRegion} ✈️ ${isReverse ? formData.departRegion : formData.returnRegion})`}
-                        date={formData.outboundDate}
-                        time={formData.outboundTime}
-                        arrivalDate={formData.outboundArrivalDate}
-                        arrivalTime={formData.outboundArrivalTime}
-                        flightNo={formData.outboundFlightNo}
-                        onDateChange={val => setFormData({ ...formData, outboundDate: val })}
-                        onTimeChange={val => setFormData({ ...formData, outboundTime: val })}
-                        onArrivalDateChange={val => setFormData({ ...formData, outboundArrivalDate: val })}
-                        onArrivalTimeChange={val => setFormData({ ...formData, outboundArrivalTime: val })}
-                        onFlightNoChange={val => setFormData({ ...formData, outboundFlightNo: val })}
-                        onAutofill={() => handleAutofill('outbound')}
-                        isFetchingFlight={isFetchingFlight}
-                    />
-
-                    {formData.type !== 'oneway' && (
-                        <FlightSegmentInput
-                            labelTitle="第 2 段航班出發時間"
-                            routeText={`(${isReverse ? formData.departRegion : formData.returnRegion} ✈️ ${isReverse ? formData.returnRegion : formData.departRegion})`}
-                            date={formData.inboundDate}
-                            time={formData.inboundTime}
-                            arrivalDate={formData.inboundArrivalDate}
-                            arrivalTime={formData.inboundArrivalTime}
-                            flightNo={formData.inboundFlightNo}
-                            onDateChange={val => setFormData({ ...formData, inboundDate: val })}
-                            onTimeChange={val => setFormData({ ...formData, inboundTime: val })}
-                            onArrivalDateChange={val => setFormData({ ...formData, inboundArrivalDate: val })}
-                            onArrivalTimeChange={val => setFormData({ ...formData, inboundArrivalTime: val })}
-                            onFlightNoChange={val => setFormData({ ...formData, inboundFlightNo: val })}
-                            onAutofill={() => handleAutofill('inbound')}
-                            isFetchingFlight={isFetchingFlight}
-                        />
-                    )}
-                </div>
-
-                    <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-2 flex flex-col sm:flex-row gap-3">
-                        <button type="submit" className={`w-full sm:w-auto px-8 py-3 text-white font-bold rounded-lg transition duration-200 shadow hover:shadow-lg flex items-center justify-center ${editingTicket ? 'bg-amber-500 hover:bg-amber-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-                            {editingTicket ? '💾 儲存修改' : '＋ 將此訂單加入系統'}
-                        </button>
-                        {editingTicket && (
-                            <button type="button" onClick={onCancelEdit} className="w-full sm:w-auto px-8 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition duration-200 shadow-sm flex items-center justify-center border border-gray-300">
-                                取消修改
+                        <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-2 flex flex-col sm:flex-row gap-3">
+                            <button type="submit" className={`w-full sm:w-auto px-8 py-3 text-white font-bold rounded-lg transition duration-200 shadow hover:shadow-lg flex items-center justify-center ${editingTicket ? 'bg-amber-500 hover:bg-amber-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                                {editingTicket ? '💾 儲存修改' : '＋ 將此訂單加入系統'}
                             </button>
-                        )}
-                    </div>
-                </form>
+                            {editingTicket && (
+                                <button type="button" onClick={onCancelEdit} className="w-full sm:w-auto px-8 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition duration-200 shadow-sm flex items-center justify-center border border-gray-300">
+                                    取消修改
+                                </button>
+                            )}
+                        </div>
+                    </form>
                 </div>
             )}
         </div>
@@ -369,8 +302,8 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
 }
 
 TicketForm.propTypes = {
-    onSubmit: PropTypes.func.isRequired,
-    initialData: PropTypes.object,
-    onCancel: PropTypes.func,
-    isEditing: PropTypes.bool
+    onAddTicket: PropTypes.func.isRequired,
+    editingTicket: PropTypes.object,
+    onCancelEdit: PropTypes.func,
+    exchangeRates: PropTypes.object
 };
