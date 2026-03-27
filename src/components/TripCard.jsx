@@ -1,4 +1,5 @@
 import React from 'react';
+import { getFlightAwareUrl } from '../utils/flightUtils';
 import PropTypes from 'prop-types';
 import { 
     AlertTriangle, ArrowRight, Edit3, Check, X, Hotel, PlaneTakeoff, 
@@ -43,7 +44,7 @@ function FlightItem({ seg, isFirst, isLast, layover, onRemove, onMove, onSelectM
                         <span>{seg.ticket?.airline || '未知航空公司'}</span>
                         {seg.flightNo && (
                             <a
-                                href={`https://flightaware.com/live/flight/${seg.flightNo}`}
+                                href={getFlightAwareUrl(seg.flightNo)}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="inline-flex items-center text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-mono px-1.5 py-0.5 rounded border border-indigo-200 transition-colors shadow-sm"

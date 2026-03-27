@@ -24,8 +24,8 @@ import { isTaiwan } from '../utils/airportUtils';
  *
  * @param {Array<Object>} tickets - LocalStorage 中的機票訂單陣列
  * @returns {{ segments: Array, trips: Array }}
- *   - segments: 所有拆解後並排序的航段（供 TripCalendar 使用）
- *   - trips:    配對後的趟次（供 TripTimeline 使用）
+ *   - segments: 所有拆解後並排序的航空業語境航段（供 TripCalendar 月曆視圖使用，不含行程邏輯）
+ *   - trips:    經過 Smart Grouping 配對後的完整趟次（供 TripTimeline 行程視圖使用，包含飯店/活動關聯）
  */
 export const useTrips = (tickets) => {
     return useMemo(() => {

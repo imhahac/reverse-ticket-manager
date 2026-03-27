@@ -46,7 +46,7 @@ import { useDecoratedTrips } from './hooks/useDecoratedTrips';
 import { useFilteredItems } from './hooks/useFilteredItems';
 import { exportData, importData } from './utils/importExportUtils';
 import { validateConfig } from './constants/config';
-import { processGeocodedEntity } from './utils/entityUtils';
+import { useEntityManager } from './hooks/useEntityManager';
 
 // ── UI Components ──────────────────────────────────────────────────────────
 import { geocodeAddress } from './utils/geoUtils';
@@ -61,6 +61,8 @@ import HotelForm from './features/hotels/components/HotelForm';
 import HotelList from './features/hotels/components/HotelList';
 import ActivityForm from './components/ActivityForm';
 import ActivityList from './components/ActivityList';
+import AppHeader from './components/AppHeader';
+import BottomNav from './components/BottomNav';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const TABS = [
@@ -80,12 +82,8 @@ function App() {
     // ── UI 狀態 ──────────────────────────────────────────────────────────────
     const [activeTab, setActiveTab] = useState('timeline');
     const [editingTicket, setEditingTicket] = useState(null);
-    const [editingHotel, setEditingHotel] = useState(null);
-    const [editingActivity, setEditingActivity] = useState(null);
     const [selectedHotelIdForMap, setSelectedHotelIdForMap] = useState(null); // 新增：地圖選中的飯店 ID
     const [selectedTripIdForMap, setSelectedTripIdForMap] = useState(null); // 新增：地圖選中的行程 ID
-    const [isSavingHotel, setIsSavingHotel] = useState(false);
-    const [isSavingActivity, setIsSavingActivity] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all'); // all, upcoming, warning
     const [configWarnings, setConfigWarnings] = useState([]);
@@ -195,68 +193,38 @@ function App() {
     const handleCancelEdit = () => setEditingTicket(null);
 
     // ── 飯店 CRUD ─────────────────────────────────────────────────────────────
-    const saveEntityWithUI = async ({
-        item, titleField, locationField, updateFn, addFn, setEditingFn, setIsSavingFn, isEditing, itemName
-    }) => {
-        setIsSavingFn(true);
-        const { enrichedItem, geoSuccess, query } = await processGeocodedEntity(item, titleField, locationField);
-
-        if (isEditing) {
-            updateFn(enrichedItem);
-        } else {
-            addFn(enrichedItem);
-        }
-        setEditingFn(null);
-        setIsSavingFn(false);
-
-        if (geoSuccess || (item.lat && item.lng)) {
-            toast.success(`${itemName}已成功儲存！`, { description: '已成功取得精確地圖座標。' });
-        } else if (query) {
-            toast.warning(`${itemName}已儲存，但無法解析地圖座標`, {
-                description: '無法找到該地點的地圖位置，這將無法為您計算地點落差警告。請檢查拼寫。',
-                duration: 6000
-            });
-        } else {
-            toast.success(`${itemName}已成功儲存！`);
-        }
-    };
-
-    const handleSaveHotel = async (hotel) => {
-        await saveEntityWithUI({
-            item: hotel, titleField: 'name', locationField: 'address',
-            updateFn: updateHotel, addFn: addHotel, setEditingFn: setEditingHotel,
-            setIsSavingFn: setIsSavingHotel, isEditing: !!editingHotel, itemName: '飯店'
-        });
-    };
-    const handleEditHotel = (hotel) => { setEditingHotel(hotel); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-    const handleDeleteHotel = (id) => {
-        import('sonner').then(({ toast }) =>
-            toast('確定要刪除這筆住宿記錄嗎？', {
-                action: { label: '確認刪除', onClick: () => deleteHotel(id) },
-                cancel: { label: '取消', onClick: () => {} },
-                duration: 8000,
-            })
-        );
-    };
+    const {
+        editingItem: editingHotel,
+        isSaving: isSavingHotel,
+        handleSave: handleSaveHotel,
+        handleEdit: handleEditHotel,
+        handleCancelEdit: handleCancelEditHotel,
+        handleDelete: handleDeleteHotel
+    } = useEntityManager({
+        itemName: '飯店',
+        titleField: 'name',
+        locationField: 'address',
+        addFn: addHotel,
+        updateFn: updateHotel,
+        deleteFn: deleteHotel
+    });
 
     // ── 票卷與活動 CRUD ─────────────────────────────────────────────────────────────
-    const handleSaveActivity = async (activity) => {
-        await saveEntityWithUI({
-            item: activity, titleField: 'title', locationField: 'location',
-            updateFn: updateActivity, addFn: addActivity, setEditingFn: setEditingActivity,
-            setIsSavingFn: setIsSavingActivity, isEditing: !!editingActivity, itemName: '活動'
-        });
-    };
-    const handleEditActivity = (activity) => { setEditingActivity(activity); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-    const handleDeleteActivity = (id) => {
-        import('sonner').then(({ toast }) =>
-            toast('確定要刪除這筆活動/票卷記錄嗎？', {
-                action: { label: '確認刪除', onClick: () => deleteActivity(id) },
-                cancel: { label: '取消', onClick: () => {} },
-                duration: 8000,
-            })
-        );
-    };
+    const {
+        editingItem: editingActivity,
+        isSaving: isSavingActivity,
+        handleSave: handleSaveActivity,
+        handleEdit: handleEditActivity,
+        handleCancelEdit: handleCancelEditActivity,
+        handleDelete: handleDeleteActivity
+    } = useEntityManager({
+        itemName: '活動/票卷',
+        titleField: 'title',
+        locationField: 'location',
+        addFn: addActivity,
+        updateFn: updateActivity,
+        deleteFn: deleteActivity
+    });
 
     // ── 本地 JSON 匯出入 ──────────────────────────────────────────────────────
     const handleExport = () => {
@@ -348,50 +316,18 @@ function App() {
 
             <div className="max-w-5xl mx-auto p-4 md:p-8">
                 {/* ── Header ─────────────────────────────────────────────── */}
-                <header className="mb-8 pt-4 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div>
-                        <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-3 tracking-tight flex items-center">
-                            <Plane className="w-8 h-8 mr-3 text-indigo-600" /> 差旅行程管理系統
-                        </h1>
-                        <p className="text-slate-500 text-lg">機票反向防呆 ✈️ + 飯店住宿管理 🏨 一站整合</p>
-                    </div>
-                    <div className="flex flex-col gap-2 w-full md:w-auto">
-                        {accessToken ? (
-                            <div className="flex flex-wrap gap-2 justify-end bg-indigo-50 p-2 rounded-lg border border-indigo-100">
-                                <span className="flex items-center text-xs font-bold text-indigo-600 w-full mb-1">
-                                    <Cloud className="w-3 h-3 mr-1" /> 已連結 Google (Drive &amp; Calendar)
-                                </span>
-                                <button onClick={handleSyncToDrive} disabled={isSyncing} className="flex items-center px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 font-bold text-sm rounded shadow-sm hover:bg-indigo-50 transition min-w-[120px] justify-center disabled:opacity-50">
-                                    <CloudUpload className="w-4 h-4 mr-1.5" /> 雲端備份
-                                </button>
-                                <button onClick={handleLoadFromDrive} disabled={isSyncing} className="flex items-center px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 font-bold text-sm rounded shadow-sm hover:bg-indigo-50 transition min-w-[120px] justify-center disabled:opacity-50">
-                                    <CloudDownload className="w-4 h-4 mr-1.5" /> 雲端載入
-                                </button>
-                                <button onClick={handleSyncToCalendar} disabled={isSyncing} className="flex items-center px-3 py-1.5 bg-indigo-600 border border-indigo-700 text-white font-bold text-sm rounded shadow-sm hover:bg-indigo-700 transition min-w-[120px] justify-center disabled:opacity-50">
-                                    <Calendar className="w-4 h-4 mr-1.5" /> 同步日曆
-                                </button>
-                                <button onClick={logout} disabled={isSyncing} className="flex items-center px-3 py-1.5 bg-gray-100 border border-gray-200 text-gray-600 font-bold text-sm rounded shadow-sm hover:bg-gray-200 transition">
-                                    <LogOut className="w-4 h-4" />
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="flex flex-wrap gap-2 justify-end border p-2 rounded-lg bg-white border-gray-200 shadow-sm">
-                                <button onClick={() => login()} className="flex items-center px-4 py-2 bg-indigo-600 text-white font-bold text-sm rounded hover:bg-indigo-700 transition">
-                                    <LogIn className="w-4 h-4 mr-2" /> 登入 Google 啟用雲端功能
-                                </button>
-                            </div>
-                        )}
-                        <div className="flex gap-2 justify-end mt-1">
-                            <button onClick={handleExport} className="flex items-center px-3 py-1.5 bg-white border border-gray-200 text-gray-500 font-bold text-xs rounded hover:bg-gray-50 transition">
-                                <Download className="w-3 h-3 mr-1" /> 本地匯出 JSON
-                            </button>
-                            <button onClick={() => fileInputRef.current?.click()} className="flex items-center px-3 py-1.5 bg-white border border-gray-200 text-gray-500 font-bold text-xs rounded hover:bg-gray-50 transition">
-                                <Upload className="w-3 h-3 mr-1" /> 本地匯入 JSON
-                            </button>
-                            <input type="file" accept=".json" ref={fileInputRef} className="hidden" onChange={handleImport} />
-                        </div>
-                    </div>
-                </header>
+                <AppHeader
+                    accessToken={accessToken}
+                    isSyncing={isSyncing}
+                    handleSyncToDrive={handleSyncToDrive}
+                    handleLoadFromDrive={handleLoadFromDrive}
+                    handleSyncToCalendar={handleSyncToCalendar}
+                    logout={logout}
+                    login={login}
+                    handleExport={handleExport}
+                    fileInputRef={fileInputRef}
+                    handleImport={handleImport}
+                />
 
                 <Instructions />
 
@@ -455,15 +391,15 @@ function App() {
                     <HotelForm
                         onSaveHotel={handleSaveHotel}
                         editingHotel={editingHotel}
-                        onCancelEdit={() => setEditingHotel(null)}
+                        onCancelEdit={handleCancelEditHotel}
                         exchangeRates={exchangeRates}
-                    isSaving={isSavingHotel}
+                        isSaving={isSavingHotel}
                     />
                 ) : activeTab === 'activities' ? (
                     <ActivityForm
                         onSaveActivity={handleSaveActivity}
                         editingActivity={editingActivity}
-                        onCancelEdit={() => setEditingActivity(null)}
+                        onCancelEdit={handleCancelEditActivity}
                         exchangeRates={exchangeRates}
                         isSaving={isSavingActivity}
                     />
@@ -546,27 +482,7 @@ function App() {
             </div>
 
             {/* ── Bottom Navigation Bar (Mobile) ───────────────────────── */}
-            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center px-2 py-2 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-50">
-                {TABS.map(tab => {
-                    const isActive = activeTab === tab.key;
-                    /* extract the emoji and text from the label */
-                    const [emoji, ...textParts] = tab.label.split(' ');
-                    const text = textParts.join(' ');
-                    
-                    return (
-                        <button
-                            key={tab.key}
-                            onClick={() => setActiveTab(tab.key)}
-                            className={`flex flex-col items-center justify-center w-full py-1 ${
-                                isActive ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
-                            }`}
-                        >
-                            <span className={`text-xl mb-1 ${isActive ? 'scale-110' : 'grayscale opacity-70'} transition-transform`}>{emoji}</span>
-                            <span className={`text-[10px] font-bold ${isActive ? 'font-black' : ''}`}>{text}</span>
-                        </button>
-                    );
-                })}
-            </div>
+            <BottomNav TABS={TABS} activeTab={activeTab} setActiveTab={setActiveTab} />
         </div>
     );
 }

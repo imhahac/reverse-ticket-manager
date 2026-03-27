@@ -98,7 +98,10 @@ export function useGoogleSync({
                         setTickets(result.tickets);
                         setTripLabels(result.tripLabels || {});
                         if (result.hotels?.length > 0 && setHotels) {
-                            setHotels(result.hotels);
+                            setHotels(result.hotels || []);
+                        }
+                        if (result.activities?.length > 0 && setActivities) {
+                            setActivities(result.activities || []);
                         }
                         toast.success('雲端資料載入成功！');
                     },

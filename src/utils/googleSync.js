@@ -1,5 +1,6 @@
 // src/utils/googleSync.js
 import { addHours, format } from 'date-fns';
+import { getFlightAwareUrl } from './flightUtils';
 
 /**
  * 上傳/覆寫資料到 Google Drive 的 reverse-tickets.json
@@ -82,14 +83,20 @@ export const loadFromDrive = async (accessToken) => {
             throw new Error(`搜尋 Drive 失敗: [${searchRes.status}] ${await searchRes.text()}`);
         }
 
-        const searchData = await searchRes.json();
+        let searchData;
+        try {
+            searchData = await searchRes.json();
+        } catch (e) {
+            throw new Error('Google Drive 搜尋回傳格式錯誤 (非 JSON)');
+        }
         
-        if (!searchData.files || searchData.files.length === 0) {
+        const files = Array.isArray(searchData.files) ? searchData.files : [];
+        if (files.length === 0) {
             return { success: false, error: `雲端找不到 reverse-tickets.json 的檔案。\n近期您是否有清除資料或變更帳號？` };
         }
 
-        const existingFile = searchData.files[0];
-        const allFoundFiles = searchData.files.map(f => `${f.name} (ID: ${f.id})`).join('\n');
+        const existingFile = files[0];
+        const allFoundFiles = files.map(f => `${f.name} (ID: ${f.id})`).join('\n');
 
         const downloadRes = await fetch(`https://www.googleapis.com/drive/v3/files/${existingFile.id}?alt=media`, {
             headers: { Authorization: `Bearer ${accessToken}` }
@@ -100,7 +107,12 @@ export const loadFromDrive = async (accessToken) => {
             throw new Error(`下載 Content 失敗: [${downloadRes.status}] ${await downloadRes.text()}`);
         }
         
-        const data = await downloadRes.json();
+        let data;
+        try {
+            data = await downloadRes.json();
+        } catch (e) {
+            throw new Error('雲端檔案內容解析失敗 (非有效 JSON)');
+        }
         
         let tickets = [];
         let tripLabels = {};
@@ -118,7 +130,7 @@ export const loadFromDrive = async (accessToken) => {
             throw new Error('雲端檔案內容格式毀損或不相容');
         }
 
-        return { success: true, tickets, tripLabels, hotels, foundFilesLog: allFoundFiles };
+        return { success: true, tickets, tripLabels, hotels, activities, foundFilesLog: allFoundFiles };
     } catch (e) {
         console.error(e);
         return { success: false, error: e.message };
@@ -220,7 +232,8 @@ async function syncFlights(calendarId, accessToken, segments) {
         const end = seg.time ? { dateTime: (seg.arrivalDate && seg.arrivalTime) ? `${seg.arrivalDate}T${seg.arrivalTime}:00` : addHoursToLocalStr(`${seg.date}T${seg.time}:00`, 2), timeZone: tz } : { date: format(addHours(new Date(seg.date + 'T00:00:00'), 24), 'yyyy-MM-dd') };
 
         let eventId = seg.ticket.calendarIds?.[seg.id];
-        const body = { summary, start, end, description: `由管理系統自動建立。\n追蹤航班: https://flightaware.com/live/flight/${seg.flightNo}`, extendedProperties: { private: { reverseTicketApp: 'true', reverseTicketSegId: seg.id } } };
+        const faUrl = getFlightAwareUrl(seg.flightNo);
+        const body = { summary, start, end, description: `由管理系統自動建立。\n追蹤航班: ${faUrl}`, extendedProperties: { private: { reverseTicketApp: 'true', reverseTicketSegId: seg.id } } };
         const method = eventId ? 'PUT' : 'POST';
         const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events${eventId ? `/${eventId}` : ''}`;
 

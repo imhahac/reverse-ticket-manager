@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import { Plane, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import { lookupFlight, getOffsetDate } from '../services/flightService';
 import { CONFIG } from '../constants/config';
+import { buildLocalDateTimeStr, autoFixArrival } from '../utils/formUtils';
+import FlightSegmentInput from './FlightSegmentInput';
 
 const AIRPORTS = [
     'TPE (台北桃園)', 'TSA (台北松山)', 'KHH (高雄小港)', 'RMQ (台中清泉崗)',
@@ -127,49 +129,6 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
                 return;
             }
         }
-
-        const buildLocalDateTimeStr = (date, time) => {
-            if (!date) return '';
-            if (!time) return `${date}T00:00:00`;
-            return `${date}T${time}:00`;
-        };
-
-        const addOneDay = (dateStr) => {
-            const [y, m, d] = dateStr.split('-');
-            const date = new Date(y, m - 1, d);
-            date.setDate(date.getDate() + 1);
-            const yyyy = date.getFullYear();
-            const mm = String(date.getMonth() + 1).padStart(2, '0');
-            const dd = String(date.getDate()).padStart(2, '0');
-            return `${yyyy}-${mm}-${dd}`;
-        };
-
-        // Smart Cross-Day Fix：若抵達時間早於出發時間，自動 +1 天（紅眼航班）
-        // 回傳修正後的 { arrivalDate, arrivalTime }，或 null 代表驗證失敗
-        const autoFixArrival = (label, departDate, departTime, arrivalDate, arrivalTime) => {
-            const hasArrDate = Boolean(arrivalDate);
-            const hasArrTime = Boolean(arrivalTime);
-            if (hasArrDate !== hasArrTime) {
-                toast.error(`${label}：抵達日期/時間需同時填寫或同時留空`);
-                return null;
-            }
-            if (!hasArrDate && !hasArrTime) return { arrivalDate, arrivalTime, fixed: false };
-
-            const departStr = buildLocalDateTimeStr(departDate, departTime);
-            const arriveStr = buildLocalDateTimeStr(arrivalDate, arrivalTime);
-            if (departStr && new Date(arriveStr) < new Date(departStr)) {
-                // 只有「同日填錯」才自動修正；若跨日後還是早於出發，才報錯
-                const fixedDate = addOneDay(arrivalDate);
-                const fixedStr = buildLocalDateTimeStr(fixedDate, arrivalTime);
-                if (new Date(fixedStr) < new Date(departStr)) {
-                    toast.error(`${label}：抵達時間早於出發時間，且無法以 +1 天修正`);
-                    return null;
-                }
-                toast.info(`✈️ ${label}：已自動修正抵達日期 +1 天（紅眼航班跨日）`);
-                return { arrivalDate: fixedDate, arrivalTime, fixed: true };
-            }
-            return { arrivalDate, arrivalTime, fixed: false };
-        };
 
         const outDateTimeStr = buildLocalDateTimeStr(formData.outboundDate, formData.outboundTime);
         const inDateTimeStr = buildLocalDateTimeStr(formData.inboundDate, formData.inboundTime);
@@ -355,140 +314,40 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
 
                 {/* Row 3: Segment Dates & Times with adaptive labels based on type */}
                 <div className="col-span-1 md:col-span-2 lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                    <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 flex flex-col gap-3">
-                        <div>
-                            <label className="block text-sm font-bold text-indigo-900 mb-1">
-                                {formData.type === 'oneway' ? '出發日期與時間' : '第 1 段航班出發時間'}
-                                <span className="block text-xs text-indigo-600 font-normal mt-0.5">
-                                    ({isReverse ? formData.returnRegion : formData.departRegion} ✈️ {isReverse ? formData.departRegion : formData.returnRegion})
-                                </span>
-                            </label>
-                            <div className="flex flex-col sm:flex-row gap-2">
-                                <input
-                                    type="date"
-                                    className="flex-1 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
-                                    value={formData.outboundDate}
-                                    onChange={e => setFormData({ ...formData, outboundDate: e.target.value })}
-                                />
-                                <input
-                                    type="time"
-                                    step="600"
-                                    className="w-full sm:w-32 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
-                                    value={formData.outboundTime}
-                                    onChange={e => setFormData({ ...formData, outboundTime: e.target.value })}
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-indigo-800 mb-1">
-                                抵達日期與時間 (選填)
-                            </label>
-                            <div className="flex flex-col sm:flex-row gap-2">
-                                <input
-                                    type="date"
-                                    className="flex-1 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
-                                    value={formData.outboundArrivalDate || ''}
-                                    onChange={e => setFormData({ ...formData, outboundArrivalDate: e.target.value })}
-                                />
-                                <input
-                                    type="time"
-                                    step="600"
-                                    className="w-full sm:w-32 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
-                                    value={formData.outboundArrivalTime || ''}
-                                    onChange={e => setFormData({ ...formData, outboundArrivalTime: e.target.value })}
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-indigo-800 mb-1">航班編號 (支援自動帶入時間)</label>
-                            <div className="flex gap-2">
-                                <input
-                                    placeholder="例: BR192"
-                                    type="text"
-                                    className="flex-1 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow uppercase"
-                                    value={formData.outboundFlightNo}
-                                    onChange={e => setFormData({ ...formData, outboundFlightNo: e.target.value })}
-                                />
-                                <button
-                                    type="button"
-                                    disabled={isFetchingFlight}
-                                    onClick={() => handleAutofill('outbound')}
-                                    className="px-3 py-2 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded-lg font-bold text-xs transition-colors flex items-center shrink-0 disabled:opacity-50"
-                                    title="自動從 API 帶入時程"
-                                >
-                                    <Zap className="w-4 h-4 mr-1" /> 自動帶入
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    <FlightSegmentInput
+                        labelTitle={formData.type === 'oneway' ? '出發日期與時間' : '第 1 段航班出發時間'}
+                        routeText={`(${isReverse ? formData.returnRegion : formData.departRegion} ✈️ ${isReverse ? formData.departRegion : formData.returnRegion})`}
+                        date={formData.outboundDate}
+                        time={formData.outboundTime}
+                        arrivalDate={formData.outboundArrivalDate}
+                        arrivalTime={formData.outboundArrivalTime}
+                        flightNo={formData.outboundFlightNo}
+                        onDateChange={val => setFormData({ ...formData, outboundDate: val })}
+                        onTimeChange={val => setFormData({ ...formData, outboundTime: val })}
+                        onArrivalDateChange={val => setFormData({ ...formData, outboundArrivalDate: val })}
+                        onArrivalTimeChange={val => setFormData({ ...formData, outboundArrivalTime: val })}
+                        onFlightNoChange={val => setFormData({ ...formData, outboundFlightNo: val })}
+                        onAutofill={() => handleAutofill('outbound')}
+                        isFetchingFlight={isFetchingFlight}
+                    />
 
                     {formData.type !== 'oneway' && (
-                        <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 flex flex-col gap-3">
-                            <div>
-                                <label className="block text-sm font-bold text-indigo-900 mb-1">
-                                    第 2 段航班出發時間
-                                    <span className="block text-xs text-indigo-600 font-normal mt-0.5">
-                                        ({isReverse ? formData.departRegion : formData.returnRegion} ✈️ {isReverse ? formData.returnRegion : formData.departRegion})
-                                    </span>
-                                </label>
-                                <div className="flex flex-col sm:flex-row gap-2">
-                                    <input
-                                        type="date"
-                                        className="flex-1 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
-                                        value={formData.inboundDate}
-                                        onChange={e => setFormData({ ...formData, inboundDate: e.target.value })}
-                                    />
-                                    <input
-                                        type="time"
-                                        step="600"
-                                        className="w-full sm:w-32 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
-                                        value={formData.inboundTime}
-                                        onChange={e => setFormData({ ...formData, inboundTime: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-indigo-800 mb-1">
-                                    抵達日期與時間 (選填)
-                                </label>
-                                <div className="flex flex-col sm:flex-row gap-2">
-                                    <input
-                                        type="date"
-                                        className="flex-1 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
-                                        value={formData.inboundArrivalDate || ''}
-                                        onChange={e => setFormData({ ...formData, inboundArrivalDate: e.target.value })}
-                                    />
-                                    <input
-                                        type="time"
-                                        step="600"
-                                        className="w-full sm:w-32 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
-                                        value={formData.inboundArrivalTime || ''}
-                                        onChange={e => setFormData({ ...formData, inboundArrivalTime: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-indigo-800 mb-1">航班編號 (支援自動帶入時間)</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        placeholder="例: JX801"
-                                        type="text"
-                                        className="flex-1 p-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow uppercase"
-                                        value={formData.inboundFlightNo}
-                                        onChange={e => setFormData({ ...formData, inboundFlightNo: e.target.value })}
-                                    />
-                                    <button
-                                        type="button"
-                                        disabled={isFetchingFlight}
-                                        onClick={() => handleAutofill('inbound')}
-                                        className="px-3 py-2 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded-lg font-bold text-xs transition-colors flex items-center shrink-0 disabled:opacity-50"
-                                        title="自動從 API 帶入時程"
-                                    >
-                                        <Zap className="w-4 h-4 mr-1" /> 自動帶入
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                        <FlightSegmentInput
+                            labelTitle="第 2 段航班出發時間"
+                            routeText={`(${isReverse ? formData.departRegion : formData.returnRegion} ✈️ ${isReverse ? formData.returnRegion : formData.departRegion})`}
+                            date={formData.inboundDate}
+                            time={formData.inboundTime}
+                            arrivalDate={formData.inboundArrivalDate}
+                            arrivalTime={formData.inboundArrivalTime}
+                            flightNo={formData.inboundFlightNo}
+                            onDateChange={val => setFormData({ ...formData, inboundDate: val })}
+                            onTimeChange={val => setFormData({ ...formData, inboundTime: val })}
+                            onArrivalDateChange={val => setFormData({ ...formData, inboundArrivalDate: val })}
+                            onArrivalTimeChange={val => setFormData({ ...formData, inboundArrivalTime: val })}
+                            onFlightNoChange={val => setFormData({ ...formData, inboundFlightNo: val })}
+                            onAutofill={() => handleAutofill('inbound')}
+                            isFetchingFlight={isFetchingFlight}
+                        />
                     )}
                 </div>
 

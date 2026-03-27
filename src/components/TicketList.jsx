@@ -13,45 +13,18 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { Trash2, Calendar, Clock, Edit2, ExternalLink } from 'lucide-react';
 import { formatDateWithDay } from '../utils/dateHelpers';
+import { getFlightAwareUrl } from '../utils/flightUtils';
 
-const IATA_TO_ICAO = {
-    'CI': 'CAL', // China Airlines
-    'BR': 'EVA', // EVA Air
-    'CX': 'CPA', // Cathay Pacific
-    'JL': 'JAL', // Japan Airlines
-    'NH': 'ANA', // All Nippon Airways
-    'JX': 'SJW', // Starlux Airlines
-    'AE': 'MDA', // Mandarin Airlines
-    'GE': 'TNA', // TransAsia (Historical)
-    'IT': 'TTW', // Tigerair Taiwan
-    'MM': 'APJ', // Peach Aviation
-    'GK': 'JJP', // Jetstar Japan
-};
-
-const FlightLink = ({ flightNo, flightIcao }) => {
+const FlightLink = ({ flightNo }) => {
     if (!flightNo) return null;
-    
-    // Priority: 1. API provided ICAO, 2. Mapped ICAO, 3. Original flightNo
-    let targetNo = flightIcao;
-    
-    if (!targetNo && flightNo) {
-        const iataStr = flightNo.substring(0, 2).toUpperCase();
-        const numberPart = flightNo.substring(2);
-        if (IATA_TO_ICAO[iataStr]) {
-            targetNo = `${IATA_TO_ICAO[iataStr]}${numberPart}`;
-        } else {
-            targetNo = flightNo;
-        }
-    }
-
-    const url = `https://flightaware.com/live/flight/${targetNo}`;
+    const url = getFlightAwareUrl(flightNo);
     return (
         <a 
             href={url} 
             target="_blank" 
             rel="noopener noreferrer"
             className="ml-2 font-mono text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm hover:bg-indigo-100 hover:border-indigo-300 transition-colors flex items-center gap-1 group"
-            title={`在 FlightAware 追蹤 ${targetNo} (${flightNo})`}
+            title={`在 FlightAware 追蹤 ${flightNo}`}
         >
             {flightNo}
             <ExternalLink className="w-2 h-2 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -104,7 +77,7 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
                                     <div className="text-gray-500 mt-1 text-xs flex flex-wrap items-center gap-y-1">
                                        <Calendar className="w-3 h-3 mr-1" /> {formatDateWithDay(ticket.outboundDate)}
                                        {ticket.outboundTime && <><Clock className="w-3 h-3 ml-2 mr-1 text-slate-400" /> {ticket.outboundTime}</>}
-                                       <FlightLink flightNo={ticket.outboundFlightNo} flightIcao={ticket.outboundFlightICAO} />
+                                       <FlightLink flightNo={ticket.outboundFlightNo} />
                                     </div>
                                 </div>
                                 {ticket.type !== 'oneway' && (
@@ -113,7 +86,7 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
                                         <div className="text-gray-500 mt-1 text-xs flex flex-wrap items-center gap-y-1">
                                            <Calendar className="w-3 h-3 mr-1" /> {formatDateWithDay(ticket.inboundDate)}
                                            {ticket.inboundTime && <><Clock className="w-3 h-3 ml-2 mr-1 text-slate-400" /> {ticket.inboundTime}</>}
-                                           <FlightLink flightNo={ticket.inboundFlightNo} flightIcao={ticket.inboundFlightICAO} />
+                                           <FlightLink flightNo={ticket.inboundFlightNo} />
                                         </div>
                                     </div>
                                 )}
@@ -174,7 +147,7 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
                                             <div className="text-sm text-gray-500 mt-1 flex items-center">
                                                 <Calendar className="w-3 h-3 mr-1" /> {formatDateWithDay(ticket.outboundDate)}
                                                 {ticket.outboundTime && <><Clock className="w-3 h-3 ml-2 mr-1 text-slate-400" /> {ticket.outboundTime}</>}
-                                                <FlightLink flightNo={ticket.outboundFlightNo} flightIcao={ticket.outboundFlightICAO} />
+                                                <FlightLink flightNo={ticket.outboundFlightNo} />
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
@@ -183,7 +156,7 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
                                                 <div className="text-sm text-gray-500 mt-1 flex items-center">
                                                     <Calendar className="w-3 h-3 mr-1" /> {formatDateWithDay(ticket.inboundDate)}
                                                     {ticket.inboundTime && <><Clock className="w-3 h-3 ml-2 mr-1 text-slate-400" /> {ticket.inboundTime}</>}
-                                                    <FlightLink flightNo={ticket.inboundFlightNo} flightIcao={ticket.inboundFlightICAO} />
+                                                    <FlightLink flightNo={ticket.inboundFlightNo} />
                                                 </div>
                                             )}
                                         </td>
