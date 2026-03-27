@@ -39,6 +39,14 @@ export const AIRPORT_COORDINATES = {
     'AKL': { lat: -38.0036, lng: 174.7930 }  // 奧克蘭
 };
 
+/**
+ * 計算兩組經緯度之間的球面距離 (Haversine formula)
+ * 
+ * 🎨 業務規則解釋:
+ * - 我們使用 200km 作為「地點不匹配」的警戒線。
+ * - 理由：大多數大型國際機場（如 NRT 到 東京市區）距離約在 60-80km 內。
+ * - 若飯店距離機場超過 200km（例如飛往東京卻住在大阪），則極大機率是預訂錯誤或跨區行程，需提醒使用者。
+ */
 export function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
     if (!lat1 || !lon1 || !lat2 || !lon2) return null;
     const R = 6371; // 地球半徑 (km)

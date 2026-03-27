@@ -62,6 +62,16 @@ import HotelList from './features/hotels/components/HotelList';
 import ActivityForm from './components/ActivityForm';
 import ActivityList from './components/ActivityList';
 
+// ── Constants ──────────────────────────────────────────────────────────────
+const TABS = [
+    { key: 'timeline', label: '📆 行程 Timeline' },
+    { key: 'list',     label: '🎟️ 機票管理' },
+    { key: 'hotels',   label: '🏨 飯店管理' },
+    { key: 'activities', label: '🎫 票卷與活動' },
+    { key: 'calendar', label: '📅 月曆' },
+    { key: 'map',      label: '🗺️ 地圖' },
+];
+
 function App() {
     // ── 持久化資料 ───────────────────────────────────────────────────────────
     const [tickets, setTickets] = useLocalStorage('reverse-tickets', []);
@@ -275,15 +285,6 @@ function App() {
         e.target.value = '';
     };
 
-    // ── Tab 設定 ──────────────────────────────────────────────────────────────
-    const TABS = [
-        { key: 'timeline', label: '📆 行程 Timeline' },
-        { key: 'list',     label: '🎟️ 機票管理' },
-        { key: 'hotels',   label: '🏨 飯店管理' },
-        { key: 'activities', label: '🎫 票卷與活動' },
-        { key: 'calendar', label: '📅 月曆' },
-        { key: 'map',      label: '🗺️ 地圖' },
-    ];
 
     // ── Render (Nuclear Protection Mode) ─────────────────────────────────────
     if (renderError) {

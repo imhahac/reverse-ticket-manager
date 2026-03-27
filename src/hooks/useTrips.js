@@ -58,7 +58,11 @@ export const useTrips = (tickets) => {
                 const arrTimeStr = arrTime ? `T${arrTime}:00` : 'T00:00:00';
                 const arrDt = arrDate ? new Date(`${arrDate}${arrTimeStr}`) : null;
                 
-                // 業務邏輯驗證：抵達時間不可早於出發時間
+                // 🎨 業務邏輯驗證 (Time Paradox Detection):
+                // 如果系統計算出抵達時間早於出發時間，通常代表：
+                // 1. 使用者輸入錯誤。
+                // 2. 跨越國際換日線時，輸入的抵達日期未正確 +1 天。
+                // 我們會將此片段標記為 isLogical: false，並在 UI 上給予視覺提示。
                 const isLogical = (arrDt && dt && dt.getTime() > 0) ? (arrDt >= dt) : true;
 
                 return {
@@ -114,6 +118,12 @@ export const useTrips = (tickets) => {
                     inbound: null,
                     isComplete: false,
                 };
+                
+                // 🎨 Smart Grouping 配對邏輯 (Greedy Boundary Matching):
+                // 1. 我們將「台灣機場」 (Home Base) 定義為趟次的邊界。
+                // 2. 只要目的地不是台灣，就視為「在旅途中」，持續將後續航段與飯店塞入同一個 Trip。
+                // 3. 一旦抵達台灣機場，該趟次立即結案 (isComplete = true)。
+                // 4. 若在結案前又發現一段從台灣出發，則強制切割並開啟新行程（處理資料不連貫或開口票）。
 
                 if (isTaiwan(seg.to)) {
                     // 特殊情況：此段直接抵達台灣（可能是純回程孤兒票）

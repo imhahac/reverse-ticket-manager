@@ -1,5 +1,14 @@
 import { useMemo } from 'react';
 
+/**
+ * useTripSchedule.js ── 行程時間軸佈局 Hook (Timeline Layout)
+ * 
+ * 🎨 運作邏輯:
+ * 1. 收集所有相關日期: 航班出發/抵達、飯店 Check-in/Out、活動日期。
+ * 2. 過濾重複並升冪排序，決定行程涵蓋的所有「關鍵日期」。
+ * 3. 以第一個日期為 Day 1，計算各日期對應的相對天數 (dayNum)。
+ * 4. 將航段、飯店、活動分別過濾並歸類至對應的日期物件中，供 UI 渲染。
+ */
 export const useTripSchedule = (segments, matchedHotels, matchedActivities) => {
     return useMemo(() => {
         const dateSet = new Set([
