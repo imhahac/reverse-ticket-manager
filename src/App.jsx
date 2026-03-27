@@ -44,6 +44,8 @@ import { useActivities } from './components/useActivities';
 import { useDecoratedTrips } from './hooks/useDecoratedTrips';
 import { useFilteredItems } from './hooks/useFilteredItems';
 import { exportData, importData } from './utils/importExportUtils';
+import { validateConfig } from './constants/config';
+import { processGeocodedEntity } from './utils/entityUtils';
 
 // ── UI Components ──────────────────────────────────────────────────────────
 import { geocodeAddress } from './utils/geoUtils';
@@ -90,6 +92,11 @@ function App() {
 
     // ── Activities Hook ──────────────────────────────────────────────────────
     const { activities = [], setActivities, addActivity, updateActivity, deleteActivity, updateActivityCalendarId } = useActivities();
+
+    // ── 組件掛載初始化 ────────────────────────────────────────────────────────
+    useEffect(() => {
+        validateConfig();
+    }, []);
 
     // ── Google Sync ──────────────────────────────────────────────────────────
     // 處理地圖選取單一行程
@@ -175,25 +182,11 @@ function App() {
     const handleCancelEdit = () => setEditingTicket(null);
 
     // ── 飯店 CRUD ─────────────────────────────────────────────────────────────
-    const saveWithGeocoding = async ({
+    const saveEntityWithUI = async ({
         item, titleField, locationField, updateFn, addFn, setEditingFn, setIsSavingFn, isEditing, itemName
     }) => {
         setIsSavingFn(true);
-        const query = `${item[titleField] || ''} ${item[locationField] || ''}`.trim();
-        let geoSuccess = false;
-        let enrichedItem = { ...item };
-
-        if (query) {
-            try {
-                const geoResult = await geocodeAddress(query);
-                if (geoResult) {
-                    enrichedItem = { ...enrichedItem, lat: geoResult.lat, lng: geoResult.lng };
-                    geoSuccess = true;
-                }
-            } catch (e) {
-                console.error('Failed to geocode address:', e);
-            }
-        }
+        const { enrichedItem, geoSuccess, query } = await processGeocodedEntity(item, titleField, locationField);
 
         if (isEditing) {
             updateFn(enrichedItem);
@@ -218,7 +211,7 @@ function App() {
     };
 
     const handleSaveHotel = async (hotel) => {
-        await saveWithGeocoding({
+        await saveEntityWithUI({
             item: hotel, titleField: 'name', locationField: 'address',
             updateFn: updateHotel, addFn: addHotel, setEditingFn: setEditingHotel,
             setIsSavingFn: setIsSavingHotel, isEditing: !!editingHotel, itemName: '飯店'
@@ -237,7 +230,7 @@ function App() {
 
     // ── 票卷與活動 CRUD ─────────────────────────────────────────────────────────────
     const handleSaveActivity = async (activity) => {
-        await saveWithGeocoding({
+        await saveEntityWithUI({
             item: activity, titleField: 'title', locationField: 'location',
             updateFn: updateActivity, addFn: addActivity, setEditingFn: setEditingActivity,
             setIsSavingFn: setIsSavingActivity, isEditing: !!editingActivity, itemName: '活動'

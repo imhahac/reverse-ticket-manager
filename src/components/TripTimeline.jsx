@@ -7,7 +7,12 @@
  *  2. [重構] 抽取 TripCard 元件，消除未來/歷史區塊約 300 行完全重複的程式碼
  *  3. [細節] 防呆：seg.ticket?.airline 改用可選鏈，避免孤兒段 crash
  */
-import React, { useMemo, useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import PropTypes from 'prop-types';
+import { 
+    Plane, Calendar, Clock, MapPin, CheckCircle, ExternalLink, 
+    AlertCircle, ChevronDown, ChevronUp, ArrowRight, Home
+} from 'lucide-react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import {
     AlertTriangle, ArrowRight, Edit3, Check, X, Hotel, Eye, EyeOff,

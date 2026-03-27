@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import { toast } from 'sonner';
 import { Plane, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import { lookupFlight, getOffsetDate } from '../services/flightService';
+import { CONFIG } from '../constants/config';
 
 const AIRPORTS = [
     'TPE (台北桃園)', 'TSA (台北松山)', 'KHH (高雄小港)', 'RMQ (台中清泉崗)',
@@ -52,12 +54,12 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
             return;
         }
 
-        const avKey = import.meta.env.VITE_AVIATIONSTACK_API_KEY;
-        const alKey = import.meta.env.VITE_AIRLABS_API_KEY;
+        const avKey = CONFIG.aviationStackKey;
+        const alKey = CONFIG.airLabsKey;
 
         if (!avKey && !alKey) {
             toast.error('尚未設定 API 金鑰', {
-                description: '請在 GitHub Secrets 中加入 VITE_AVIATIONSTACK_API_KEY 或 VITE_AIRLABS_API_KEY。'
+                description: '請在 GitHub Secrets 或 .env 中加入對應的金鑰。'
             });
             return;
         }
@@ -103,7 +105,7 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
         };
 
         try {
-            const flightData = await lookupFlight(flightNo, flightDate, avKey, alKey);
+            const flightData = await lookupFlight(flightNo, flightDate);
             applyData(flightData, flightData.sourceLabel);
         } catch (err) {
             toast.error(`查詢失敗：${err.message}`, { id: toastId });
@@ -506,3 +508,10 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
         </div>
     );
 }
+
+TicketForm.propTypes = {
+    onSubmit: PropTypes.func.isRequired,
+    initialData: PropTypes.object,
+    onCancel: PropTypes.func,
+    isEditing: PropTypes.bool
+};

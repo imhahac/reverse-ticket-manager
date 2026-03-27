@@ -38,8 +38,20 @@ export const useTrips = (tickets) => {
             // 建構出發/抵達的 Date 物件，供排序用
             const outTime = t.outboundTime ? `T${t.outboundTime}:00` : 'T00:00:00';
             const inTime  = t.inboundTime  ? `T${t.inboundTime}:00`  : 'T00:00:00';
-            const outDateTime = new Date(`${t.outboundDate}${outTime}`);
-            const inDateTime  = new Date(`${t.inboundDate}${inTime}`);
+            const outDateTimeStr = t.outboundDate ? `${t.outboundDate}${outTime}` : null;
+            const inDateTimeStr = t.inboundDate ? `${t.inboundDate}${inTime}` : null;
+            let outDateTime = outDateTimeStr ? new Date(outDateTimeStr) : new Date(0);
+            let inDateTime  = inDateTimeStr ? new Date(inDateTimeStr) : new Date(0);
+
+            // Fallback for Invalid Date issues
+            if (isNaN(outDateTime.getTime())) {
+                console.warn(`[useTrips] Invalid outbound date for ticket ${t.id}: ${outDateTimeStr}`);
+                outDateTime = new Date(0);
+            }
+            if (isNaN(inDateTime.getTime())) {
+                console.warn(`[useTrips] Invalid inbound date for ticket ${t.id}: ${inDateTimeStr}`);
+                inDateTime = new Date(0);
+            }
 
             // 共用欄位建構 helper，避免重複程式碼
             const buildSeg = (suffix, date, time, arrDate, arrTime, flightNo, dt, from, to) => ({
@@ -69,7 +81,14 @@ export const useTrips = (tickets) => {
         });
 
         // ── Step 2：按出發時間升冪排序 ────────────────────────────────────────
-        segments.sort((a, b) => a.dateTime - b.dateTime);
+        segments.sort((a, b) => {
+            const timeA = a.dateTime.getTime();
+            const timeB = b.dateTime.getTime();
+            if (isNaN(timeA) && isNaN(timeB)) return 0;
+            if (isNaN(timeA)) return 1;
+            if (isNaN(timeB)) return -1;
+            return timeA - timeB;
+        });
 
         // ── Step 3：掃描航段，依台灣邊界配對成趟次 ───────────────────────────
         let trips = [];

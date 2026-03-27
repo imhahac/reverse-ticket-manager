@@ -58,10 +58,14 @@ export function useGoogleAuth() {
         },
         onError: (error) => {
             console.error('Login Failed:', error);
-            toast.error('Google 登入失敗', {
-                description: `錯誤訊息: ${error?.error_description || error?.error || '未知錯誤'}。請確認 Client ID 與已授權的 JavaScript 來源。`,
-                duration: 8000,
-            });
+            if (error?.error === 'popup_closed_by_user') {
+                toast.error('您已取消 Google 登入', { duration: 4000 });
+            } else {
+                toast.error('Google 登入失敗', {
+                    description: `錯誤訊息: ${error?.error_description || error?.error || '未知錯誤'}。請確認 Client ID 與已授權的 JavaScript 來源。`,
+                    duration: 8000,
+                });
+            }
         },
     });
 
@@ -83,11 +87,21 @@ export function useGoogleAuth() {
         }
         return new Promise((resolve) => {
             refreshResolverRef.current = resolve;
-            silentLogin();
+            
+            try {
+                silentLogin();
+            } catch (e) {
+                console.error("Silent login trigger failed:", e);
+                refreshResolverRef.current(false);
+                refreshResolverRef.current = null;
+                return;
+            }
+
             setTimeout(() => {
                 if (refreshResolverRef.current) {
                     refreshResolverRef.current(false);
                     refreshResolverRef.current = null;
+                    toast.error('Google Token 更新超時', { description: '若持續出現異常，請手動重新登入。' });
                 }
             }, 8000);
         });

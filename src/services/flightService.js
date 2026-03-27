@@ -3,6 +3,8 @@
  * 獨立處理航班時刻表的查詢與快取邏輯
  */
 
+import { CONFIG } from '../constants/config';
+
 // Caching Setup
 const CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 1 week
 
@@ -36,7 +38,8 @@ const getTimeFromISO = (isoStr) => {
 };
 
 // AviationStack API
-const tryAviationStack = async (flightNo, flightDate, avKey) => {
+const tryAviationStack = async (flightNo, flightDate) => {
+    const avKey = CONFIG.aviationStackKey;
     if (!avKey) return null;
     const targetUrl = `http://api.aviationstack.com/v1/flights?access_key=${avKey}&flight_iata=${flightNo}`;
     const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
@@ -70,7 +73,8 @@ const tryAviationStack = async (flightNo, flightDate, avKey) => {
 };
 
 // AirLabs API
-const tryAirLabs = async (flightNo, alKey) => {
+const tryAirLabs = async (flightNo) => {
+    const alKey = CONFIG.airLabsKey;
     if (!alKey) return null;
     const targetUrl = `https://airlabs.co/api/v9/routes?api_key=${alKey}&flight_iata=${flightNo}`;
     const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
@@ -105,7 +109,7 @@ const tryAirLabs = async (flightNo, alKey) => {
     };
 };
 
-export const lookupFlight = async (flightNo, flightDate, avKey, alKey) => {
+export const lookupFlight = async (flightNo, flightDate) => {
     const cacheKey = `fcache_${flightNo.toUpperCase()}`;
 
     // 1. Check Cache
@@ -122,10 +126,10 @@ export const lookupFlight = async (flightNo, flightDate, avKey, alKey) => {
     }
 
     // 2. Try APIs
-    let flightData = await tryAviationStack(flightNo, flightDate, avKey);
+    let flightData = await tryAviationStack(flightNo, flightDate);
     if (!flightData) {
         console.log('AviationStack failed/empty, trying AirLabs...');
-        flightData = await tryAirLabs(flightNo, alKey);
+        flightData = await tryAirLabs(flightNo);
     }
 
     if (!flightData) throw new Error(`找不到航班 ${flightNo.toUpperCase()} 的有效資訊`);

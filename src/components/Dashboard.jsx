@@ -14,6 +14,7 @@
  *   sunkCostTWD      {number} 未配對沉沒成本
  */
 import React from 'react';
+import PropTypes from 'prop-types';
 import { ListFilter, Plane, Building2 } from 'lucide-react';
 
 export default function Dashboard({
@@ -124,3 +125,17 @@ export default function Dashboard({
         </div>
     );
 }
+
+Dashboard.propTypes = {
+    ticketCount: PropTypes.number.isRequired,
+    tripCount: PropTypes.number.isRequired,
+    hotelCount: PropTypes.number,
+    activityCount: PropTypes.number,
+    totalPriceTWD: PropTypes.number.isRequired,
+    totalHotelTWD: PropTypes.number,
+    totalActivityTWD: PropTypes.number,
+    futureCostTWD: PropTypes.number.isRequired,
+    pastCostTWD: PropTypes.number.isRequired,
+    sunkCostTWD: PropTypes.number.isRequired,
+    totalTripDays: PropTypes.number,
+};
