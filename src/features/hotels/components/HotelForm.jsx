@@ -14,6 +14,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { Building2, CalendarDays, Banknote, Hash, MapPin, FileText, X, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { toast } from 'sonner';
 import { convertToTWD } from '../../../utils/currency';
 
 const EMPTY = {
@@ -65,13 +66,11 @@ export default function HotelForm({ onSaveHotel, editingHotel, onCancelEdit, exc
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!form.name || !form.checkIn || !form.checkOut) {
-            import('sonner').then(({ toast }) =>
-                toast.error('請填寫飯店名稱、入住日期與退房日期'));
+            toast.error('請填寫飯店名稱、入住日期與退房日期');
             return;
         }
         if (nights === null || nights <= 0) {
-            import('sonner').then(({ toast }) =>
-                toast.error('退房日期必須晚於入住日期'));
+            toast.error('退房日期必須晚於入住日期');
             return;
         }
         const hotel = {

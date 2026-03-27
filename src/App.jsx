@@ -234,21 +234,19 @@ function App() {
     const handleImport = (e) => {
         const file = e.target.files[0];
         importData(file, (data) => {
-            import('sonner').then(({ toast }) =>
-                toast(`成功讀取 ${data.newTickets.length} 筆機票、${data.newHotels.length} 筆住宿、${data.newActivities.length} 筆活動`, {
-                    action: { label: '確認覆寫', onClick: () => {
-                        setTickets(data.newTickets);
-                        setTripLabels(data.newLabels);
-                        if (data.newHotels.length > 0) setHotels(data.newHotels);
-                        if (data.newActivities.length > 0) setActivities(data.newActivities);
-                        toast.success('匯入成功！');
-                    }},
-                    cancel: { label: '取消', onClick: () => {} },
-                    duration: 10000,
-                })
-            );
+            toast(`成功讀取 ${data.newTickets.length} 筆機票、${data.newHotels.length} 筆住宿、${data.newActivities.length} 筆活動`, {
+                action: { label: '確認覆寫', onClick: () => {
+                    setTickets(data.newTickets);
+                    setTripLabels(data.newLabels);
+                    if (data.newHotels.length > 0) setHotels(data.newHotels);
+                    if (data.newActivities.length > 0) setActivities(data.newActivities);
+                    toast.success('匯入成功！');
+                }},
+                cancel: { label: '取消', onClick: () => {} },
+                duration: 10000,
+            });
         }, (err) => {
-            import('sonner').then(({ toast }) => toast.error('匯入失敗', { description: err.message || '檔案格式錯誤或損毀。' }));
+            toast.error('匯入失敗', { description: err.message || '檔案格式錯誤 or 損毀。' });
         });
         e.target.value = '';
     };
@@ -439,14 +437,12 @@ function App() {
                         )}
                         {activeTab === 'list' && (
                             <TicketList tickets={filteredTickets} onDelete={(id) => {
-                                import('sonner').then(({ toast }) =>
-                                    toast('確定要刪除這筆機票訂單嗎？', {
-                                        description: '相關的趟次配對將會被移除。',
-                                        action: { label: '確認刪除', onClick: () => setTickets(prev => prev.filter(t => t.id !== id)) },
-                                        cancel: { label: '取消', onClick: () => {} },
-                                        duration: 8000,
-                                    })
-                                );
+                                toast('確定要刪除這筆機票訂單嗎？', {
+                                    description: '相關的趟次配對將會被移除。',
+                                    action: { label: '確認刪除', onClick: () => setTickets(prev => prev.filter(t => t.id !== id)) },
+                                    cancel: { label: '取消', onClick: () => {} },
+                                    duration: 8000,
+                                });
                             }} onEdit={handleEditTicket} />
                         )}
                         {activeTab === 'hotels' && (
