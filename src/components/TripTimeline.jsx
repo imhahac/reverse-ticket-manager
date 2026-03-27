@@ -10,14 +10,11 @@
 import React, { useState, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { 
-    Plane, Calendar, Clock, MapPin, CheckCircle, ExternalLink, 
-    AlertCircle, ChevronDown, ChevronUp, ArrowRight, Home
+    AlertTriangle, ArrowRight, Edit3, Check, X, Hotel, Eye, EyeOff,
+    PlaneTakeoff, PlaneLanding, Clock, CheckCircle2, Plane, Ticket, Tag,
+    Calendar, MapPin, CheckCircle, ExternalLink, AlertCircle, ChevronDown, 
 } from 'lucide-react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import {
-    AlertTriangle, ArrowRight, Edit3, Check, X, Hotel, Eye, EyeOff,
-    PlaneTakeoff, PlaneLanding, Clock, CheckCircle2, Plane, Ticket, Tag
-} from 'lucide-react';
 import { formatDateWithDay } from '../utils/dateHelpers';
 import HotelStayCard from '../features/hotels/components/HotelStayCard';
 import { useTripSchedule } from '../hooks/useTripSchedule';

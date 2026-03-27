@@ -6,6 +6,7 @@
  *   v7.1 - 住宿警告改為直接使用 trip.hotelWarnings（來自 useItinerary），避免重複計算
  */
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import { ArrowRight } from 'lucide-react';
 
 export default function TripCalendar({ trips = [], tripLabels = {} }) {
@@ -257,3 +258,8 @@ export default function TripCalendar({ trips = [], tripLabels = {} }) {
         </div>
     );
 }
+
+TripCalendar.propTypes = {
+    trips: PropTypes.array.isRequired,
+    tripLabels: PropTypes.object
+};

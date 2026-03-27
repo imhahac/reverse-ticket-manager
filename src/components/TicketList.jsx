@@ -10,6 +10,7 @@
  *   - 為避免行動裝置排版跑版，管理按鈕已用 div 包覆確保佈局穩定。
  */
 import React from 'react';
+import PropTypes from 'prop-types';
 import { Trash2, Calendar, Clock, Edit2, ExternalLink } from 'lucide-react';
 import { formatDateWithDay } from '../utils/dateHelpers';
 
@@ -216,3 +217,9 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
         </div>
     );
 }
+
+TicketList.propTypes = {
+    tickets: PropTypes.array.isRequired,
+    onDelete: PropTypes.func.isRequired,
+    onEdit: PropTypes.func.isRequired
+};
