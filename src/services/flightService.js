@@ -37,17 +37,46 @@ const getTimeFromISO = (isoStr) => {
     return tech ? tech.substring(0, 5) : '';
 };
 
+/**
+ * 通用的 Proxy Fetch 輔助函式
+ * 嘗試多個 Proxy 以提高穩定性
+ */
+const fetchWithProxy = async (targetUrl) => {
+    // 1. 嘗試 corsproxy.io (目前較穩定)
+    try {
+        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
+        if (res.ok) {
+            const text = await res.text();
+            if (text) return JSON.parse(text);
+        }
+    } catch (e) {
+        console.warn('corsproxy.io failed, trying allorigins...');
+    }
+
+    // 2. 嘗試 allorigins.win
+    try {
+        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}&timestamp=${Date.now()}`);
+        if (res.ok) {
+            const wrapped = await res.json();
+            if (wrapped.contents) return JSON.parse(wrapped.contents);
+        }
+    } catch (e) {
+        console.warn('allorigins.win failed');
+    }
+
+    return null;
+};
+
 // AviationStack API
 const tryAviationStack = async (flightNo, flightDate) => {
     const avKey = CONFIG.aviationStackKey;
     if (!avKey) return null;
+    
+    // AviationStack 免費版僅支援 http
     const targetUrl = `http://api.aviationstack.com/v1/flights?access_key=${avKey}&flight_iata=${flightNo}`;
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-    const res = await fetch(proxyUrl);
-    const wrapped = await res.json();
-    if (!wrapped.contents) return null;
-    const data = JSON.parse(wrapped.contents);
-    if (data.error || !data.data || data.data.length === 0) return null;
+    const data = await fetchWithProxy(targetUrl);
+    
+    if (!data || data.error || !data.data || data.data.length === 0) return null;
     
     const scheduledFlights = data.data.filter(f => f.flight_date >= flightDate);
     const flight = scheduledFlights.length > 0 ? scheduledFlights[0] : data.data[0];
@@ -76,13 +105,22 @@ const tryAviationStack = async (flightNo, flightDate) => {
 const tryAirLabs = async (flightNo) => {
     const alKey = CONFIG.airLabsKey;
     if (!alKey) return null;
+    
     const targetUrl = `https://airlabs.co/api/v9/routes?api_key=${alKey}&flight_iata=${flightNo}`;
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-    const res = await fetch(proxyUrl);
-    const wrapped = await res.json();
-    if (!wrapped.contents) return null;
-    const data = JSON.parse(wrapped.contents);
-    if (!data.response || data.response.length === 0) return null;
+    
+    // AirLabs 是 https，優先嘗試直接連線 (部分 API 可能支援 CORS)
+    try {
+        const res = await fetch(targetUrl);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.response && data.response.length > 0) return data;
+        }
+    } catch (e) {
+        // 直接連線失敗通常是 CORS 問題，繼續使用 Proxy
+    }
+
+    const data = await fetchWithProxy(targetUrl);
+    if (!data || !data.response || data.response.length === 0) return null;
 
     const flight = data.response[0];
     
