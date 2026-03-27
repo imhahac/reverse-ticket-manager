@@ -25,7 +25,7 @@
  *   🏨 飯店管理
  *   📅 月曆
  */
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Plane, Calendar, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn } from 'lucide-react';
 
 // ── Hooks ──────────────────────────────────────────────────────────────────
