@@ -19,50 +19,40 @@
 
 ## 第三步：🛡️ 航班 API 的安全性部署 (Cloudflare Workers Proxy)
 
-**⚠️ 嚴重警告**：因為這個專案沒有後端，所有寫在 GitHub Secrets (`VITE_AVIATIONSTACK_API_KEY`) 的變數，在網頁上線後，**任何人都能透過 F12 瀏覽器開發者工具直接看到您的金鑰，進而盜刷您的 API 額度** (`Google OAuth ID` 與 `Mapbox` 屬於公開金鑰則無此風險)。
+**⚠️ 嚴重警告**：本專案為無後端架構，若直接將航班查詢 API (AviationStack/AirLabs) 金鑰放進 GitHub Secrets 作為純前端變數，網頁上線後任何人都可透過瀏覽器 (F12) 看見您的金鑰並盜刷額度。
 
-如果您想開啟航班查詢功能，**強烈建議使用免費的 [Cloudflare Workers](https://workers.cloudflare.com/) 架設 Proxy 來隱藏付費金鑰**：
+為了解決此安全風險，我們在專案原始碼中提供了一個預先寫好的 Proxy 腳本 (`cloudflare-worker/worker.js`)。請跟隨以下步驟，免費架設您的專屬 Serverless Proxy 來隱藏付費金鑰：
 
-**1. 建立 Worker 專案**
+**1. 初始化 Worker 環境**
+請開啟終端機並確保已安裝 [Node.js](https://nodejs.org/)。
 ```bash
-npm create cloudflare@latest flight-proxy
-cd flight-proxy
+# 進入專案內的 worker 目錄
+cd cloudflare-worker
+
+# 全域安裝 Cloudflare 的命令列工具 Wrangler
+npm install -g wrangler
 ```
 
-**2. 撰寫通訊與跨域防護邏輯 (編輯 `src/index.js`)**
-```javascript
-export default {
-  async fetch(request, env) {
-    // 限制只能從您的 GitHub Pages 呼叫
-    const allowedOrigin = "https://your_username.github.io";
-    
-    if (request.method === "OPTIONS") {
-      return new Response(null, { headers: { "Access-Control-Allow-Origin": allowedOrigin } });
-    }
-
-    const url = new URL(request.url);
-    const flight = url.searchParams.get('flight');
-    if (!flight) return new Response("Missing flight param", { status: 400 });
-
-    // 透過隱藏在 Cloudflare 伺服器的金鑰發送真實請求
-    const targetUrl = `http://api.aviationstack.com/v1/flights?access_key=${env.AVIATIONSTACK_API_KEY}&flight_iata=${flight}`;
-    const response = await fetch(targetUrl);
-    
-    return new Response(JSON.stringify(await response.json()), {
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": allowedOrigin }
-    });
-  }
-};
-```
-
-**3. 將金鑰加密推上 Cloudflare 並部署**
+**2. 將金鑰加密推上 Cloudflare 伺服器**
+請**不要**將金鑰寫進程式碼。利用 Wrangler 將您申請的金鑰安全地儲存為雲端變數：
 ```bash
-npx wrangler secret put AVIATIONSTACK_API_KEY
-# 終端機會提示您貼上您真正的 Aviation API 金鑰
+wrangler secret put AVIATIONSTACK_API_KEY
+# 終端機會提示您，請貼上真正的 AviationStack API 金鑰
 
-npx wrangler deploy
-# 部署完成後，您會獲得一段專屬的安全網址，例如 https://flight-proxy.yourname.workers.dev
+wrangler secret put AIRLABS_API_KEY
+# 終端機會提示您，請貼上真正的 AirLabs API 金鑰
 ```
 
-**4. 替換前端連線**
-最後，回到本專案的原始碼 `src/services/flightService.js` 中，將原本打給 AviationStack 的區塊，改為呼叫您自己的 Worker URL 即可。這樣原本寫在 GitHub Secrets 裡危險的 `VITE_AVIATIONSTACK...` 變數就可以安全移除了！
+**3. 部署 Proxy 上線**
+```bash
+wrangler deploy
+# 部署完成後，您會獲得一段專屬的安全網址
+# (例如：https://flight-proxy.yourname.workers.dev)
+```
+
+**4. 替換 GitHub Secrets 連線設定**
+取得那段專屬網址後，請回到您 GitHub Repo 的 `Settings` > `Secrets and variables` > `Actions`：
+- **新增** `VITE_FLIGHT_PROXY_URL`，值設為剛才取得的 Proxy 網址 (Ex: `https://flight-proxy.yourname.workers.dev`)。
+- *(如果您之前有設定 `VITE_AVIATIONSTACK...` 等變數，為確保安全，強烈建議將它們刪除)*。
+
+完成！系統前端原始碼已經過全面加固，會自動統一透過您架設的 Proxy 來向 AviationStack 與 AirLabs 發起安全的請求！

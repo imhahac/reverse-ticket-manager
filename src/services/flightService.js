@@ -44,114 +44,86 @@ const getTimeFromISO = (isoStr) => {
     return tech ? tech.substring(0, 5) : '';
 };
 
-/**
- * 通用的 Proxy Fetch 輔助函式
- * 嘗試多個 Proxy 以提高穩定性
- */
-const fetchWithProxy = async (targetUrl) => {
-    // 1. 嘗試 corsproxy.io (目前較穩定)
-    try {
-        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`);
-        if (res.ok) {
-            const text = await res.text();
-            if (text) return JSON.parse(text);
-        }
-    } catch (e) {
-        console.warn('corsproxy.io failed, trying allorigins...');
-    }
-
-    // 2. 嘗試 allorigins.win
-    try {
-        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}&timestamp=${Date.now()}`);
-        if (res.ok) {
-            const wrapped = await res.json();
-            if (wrapped.contents) return JSON.parse(wrapped.contents);
-        }
-    } catch (e) {
-        console.warn('allorigins.win failed');
-    }
-
-    return null;
-};
-
-// AviationStack API
+// AviationStack 透過自建 Proxy 查詢
 const tryAviationStack = async (flightNo, flightDate) => {
-    const avKey = CONFIG.aviationStackKey;
-    if (!avKey) return null;
+    const proxyUrl = CONFIG.flightProxyUrl;
+    if (!proxyUrl) return null;
     
-    // AviationStack 免費版僅支援 http
-    const targetUrl = `http://api.aviationstack.com/v1/flights?access_key=${avKey}&flight_iata=${flightNo}`;
-    const data = await fetchWithProxy(targetUrl);
-    
-    if (!data || data.error || !data.data || data.data.length === 0) return null;
-    
-    const scheduledFlights = data.data.filter(f => f.flight_date >= flightDate);
-    const flight = scheduledFlights.length > 0 ? scheduledFlights[0] : data.data[0];
-    if (!flight.departure || !flight.arrival) return null;
+    try {
+        const targetUrl = `${proxyUrl}?api=aviationstack&flight=${flightNo}`;
+        const res = await fetch(targetUrl);
+        if (!res.ok) throw new Error("AviationStack Proxy failed");
+        
+        const data = await res.json();
+        if (!data || data.error || !data.data || data.data.length === 0) return null;
+        
+        const scheduledFlights = data.data.filter(f => f.flight_date >= flightDate);
+        const flight = scheduledFlights.length > 0 ? scheduledFlights[0] : data.data[0];
+        if (!flight.departure || !flight.arrival) return null;
 
-    const depDateRaw = getSafeDateFromISO(flight.departure.scheduled, flight.flight_date);
-    const arrDateRaw = getSafeDateFromISO(flight.arrival.scheduled, depDateRaw);
-    const depD = parseLocalDate(depDateRaw);
-    const arrD = parseLocalDate(arrDateRaw);
-    
-    return {
-        depTime: getTimeFromISO(flight.departure.scheduled),
-        arrTime: getTimeFromISO(flight.arrival.scheduled),
-        dayOffset: Math.round((arrD - depD) / (86400000)),
-        airline: flight.airline ? flight.airline.name : '',
-        flightIcao: flight.flight ? flight.flight.icao : '',
-        originIata: flight.departure.iata || '',
-        originName: flight.departure.airport || '',
-        destIata: flight.arrival.iata || '',
-        destName: flight.arrival.airport || '',
-        source: 'AviationStack'
-    };
+        const depDateRaw = getSafeDateFromISO(flight.departure.scheduled, flight.flight_date);
+        const arrDateRaw = getSafeDateFromISO(flight.arrival.scheduled, depDateRaw);
+        const depD = parseLocalDate(depDateRaw);
+        const arrD = parseLocalDate(arrDateRaw);
+        
+        return {
+            depTime: getTimeFromISO(flight.departure.scheduled),
+            arrTime: getTimeFromISO(flight.arrival.scheduled),
+            dayOffset: Math.round((arrD - depD) / (86400000)),
+            airline: flight.airline ? flight.airline.name : '',
+            flightIcao: flight.flight ? flight.flight.icao : '',
+            originIata: flight.departure.iata || '',
+            originName: flight.departure.airport || '',
+            destIata: flight.arrival.iata || '',
+            destName: flight.arrival.airport || '',
+            source: 'AviationStack (Proxy)'
+        };
+    } catch (e) {
+        console.warn('AviationStack proxy error:', e);
+        return null;
+    }
 };
 
-// AirLabs API
+// AirLabs 透過自建 Proxy 查詢
 const tryAirLabs = async (flightNo) => {
-    const alKey = CONFIG.airLabsKey;
-    if (!alKey) return null;
+    const proxyUrl = CONFIG.flightProxyUrl;
+    if (!proxyUrl) return null;
     
-    const targetUrl = `https://airlabs.co/api/v9/routes?api_key=${alKey}&flight_iata=${flightNo}`;
-    
-    // AirLabs 是 https，優先嘗試直接連線 (部分 API 可能支援 CORS)
     try {
+        const targetUrl = `${proxyUrl}?api=airlabs&flight=${flightNo}`;
         const res = await fetch(targetUrl);
-        if (res.ok) {
-            const data = await res.json();
-            if (data.response && data.response.length > 0) return data;
+        if (!res.ok) throw new Error("AirLabs Proxy failed");
+        
+        const data = await res.json();
+        if (!data || !data.response || data.response.length === 0) return null;
+
+        const flight = data.response[0];
+        
+        const depT = flight.dep_time || '';
+        const arrT = flight.arr_time || '';
+        let offset = 0;
+        if (depT && arrT) {
+            const depSum = parseInt(depT.replace(':',''));
+            const arrSum = parseInt(arrT.replace(':',''));
+            if (arrSum < depSum) offset = 1;
         }
+
+        return {
+            depTime: depT,
+            arrTime: arrT,
+            dayOffset: offset,
+            airline: flight.airline_iata || '',
+            flightIcao: flight.flight_icao || '',
+            originIata: flight.dep_iata || '',
+            originName: '', 
+            destIata: flight.arr_iata || '',
+            destName: '',
+            source: 'AirLabs (Proxy)'
+        };
     } catch (e) {
-        // 直接連線失敗通常是 CORS 問題，繼續使用 Proxy
+        console.warn('AirLabs proxy error:', e);
+        return null;
     }
-
-    const data = await fetchWithProxy(targetUrl);
-    if (!data || !data.response || data.response.length === 0) return null;
-
-    const flight = data.response[0];
-    
-    const depT = flight.dep_time || '';
-    const arrT = flight.arr_time || '';
-    let offset = 0;
-    if (depT && arrT) {
-        const depSum = parseInt(depT.replace(':',''));
-        const arrSum = parseInt(arrT.replace(':',''));
-        if (arrSum < depSum) offset = 1;
-    }
-
-    return {
-        depTime: depT,
-        arrTime: arrT,
-        dayOffset: offset,
-        airline: flight.airline_iata || '',
-        flightIcao: flight.flight_icao || '',
-        originIata: flight.dep_iata || '',
-        originName: '', 
-        destIata: flight.arr_iata || '',
-        destName: '',
-        source: 'AirLabs'
-    };
 };
 
 export const lookupFlight = async (flightNo, flightDate) => {

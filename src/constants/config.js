@@ -5,8 +5,7 @@
 
 export const CONFIG = {
     googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-    aviationStackKey: import.meta.env.VITE_AVIATIONSTACK_API_KEY || '',
-    airLabsKey: import.meta.env.VITE_AIRLABS_API_KEY || '',
+    flightProxyUrl: import.meta.env.VITE_FLIGHT_PROXY_URL || '',
     exchangeRates: {
         'TWD': 1,
         'JPY': 0.21,
@@ -23,7 +22,7 @@ export const CONFIG = {
 export const validateConfig = () => {
     const warnings = [];
     if (!CONFIG.googleClientId) warnings.push('遺失 VITE_GOOGLE_CLIENT_ID：Google 登入與日曆同步將無法使用。');
-    if (!CONFIG.aviationStackKey && !CONFIG.airLabsKey) warnings.push('遺失航班 API Keys (AviationStack/AirLabs)：航班自動填寫功能將無法使用。');
+    if (!CONFIG.flightProxyUrl) warnings.push('遺失 VITE_FLIGHT_PROXY_URL：請架設 Cloudflare Worker 以啟用航班自動帶入防護。');
     
     return warnings;
 };
