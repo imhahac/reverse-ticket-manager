@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { formatDateWithDay } from '../utils/dateHelpers';
 import HotelStayCard from '../features/hotels/components/HotelStayCard';
+import { useTripSchedule } from '../hooks/useTripSchedule';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TripCard：單一趟次卡片（純展示，狀態由父元件管理）
@@ -111,28 +112,7 @@ function TripCard({
     });
 
     // ── Day-by-Day 分組邏輯 ───────────────────────────────────────────────
-    const dateSet = new Set([
-        ...segments.map(s => s.date),
-        ...segments.map(s => s.arrivalDate).filter(Boolean),
-        ...matchedHotels.map(h => h.checkIn).filter(Boolean),
-        ...matchedHotels.map(h => h.checkOut).filter(Boolean),
-        ...matchedActivities.filter(a => !a.endDate || a.endDate === a.startDate).map(a => a.startDate).filter(Boolean)
-    ]);
-    const sortedDates = Array.from(dateSet).sort();
-    const minDate = sortedDates.length > 0 ? new Date(sortedDates[0]) : null;
-
-    const schedule = sortedDates.map(dateStr => {
-        const currDate = new Date(dateStr);
-        const diffTime = Math.abs(currDate - minDate);
-        const dayNum = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
-        return {
-            dateStr, dayNum,
-            flights: segments.filter(s => s.date === dateStr),
-            checkIns: matchedHotels.filter(h => h.checkIn === dateStr),
-            checkOuts: matchedHotels.filter(h => h.checkOut === dateStr),
-            activities: matchedActivities.filter(a => a.startDate === dateStr && (!a.endDate || a.endDate === a.startDate))
-        };
-    });
+    const schedule = useTripSchedule(segments, matchedHotels, matchedActivities);
 
     return (
         <div

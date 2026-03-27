@@ -43,6 +43,7 @@ import { useActivities } from './components/useActivities';
 
 import { useDecoratedTrips } from './hooks/useDecoratedTrips';
 import { useFilteredItems } from './hooks/useFilteredItems';
+import { exportData, importData } from './utils/importExportUtils';
 
 // ── UI Components ──────────────────────────────────────────────────────────
 import { geocodeAddress } from './utils/geoUtils';
@@ -174,19 +175,19 @@ function App() {
     const handleCancelEdit = () => setEditingTicket(null);
 
     // ── 飯店 CRUD ─────────────────────────────────────────────────────────────
-    const handleSaveHotel = async (hotel) => {
-        setIsSavingHotel(true); // 啟用 Loading 狀態
-        // 組合飯店名稱與地址，呼叫 Google Maps API 取得經緯度
-        const query = `${hotel.name || ''} ${hotel.address || ''}`.trim();
+    const saveWithGeocoding = async ({
+        item, titleField, locationField, updateFn, addFn, setEditingFn, setIsSavingFn, isEditing, itemName
+    }) => {
+        setIsSavingFn(true);
+        const query = `${item[titleField] || ''} ${item[locationField] || ''}`.trim();
         let geoSuccess = false;
-
-        let enrichedHotel = { ...hotel };
+        let enrichedItem = { ...item };
 
         if (query) {
             try {
                 const geoResult = await geocodeAddress(query);
                 if (geoResult) {
-                    enrichedHotel = { ...enrichedHotel, lat: geoResult.lat, lng: geoResult.lng };
+                    enrichedItem = { ...enrichedItem, lat: geoResult.lat, lng: geoResult.lng };
                     geoSuccess = true;
                 }
             } catch (e) {
@@ -194,26 +195,33 @@ function App() {
             }
         }
 
-        if (editingHotel) {
-            updateHotel(enrichedHotel);
+        if (isEditing) {
+            updateFn(enrichedItem);
         } else {
-            addHotel(enrichedHotel);
+            addFn(enrichedItem);
         }
-        setEditingHotel(null);
-        setIsSavingHotel(false); // 解除 Loading 狀態
+        setEditingFn(null);
+        setIsSavingFn(false);
 
-        // ── 依據 Geocoding 結果顯示 UI 提示 ──
         import('sonner').then(({ toast }) => {
-            if (geoSuccess || (hotel.lat && hotel.lng)) {
-                toast.success('飯店已成功儲存！', { description: '已成功取得精確地圖座標。' });
+            if (geoSuccess || (item.lat && item.lng)) {
+                toast.success(`${itemName}已成功儲存！`, { description: '已成功取得精確地圖座標。' });
             } else if (query) {
-                toast.warning('飯店已儲存，但無法解析地圖座標', {
-                    description: '無法找到該地址的地圖位置，這將無法為您計算地點落差警告。請檢查拼寫。',
+                toast.warning(`${itemName}已儲存，但無法解析地圖座標`, {
+                    description: '無法找到該地點的地圖位置，這將無法為您計算地點落差警告。請檢查拼寫。',
                     duration: 6000
                 });
             } else {
-                toast.success('飯店已成功儲存！');
+                toast.success(`${itemName}已成功儲存！`);
             }
+        });
+    };
+
+    const handleSaveHotel = async (hotel) => {
+        await saveWithGeocoding({
+            item: hotel, titleField: 'name', locationField: 'address',
+            updateFn: updateHotel, addFn: addHotel, setEditingFn: setEditingHotel,
+            setIsSavingFn: setIsSavingHotel, isEditing: !!editingHotel, itemName: '飯店'
         });
     };
     const handleEditHotel = (hotel) => { setEditingHotel(hotel); window.scrollTo({ top: 0, behavior: 'smooth' }); };
@@ -229,43 +237,10 @@ function App() {
 
     // ── 票卷與活動 CRUD ─────────────────────────────────────────────────────────────
     const handleSaveActivity = async (activity) => {
-        setIsSavingActivity(true);
-        const query = `${activity.title || ''} ${activity.location || ''}`.trim();
-        let geoSuccess = false;
-
-        let enrichedActivity = { ...activity };
-
-        if (query) {
-            try {
-                const geoResult = await geocodeAddress(query);
-                if (geoResult) {
-                    enrichedActivity = { ...enrichedActivity, lat: geoResult.lat, lng: geoResult.lng };
-                    geoSuccess = true;
-                }
-            } catch (e) {
-                console.error('Failed to geocode address:', e);
-            }
-        }
-
-        if (editingActivity) {
-            updateActivity(enrichedActivity);
-        } else {
-            addActivity(enrichedActivity);
-        }
-        setEditingActivity(null);
-        setIsSavingActivity(false);
-
-        import('sonner').then(({ toast }) => {
-            if (geoSuccess || (activity.lat && activity.lng)) {
-                toast.success('活動已成功儲存！', { description: '已成功取得精確地圖座標。' });
-            } else if (query) {
-                toast.warning('活動已儲存，但無法解析地圖座標', {
-                    description: '無法找到該地點的地圖位置，這將無法為您計算地點落差警告。請檢查拼寫。',
-                    duration: 6000
-                });
-            } else {
-                toast.success('活動已成功儲存！');
-            }
+        await saveWithGeocoding({
+            item: activity, titleField: 'title', locationField: 'location',
+            updateFn: updateActivity, addFn: addActivity, setEditingFn: setEditingActivity,
+            setIsSavingFn: setIsSavingActivity, isEditing: !!editingActivity, itemName: '活動'
         });
     };
     const handleEditActivity = (activity) => { setEditingActivity(activity); window.scrollTo({ top: 0, behavior: 'smooth' }); };
@@ -281,55 +256,29 @@ function App() {
 
     // ── 本地 JSON 匯出入 ──────────────────────────────────────────────────────
     const handleExport = () => {
-        const blob = new Blob([JSON.stringify({ tickets, tripLabels, hotels: rawHotels, activities }, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        Object.assign(document.createElement('a'), {
-            href: url,
-            download: `travel-backup-${new Date().toISOString().split('T')[0]}.json`,
-        }).click();
-        URL.revokeObjectURL(url);
+        exportData(tickets, tripLabels, rawHotels, activities);
     };
 
     const handleImport = (e) => {
         const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = ({ target }) => {
-            try {
-                const data = JSON.parse(target.result);
-                const newTickets = Array.isArray(data) ? data : (data.tickets || []);
-                const newLabels  = data.tripLabels || {};
-                const newHotels  = data.hotels || [];
-                const newActivities = data.activities || [];
-                
-                // 更嚴謹的驗證：確保 tickets 必須是陣列，且內部每個元素都有 id
-                if (!Array.isArray(newTickets)) throw new Error('Tickets 資料必須是陣列 (Array) 格式');
-                if (newTickets.length > 0) {
-                    const isValid = newTickets.every(t => t && typeof t === 'object' && t.id);
-                    if (!isValid) throw new Error('部分機票資料遺漏了必要的 id 欄位，或者資料結構不正確');
-                } else if (!data.tickets && !Array.isArray(data)) {
-                    throw new Error('無法識別的檔案格式：找不到 tickets 資料');
-                }
-
-                import('sonner').then(({ toast }) =>
-                    toast(`成功讀取 ${newTickets.length} 筆機票、${newHotels.length} 筆住宿、${newActivities.length} 筆活動`, {
-                        action: { label: '確認覆寫', onClick: () => {
-                            setTickets(newTickets);
-                            setTripLabels(newLabels);
-                            if (newHotels.length > 0) setHotels(newHotels);
-                            if (newActivities.length > 0) setActivities(newActivities);
-                            toast.success('匯入成功！');
-                        }},
-                        cancel: { label: '取消', onClick: () => {} },
-                        duration: 10000,
-                    })
-                );
-            } catch {
-                import('sonner').then(({ toast }) => toast.error('匯入失敗', { description: '檔案格式錯誤或損毀。' }));
-            }
-            e.target.value = '';
-        };
-        reader.readAsText(file);
+        importData(file, (data) => {
+            import('sonner').then(({ toast }) =>
+                toast(`成功讀取 ${data.newTickets.length} 筆機票、${data.newHotels.length} 筆住宿、${data.newActivities.length} 筆活動`, {
+                    action: { label: '確認覆寫', onClick: () => {
+                        setTickets(data.newTickets);
+                        setTripLabels(data.newLabels);
+                        if (data.newHotels.length > 0) setHotels(data.newHotels);
+                        if (data.newActivities.length > 0) setActivities(data.newActivities);
+                        toast.success('匯入成功！');
+                    }},
+                    cancel: { label: '取消', onClick: () => {} },
+                    duration: 10000,
+                })
+            );
+        }, (err) => {
+            import('sonner').then(({ toast }) => toast.error('匯入失敗', { description: err.message || '檔案格式錯誤或損毀。' }));
+        });
+        e.target.value = '';
     };
 
     // ── Tab 設定 ──────────────────────────────────────────────────────────────
