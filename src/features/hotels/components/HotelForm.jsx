@@ -165,6 +165,7 @@ export default function HotelForm() {
                         <option value="TWD">TWD 新台幣</option>
                         <option value="JPY">JPY 日圓</option>
                         <option value="USD">USD 美金</option>
+                        <option value="KRW">KRW 韓元</option>
                     </select>
                 </div>
                 <div>

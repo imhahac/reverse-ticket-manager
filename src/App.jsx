@@ -13,15 +13,17 @@ import AppHeader from './components/AppHeader';
 import BottomNav from './components/BottomNav';
 import SearchFilterBar from './components/SearchFilterBar';
 import TabContent from './components/TabContent';
+import CostDashboard from './components/CostDashboard';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const TABS = [
-    { key: 'timeline', label: '📆 行程 Timeline' },
-    { key: 'list',     label: '🎟️ 機票管理' },
-    { key: 'hotels',   label: '🏨 飯店管理' },
+    { key: 'timeline',   label: '📆 行程 Timeline' },
+    { key: 'list',       label: '🎟️ 機票管理' },
+    { key: 'hotels',     label: '🏨 飯店管理' },
     { key: 'activities', label: '🎫 票卷與活動' },
-    { key: 'calendar', label: '📅 月曆' },
-    { key: 'map',      label: '🗺️ 地圖' },
+    { key: 'calendar',   label: '📅 月曆' },
+    { key: 'map',        label: '🗺️ 地圖' },
+    { key: 'analytics',  label: '📊 成本分析' },
 ];
 
 function AppContent() {
@@ -91,7 +93,7 @@ function AppContent() {
                         ))}
                     </div>
                     <div className="p-4 md:p-6 bg-white min-h-[400px]">
-                        <TabContent />
+                        {activeTab === 'analytics' ? <CostDashboard /> : <TabContent />}
                     </div>
                 </div>
 

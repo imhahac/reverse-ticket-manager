@@ -18,6 +18,7 @@ export default function PriceInputSection({
                             exchangeRate: newCurrency === 'TWD' ? '1'
                                 : newCurrency === 'JPY' ? String(exchangeRates.JPY)
                                 : newCurrency === 'USD' ? String(exchangeRates.USD)
+                                : newCurrency === 'KRW' ? String(exchangeRates.KRW ?? 0.024)
                                 : formData.exchangeRate
                         });
                     }}
@@ -25,6 +26,7 @@ export default function PriceInputSection({
                     <option value="TWD">TWD 台幣</option>
                     <option value="JPY">JPY 日幣</option>
                     <option value="USD">USD 美金</option>
+                    <option value="KRW">KRW 韓元</option>
                 </select>
             </div>
             <div className="col-span-1">

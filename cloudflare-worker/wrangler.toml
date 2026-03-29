@@ -1,0 +1,15 @@
+name = "rtm-flight-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# ── KV Namespace 綁定 ──────────────────────────────────────────────────────────
+# 步驟：
+# 1. 執行 `npx wrangler kv:namespace create SHARED_TRIPS` (線上)
+# 2. 將產生的 id 填入下方 `id = "你的KV命名空間ID"`
+# 3. 若要在本地測試執行 `npx wrangler kv:namespace create SHARED_TRIPS --preview`，
+#    並將 preview_id 填入下方。
+
+[[kv_namespaces]]
+binding = "SHARED_TRIPS"
+id = "your_kv_namespace_id_here"
+# preview_id = "your_preview_kv_id"  # 本地開發用（可選）

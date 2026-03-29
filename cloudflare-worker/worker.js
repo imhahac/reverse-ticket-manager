@@ -1,51 +1,95 @@
 /**
- * Cloudflare Worker for Reverse Ticket Manager (RTM) Flight API Proxy
- * 
- * 這是一個將 AviationStack 與 AirLabs 的 API 呼叫安全封裝在 Serverless 環境的代理程式，
- * 避免將 `VITE_AVIATIONSTACK_API_KEY` 等會扣額度的金鑰直接寫在 GitHub Pages 前端。
+ * Cloudflare Worker for Reverse Ticket Manager (RTM)
+ *
+ * ── 功能一：航班 API 代理 ──────────────────────────────────────────────────────
+ * GET /?api=aviationstack&flight=CI101
+ * GET /?api=airlabs&flight=CI101
+ *
+ * ── 功能二：唯讀行程分享 (KV) ──────────────────────────────────────────────────
+ * POST /share        Body: JSON 行程快照 → 回傳 { id: UUID }
+ * GET  /share/:id   → 回傳之前存入的行程快照 JSON
+ *
+ * 環境變數（Secrets）：
+ *   AVIATIONSTACK_API_KEY  - AviationStack 金鑰
+ *   AIRLABS_API_KEY        - AirLabs 金鑰
+ *
+ * KV Namespace 綁定（wrangler.toml）：
+ *   SHARED_TRIPS  - 用於分享功能的 KV namespace
  *
  * 部署步驟：
- * 1. 安裝 Wrangler: `npm install -g wrangler`
- * 2. 初始化防護金鑰: 
- *    `wrangler secret put AVIATIONSTACK_API_KEY`
- *    `wrangler secret put AIRLABS_API_KEY`
- * 3. 部署上線: `wrangler deploy`
- * 4. 將產生的 Worker URL 填入 RTM Github Secrets 的 `VITE_FLIGHT_PROXY_URL` 中。
+ * 1. 建立 KV namespace: wrangler kv:namespace create SHARED_TRIPS
+ * 2. 複製輸出的 id 填入 wrangler.toml（見同目錄的 wrangler.toml）
+ * 3. wrangler secret put AVIATIONSTACK_API_KEY
+ *    wrangler secret put AIRLABS_API_KEY
+ * 4. wrangler deploy
  */
+
+function uuid() {
+  return crypto.randomUUID();
+}
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin") || "*";
-    
-    // 如果您想嚴格限制只有您的 GitHub Pages 網域可以呼叫，請取消下方註解並修改網域
-    /*
-    const allowedOrigins = ["https://your_github_username.github.io", "http://localhost:5173", "http://localhost:4173"];
-    if (!allowedOrigins.includes(origin) && origin !== "*") {
-      return new Response("Forbidden: Invalid Origin", { status: 403 });
-    }
-    */
 
     const corsHeaders = {
       "Access-Control-Allow-Origin": origin,
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type"
     };
 
-    // 處理 CORS 預檢請求
+    // CORS 預檢
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
     }
 
-    // 取得查詢參數
-    const apiType = url.searchParams.get('api');      // 'aviationstack' 或 'airlabs'
-    const flightNo = url.searchParams.get('flight');  // 航班編號，例如 'CI101'
-    
-    if (!apiType || !flightNo) {
-      return new Response(JSON.stringify({ error: "缺少必要的 'api' 或 'flight' 參數" }), { 
-        status: 400, 
-        headers: { "Content-Type": "application/json", ...corsHeaders } 
+    const json = (data, status = 200) =>
+      new Response(JSON.stringify(data), {
+        status,
+        headers: { "Content-Type": "application/json", ...corsHeaders }
       });
+
+    // ── 路由 /share ──────────────────────────────────────────────────────────
+    if (url.pathname === "/share" && request.method === "POST") {
+      if (!env.SHARED_TRIPS) {
+        return json({ error: "KV namespace SHARED_TRIPS 未綁定" }, 500);
+      }
+      try {
+        const body = await request.text();
+        // 驗證是合法 JSON
+        JSON.parse(body);
+
+        const id = uuid();
+        // 有效期 30 天（秒數）
+        await env.SHARED_TRIPS.put(id, body, { expirationTtl: 60 * 60 * 24 * 30 });
+        return json({ id });
+      } catch (e) {
+        return json({ error: "無效的 JSON 格式: " + e.message }, 400);
+      }
+    }
+
+    if (url.pathname.startsWith("/share/") && request.method === "GET") {
+      if (!env.SHARED_TRIPS) {
+        return json({ error: "KV namespace SHARED_TRIPS 未綁定" }, 500);
+      }
+      const id = url.pathname.replace("/share/", "").trim();
+      if (!id) return json({ error: "缺少 id" }, 400);
+
+      const data = await env.SHARED_TRIPS.get(id);
+      if (!data) return json({ error: "分享連結已過期或不存在" }, 404);
+      return new Response(data, {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders }
+      });
+    }
+
+    // ── 原有：航班 API 代理 ──────────────────────────────────────────────────
+    const apiType = url.searchParams.get('api');
+    const flightNo = url.searchParams.get('flight');
+
+    if (!apiType || !flightNo) {
+      return json({ error: "缺少必要的 'api' 或 'flight' 參數" }, 400);
     }
 
     let targetUrl = "";
@@ -53,32 +97,23 @@ export default {
     try {
       if (apiType === 'aviationstack') {
         if (!env.AVIATIONSTACK_API_KEY) throw new Error("Worker 環境變數遺失: AVIATIONSTACK_API_KEY");
-        // AviationStack 免費版只支援 HTTP
         targetUrl = `http://api.aviationstack.com/v1/flights?access_key=${env.AVIATIONSTACK_API_KEY}&flight_iata=${flightNo}`;
       } else if (apiType === 'airlabs') {
         if (!env.AIRLABS_API_KEY) throw new Error("Worker 環境變數遺失: AIRLABS_API_KEY");
         targetUrl = `https://airlabs.co/api/v9/routes?api_key=${env.AIRLABS_API_KEY}&flight_iata=${flightNo}`;
       } else {
-        return new Response(JSON.stringify({ error: "參數 'api' 無效。請使用 'aviationstack' 或 'airlabs'" }), { 
-          status: 400, 
-          headers: { "Content-Type": "application/json", ...corsHeaders } 
-        });
+        return json({ error: "參數 'api' 無效。請使用 'aviationstack' 或 'airlabs'" }, 400);
       }
 
-      // 替前端送出真實請求
       const response = await fetch(targetUrl);
       const data = await response.json();
-
       return new Response(JSON.stringify(data), {
         status: response.status,
         headers: { "Content-Type": "application/json", ...corsHeaders }
       });
 
     } catch (error) {
-      return new Response(JSON.stringify({ error: error.message }), { 
-        status: 500, 
-        headers: { "Content-Type": "application/json", ...corsHeaders } 
-      });
+      return json({ error: error.message }, 500);
     }
   }
 };
