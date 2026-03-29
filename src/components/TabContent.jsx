@@ -6,33 +6,37 @@ import ActivityList from './ActivityList';
 import TripCalendar from './TripCalendar';
 import TripMap from './TripMap';
 
-export default function TabContent({ 
-    activeTab, 
-    filteredItinerary, 
-    tripLabels, 
-    setTripLabels,
-    tripOverrides,
-    removeSegment,
-    restoreSegment,
-    moveSegmentToTrip,
-    clearAllOverrides,
-    handleSelectHotelForMap,
-    handleSelectTripForMap,
-    filteredTickets,
-    handleDeleteTicket,
-    handleEditTicket,
-    filteredHotels,
-    handleEditHotel,
-    handleDeleteHotel,
-    filteredActivities,
-    handleEditActivity,
-    handleDeleteActivity,
-    itineraryForMap,
-    hotelsForMap,
-    handleClearSelectedTripForMap,
-    selectedHotelIdForMap,
-    selectedTripIdForMap
-}) {
+import { useAppContext } from '../contexts/AppContext';
+
+export default function TabContent() {
+    const { 
+        activeTab, 
+        filteredItinerary, 
+        tripLabels, 
+        setTripLabels,
+        tripOverrides,
+        removeSegment,
+        restoreSegment,
+        moveSegmentToTrip,
+        clearAllOverrides,
+        handleSelectHotelForMap,
+        handleSelectTripForMap,
+        filteredTickets,
+        handleDeleteTicket,
+        handleEditTicket,
+        filteredHotels,
+        handleEditHotel,
+        handleDeleteHotel,
+        filteredActivities,
+        handleEditActivity,
+        handleDeleteActivity,
+        itineraryForMap,
+        hotelsForMap,
+        handleClearSelectedTripForMap,
+        selectedHotelIdForMap,
+        selectedTripIdForMap
+    } = useAppContext();
+
     if (activeTab === 'timeline') {
         return (
             <TripTimeline

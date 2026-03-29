@@ -111,7 +111,12 @@ export function useGoogleAuth() {
     useEffect(() => {
         if (!accessToken) return;
         const interval = setInterval(() => {
-            if (!accessTokenExpiresAt || accessTokenExpiresAt - Date.now() < 10 * 60 * 1000) {
+            if (
+                !accessToken || 
+                !accessTokenExpiresAt || 
+                isNaN(accessTokenExpiresAt) || 
+                accessTokenExpiresAt - Date.now() < 10 * 60 * 1000
+            ) {
                 trySilentRefresh();
             }
         }, 5 * 60 * 1000);

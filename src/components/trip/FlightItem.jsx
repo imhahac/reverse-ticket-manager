@@ -8,14 +8,7 @@ export default function FlightItem({
 }) {
     return (
         <div
-            draggable
-            className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-50/80 rounded-xl hover:bg-indigo-50/50 hover:border-indigo-100 transition-all border border-slate-100 shadow-sm hover:shadow cursor-grab active:cursor-grabbing"
-            onDragStart={e => {
-                try {
-                    e.dataTransfer.setData('text/plain', seg.id);
-                    e.dataTransfer.effectAllowed = 'move';
-                } catch { /* ignore */ }
-            }}
+            className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-50/80 rounded-xl hover:bg-indigo-50/50 hover:border-indigo-100 transition-all border border-slate-100 shadow-sm hover:shadow"
         >
             <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-full bg-slate-200 group-hover:bg-indigo-100 transition-colors flex items-center justify-center shrink-0 border border-slate-300 group-hover:border-indigo-200 shadow-inner">

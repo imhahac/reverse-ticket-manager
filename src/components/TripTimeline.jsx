@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import TripCard from './TripCard';
+import { TripPropType } from '../types/propTypes';
 
 export default function TripTimeline({
     trips,
@@ -23,7 +24,6 @@ export default function TripTimeline({
 }) {
     const [editingLabelId, setEditingLabelId] = useState(null);
     const [editLabelValue, setEditLabelValue] = useState('');
-    const [dragOverTripId, setDragOverTripId] = useState(null);
     
     // ── 視圖狀態（持久化） ──
     const [showFuture, setShowFuture] = useLocalStorage('timeline-show-future', true);
@@ -60,26 +60,6 @@ export default function TripTimeline({
 
     const futureTrips = (trips || []).filter(t => !t.isPast);
     const pastTrips   = (trips || []).filter(t =>  t.isPast);
-
-    const handleSegDragStart = (e, segId) => {
-        try {
-            e.dataTransfer.setData('text/plain', segId);
-            e.dataTransfer.effectAllowed = 'move';
-        } catch { /* ignore */ }
-    };
-
-    const handleTripDragOver = (e, tripId) => {
-        e.preventDefault();
-        setDragOverTripId(tripId);
-        try { e.dataTransfer.dropEffect = 'move'; } catch { /* ignore */ }
-    };
-
-    const handleTripDrop = (e, tripId) => {
-        e.preventDefault();
-        setDragOverTripId(null);
-        const segId = e.dataTransfer.getData('text/plain');
-        if (segId) onMoveSegmentToTrip?.(segId, tripId);
-    };
 
     const getDepartDate = (seg) => {
         if (!seg?.date || !seg?.time) return null;
@@ -131,11 +111,6 @@ export default function TripTimeline({
         onStartEditing:   handleStartEditing,
         onSaveLabel:      handleSaveLabel,
         onCancelEditing:  handleCancelEditing,
-        dragOverTripId,
-        setDragOverTripId,
-        onSegDragStart:   handleSegDragStart,
-        onTripDragOver:   handleTripDragOver,
-        onTripDrop:       handleTripDrop,
         displayOptions: { ...displayOptions, viewMode }, 
         onSelectHotelForMap, 
         onSelectTripForMap, 
@@ -215,7 +190,7 @@ export default function TripTimeline({
 }
 
 TripTimeline.propTypes = {
-    trips: PropTypes.array,
+    trips: PropTypes.arrayOf(TripPropType),
     tripLabels: PropTypes.object,
     onUpdateLabel: PropTypes.func,
     overrideState: PropTypes.object,

@@ -14,22 +14,21 @@
  *   sunkCostTWD      {number} 未配對沉沒成本
  */
 import React from 'react';
-import PropTypes from 'prop-types';
+// import PropTypes from 'prop-types';
 import { ListFilter, Plane, Building2 } from 'lucide-react';
+import { useAppContext } from '../contexts/AppContext';
 
-export default function Dashboard({
-    ticketCount,
-    tripCount,
-    hotelCount = 0,
-    activityCount = 0,
-    totalPriceTWD,
-    totalHotelTWD = 0,
-    totalActivityTWD = 0,
-    futureCostTWD,
-    pastCostTWD,
-    sunkCostTWD,
-    totalTripDays = 0,
-}) {
+export default function Dashboard() {
+    const {
+        safeTickets, trips, safeHotels, safeActivities,
+        totalPriceTWD, totalHotelTWD = 0, totalActivityTWD = 0,
+        futureCostTWD, pastCostTWD, sunkCostTWD, totalTripDays = 0,
+    } = useAppContext();
+
+    const ticketCount = safeTickets.length;
+    const tripCount = trips.length;
+    const hotelCount = safeHotels.length;
+    const activityCount = safeActivities.length;
     const grandTotal = totalPriceTWD + totalHotelTWD + totalActivityTWD;
     const flightRatio = grandTotal > 0 ? (totalPriceTWD / grandTotal) * 100 : 0;
     const hotelRatio = grandTotal > 0 ? (totalHotelTWD / grandTotal) * 100 : 0;
@@ -126,16 +125,3 @@ export default function Dashboard({
     );
 }
 
-Dashboard.propTypes = {
-    ticketCount: PropTypes.number.isRequired,
-    tripCount: PropTypes.number.isRequired,
-    hotelCount: PropTypes.number,
-    activityCount: PropTypes.number,
-    totalPriceTWD: PropTypes.number.isRequired,
-    totalHotelTWD: PropTypes.number,
-    totalActivityTWD: PropTypes.number,
-    futureCostTWD: PropTypes.number.isRequired,
-    pastCostTWD: PropTypes.number.isRequired,
-    sunkCostTWD: PropTypes.number.isRequired,
-    totalTripDays: PropTypes.number,
-};

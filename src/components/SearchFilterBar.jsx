@@ -1,6 +1,8 @@
 import React from 'react';
+import { useAppContext } from '../contexts/AppContext';
 
-export default function SearchFilterBar({ searchTerm, setSearchTerm, filterStatus, setFilterStatus }) {
+export default function SearchFilterBar() {
+    const { searchTerm, setSearchTerm, filterStatus, setFilterStatus } = useAppContext();
     return (
         <div className="mb-6 flex flex-col md:flex-row gap-3 items-center bg-white p-3 rounded-xl shadow-sm border border-slate-200">
             <div className="relative flex-1 w-full">

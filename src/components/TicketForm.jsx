@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Plane, ChevronDown, ChevronUp } from 'lucide-react';
 import { lookupFlight, getOffsetDate } from '../services/flightService';
 import { buildLocalDateTimeStr, autoFixArrival } from '../utils/formUtils';
+import { useAppContext } from '../contexts/AppContext';
 
 // 匯入子組件
 import FlightSegmentInput from './ticket/FlightSegmentInput';
@@ -16,7 +17,8 @@ const AIRPORTS = [
     'CTS (札幌新千歲)', 'OKA (沖繩那霸)', 'FUK (福岡)', 'SDJ (仙台)', 'HKD (函館)'
 ];
 
-export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, exchangeRates = { JPY: 0.21, USD: 32.5 } }) {
+export default function TicketForm() {
+    const { handleSaveTicket: onAddTicket, editingTicket, handleCancelEdit: onCancelEdit, exchangeRates = { JPY: 0.21, USD: 32.5 } } = useAppContext();
     const defaultFormData = {
         airline: '',
         price: '',
@@ -301,9 +303,3 @@ export default function TicketForm({ onAddTicket, editingTicket, onCancelEdit, e
     );
 }
 
-TicketForm.propTypes = {
-    onAddTicket: PropTypes.func.isRequired,
-    editingTicket: PropTypes.object,
-    onCancelEdit: PropTypes.func,
-    exchangeRates: PropTypes.object
-};

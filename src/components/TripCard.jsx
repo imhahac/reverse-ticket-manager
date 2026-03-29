@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { formatDateWithDay } from '../utils/dateHelpers';
 import { useTripSchedule } from '../hooks/useTripSchedule';
+import { TripPropType } from '../types/propTypes';
 
 // 匯入子組件
 import TripCostPanel from './trip/TripCostPanel';
@@ -23,8 +24,8 @@ const categoryIcon = {
 export default function TripCard({
     trip, index, tripLabels, tripIdOptions, onRemoveSegment, onMoveSegmentToTrip,
     editingLabelId, editLabelValue, setEditLabelValue, onStartEditing, onSaveLabel, onCancelEditing,
-    onSelectHotelForMap, displayOptions, onSelectTripForMap, dragOverTripId, setDragOverTripId,
-    onSegDragStart, onTripDragOver, onTripDrop, getDepartDate, getArrivalDate, formatDuration,
+    onSelectHotelForMap, displayOptions, onSelectTripForMap,
+    getDepartDate, getArrivalDate, formatDuration,
 }) {
     const comboKey = trip.id;
     const segments = trip.segments || [];
@@ -59,10 +60,7 @@ export default function TripCard({
 
     return (
         <div
-            onDragOver={e => onTripDragOver(e, comboKey)}
-            onDragLeave={() => setDragOverTripId(null)}
-            onDrop={e => onTripDrop(e, comboKey)}
-            className={`relative flex flex-col md:flex-row items-stretch bg-white border ${borderColor} ${dragOverTripId === comboKey ? 'ring-2 ring-indigo-400' : ''} rounded-xl shadow-sm hover:shadow-md transition-shadow mt-4`}
+            className={`relative flex flex-col md:flex-row items-stretch bg-white border ${borderColor} rounded-xl shadow-sm hover:shadow-md transition-shadow mt-4`}
         >
             <div className={`absolute -top-3 -right-2 px-3 py-1 text-xs font-bold text-white rounded-full shadow-sm flex items-center z-20 ${badgeBg}`}>
                 {BadgeIcon} {badgeLabel}
@@ -137,7 +135,7 @@ export default function TripCard({
 }
 
 TripCard.propTypes = {
-    trip: PropTypes.object.isRequired,
+    trip: TripPropType.isRequired,
     index: PropTypes.number.isRequired,
     tripLabels: PropTypes.object,
     tripIdOptions: PropTypes.array,
@@ -152,11 +150,6 @@ TripCard.propTypes = {
     onSelectHotelForMap: PropTypes.func,
     displayOptions: PropTypes.object,
     onSelectTripForMap: PropTypes.func,
-    dragOverTripId: PropTypes.string,
-    setDragOverTripId: PropTypes.func,
-    onSegDragStart: PropTypes.func,
-    onTripDragOver: PropTypes.func,
-    onTripDrop: PropTypes.func,
     getDepartDate: PropTypes.func,
     getArrivalDate: PropTypes.func,
     formatDuration: PropTypes.func

@@ -1,19 +1,21 @@
 import React from 'react';
-import PropTypes from 'prop-types';
+// import PropTypes from 'prop-types'; // no longer needed
 import { Plane, Calendar, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn } from 'lucide-react';
+import { useAppContext } from '../contexts/AppContext';
 
-export default function AppHeader({
-    accessToken,
-    isSyncing,
-    handleSyncToDrive,
-    handleLoadFromDrive,
-    handleSyncToCalendar,
-    logout,
-    login,
-    handleExport,
-    fileInputRef,
-    handleImport
-}) {
+export default function AppHeader() {
+    const {
+        accessToken,
+        isSyncing,
+        handleSyncToDrive,
+        handleLoadFromDrive,
+        handleSyncToCalendar,
+        logout,
+        login,
+        handleExport,
+        fileInputRef,
+        handleImport
+    } = useAppContext();
     return (
         <header className="mb-8 pt-4 flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
@@ -62,15 +64,3 @@ export default function AppHeader({
     );
 }
 
-AppHeader.propTypes = {
-    accessToken: PropTypes.string,
-    isSyncing: PropTypes.bool.isRequired,
-    handleSyncToDrive: PropTypes.func.isRequired,
-    handleLoadFromDrive: PropTypes.func.isRequired,
-    handleSyncToCalendar: PropTypes.func.isRequired,
-    logout: PropTypes.func.isRequired,
-    login: PropTypes.func.isRequired,
-    handleExport: PropTypes.func.isRequired,
-    fileInputRef: PropTypes.object.isRequired,
-    handleImport: PropTypes.func.isRequired
-};

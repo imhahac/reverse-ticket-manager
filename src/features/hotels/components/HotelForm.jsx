@@ -31,7 +31,10 @@ function calcNights(checkIn, checkOut) {
     return diff > 0 ? Math.round(diff / 86400000) : null;
 }
 
-export default function HotelForm({ onSaveHotel, editingHotel, onCancelEdit, exchangeRates }) {
+import { useAppContext } from '../../../contexts/AppContext';
+
+export default function HotelForm() {
+    const { handleSaveHotel: onSaveHotel, editingHotel, handleCancelEditHotel: onCancelEdit, exchangeRates } = useAppContext();
     const [form, setForm] = useState(EMPTY);
     const [isFormExpanded, setIsFormExpanded] = useState(false);
 

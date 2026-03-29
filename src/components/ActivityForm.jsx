@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Ticket, ChevronDown, ChevronUp } from 'lucide-react';
+import { useAppContext } from '../contexts/AppContext';
 
-export default function ActivityForm({ onSaveActivity, editingActivity, onCancelEdit, exchangeRates, isSaving }) {
+export default function ActivityForm() {
+    const { handleSaveActivity: onSaveActivity, editingActivity, handleCancelEditActivity: onCancelEdit, exchangeRates, isSavingActivity: isSaving } = useAppContext();
     const defaultFormData = {
         title: '',
         category: 'attraction', // attraction, transport, dining, other
