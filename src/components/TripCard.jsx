@@ -21,12 +21,12 @@ const categoryIcon = {
 
 
 // ── TripCard 主組件 ──────────────────────────────────────────────────────────
-export default function TripCard({
+const TripCard = ({
     trip, index, tripLabels, tripIdOptions, onRemoveSegment, onMoveSegmentToTrip,
     editingLabelId, editLabelValue, setEditLabelValue, onStartEditing, onSaveLabel, onCancelEditing,
     onSelectHotelForMap, displayOptions, onSelectTripForMap,
     getDepartDate, getArrivalDate, formatDuration,
-}) {
+}) => {
     const comboKey = trip.id;
     const segments = trip.segments || [];
     const totalCostTWD = trip.totalCostTWD ?? 0;
@@ -154,3 +154,5 @@ TripCard.propTypes = {
     getArrivalDate: PropTypes.func,
     formatDuration: PropTypes.func
 };
+
+export default React.memo(TripCard);

@@ -2,6 +2,7 @@ import React from 'react';
 // import PropTypes from 'prop-types'; // no longer needed
 import { Plane, Calendar, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
+import { useUIContext } from '../contexts/UIContext';
 
 export default function AppHeader() {
     const {
@@ -13,9 +14,9 @@ export default function AppHeader() {
         logout,
         login,
         handleExport,
-        fileInputRef,
         handleImport
     } = useAppContext();
+    const { fileInputRef } = useUIContext();
     return (
         <header className="mb-8 pt-4 flex flex-col md:flex-row justify-between items-center gap-4">
             <div>

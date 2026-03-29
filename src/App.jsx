@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { AppProvider, useAppContext } from './contexts/AppContext';
+import { UIProvider, useUIContext } from './contexts/UIContext';
 
 // ── UI Components ──────────────────────────────────────────────────────────
 import Instructions from './components/Instructions';
@@ -25,8 +26,9 @@ const TABS = [
 
 function AppContent() {
     const { 
-        activeTab, setActiveTab, configWarnings, setConfigWarnings, renderError 
-    } = useAppContext();
+        activeTab, setActiveTab, configWarnings, setConfigWarnings 
+    } = useUIContext();
+    const { renderError } = useAppContext();
 
     if (renderError) {
         return (
@@ -104,8 +106,10 @@ function AppContent() {
 
 export default function App() {
     return (
-        <AppProvider>
-            <AppContent />
-        </AppProvider>
+        <UIProvider>
+            <AppProvider>
+                <AppContent />
+            </AppProvider>
+        </UIProvider>
     );
 }

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useState, useMemo } from 'react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useGoogleAuth } from '../hooks/useGoogleAuth';
 import { useGoogleSync } from '../hooks/useGoogleSync';
@@ -11,27 +11,23 @@ import { useHotels } from '../features/hotels/hooks/useHotels';
 import { useActivities } from '../hooks/useActivities';
 import { useDecoratedTrips } from '../hooks/useDecoratedTrips';
 import { useFilteredItems } from '../hooks/useFilteredItems';
-import { validateConfig } from '../constants/config';
 import { useEntityManager } from '../hooks/useEntityManager';
 import { exportData, importData } from '../utils/importExportUtils';
 import { toast } from 'sonner';
+import { useUIContext } from './UIContext';
 
 const AppContext = createContext();
 
 export function AppProvider({ children }) {
+    // ── 從 UIContext 取得介面參數 ──────────────────────────────────────────────
+    const { searchTerm, filterStatus, selectedTripIdForMap } = useUIContext();
+
     // ── 持久化資料 ───────────────────────────────────────────────────────────
     const [tickets, setTickets] = useLocalStorage('reverse-tickets', []);
     const [tripLabels, setTripLabels] = useLocalStorage('reverse-trip-labels', {});
 
-    // ── UI 狀態 ──────────────────────────────────────────────────────────────
-    const [activeTab, setActiveTab] = useState('timeline');
+    // ── UI 狀態 (剩餘) ──────────────────────────────────────────────────────────────
     const [editingTicket, setEditingTicket] = useState(null);
-    const [selectedHotelIdForMap, setSelectedHotelIdForMap] = useState(null);
-    const [selectedTripIdForMap, setSelectedTripIdForMap] = useState(null);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [filterStatus, setFilterStatus] = useState('all');
-    const [configWarnings, setConfigWarnings] = useState([]);
-    const fileInputRef = useRef(null);
 
     // ── Auth & Sync Hooks ────────────────────────────────────────────────────
     const { accessToken, accessTokenState, login, logout, trySilentRefresh } = useGoogleAuth();
@@ -46,28 +42,6 @@ export function AppProvider({ children }) {
 
     // ── Activities Hook ──────────────────────────────────────────────────────
     const { activities = [], setActivities, addActivity, updateActivity, deleteActivity, updateActivityCalendarId } = useActivities();
-
-    // ── 組件掛載初始化 ────────────────────────────────────────────────────────
-    useEffect(() => {
-        const warnings = validateConfig();
-        setConfigWarnings(warnings);
-    }, []);
-
-    // ── 地圖與行程連動邏輯 ────────────────────────────────────────────────────
-    const handleSelectTripForMap = (tripId) => {
-        setSelectedHotelIdForMap(null);
-        setSelectedTripIdForMap(tripId);
-        setActiveTab('map');
-    };
-    
-    const handleSelectHotelForMap = (hotelId, tripId) => {
-        setSelectedHotelIdForMap(hotelId);
-        handleSelectTripForMap(tripId);
-    };
-
-    const handleClearSelectedTripForMap = () => {
-        setSelectedTripIdForMap(null);
-    };
 
     // ── Google Sync ──────────────────────────────────────────────────────────
     const { isSyncing, handleSyncToDrive, handleLoadFromDrive, handleSyncToCalendar } = useGoogleSync({
@@ -160,13 +134,6 @@ export function AppProvider({ children }) {
 
     // 欲提供的資料
     const value = {
-        // UI 狀態
-        activeTab, setActiveTab,
-        searchTerm, setSearchTerm,
-        filterStatus, setFilterStatus,
-        configWarnings, setConfigWarnings,
-        fileInputRef,
-        
         // 資料狀態與預算
         trips, safeTickets, safeHotels, safeActivities,
         filteredTickets, filteredHotels, filteredActivities, filteredItinerary,
@@ -179,8 +146,7 @@ export function AppProvider({ children }) {
         editingActivity, handleSaveActivity, handleEditActivity, handleCancelEditActivity, handleDeleteActivity, isSavingActivity,
 
         // Map 選項
-        selectedHotelIdForMap, selectedTripIdForMap, itineraryForMap, hotelsForMap,
-        handleSelectTripForMap, handleSelectHotelForMap, handleClearSelectedTripForMap,
+        itineraryForMap, hotelsForMap,
 
         // 行程標籤與手動重組
         tripLabels, setTripLabels, tripOverrides, removeSegment, restoreSegment, moveSegmentToTrip, clearAllOverrides,

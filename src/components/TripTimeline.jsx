@@ -1,7 +1,7 @@
 /**
  * TripTimeline.jsx ── 實際飛行配對 Timeline 元件
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { 
     Clock, Plane, Hotel, Ticket, CheckCircle, X, LayoutList
@@ -61,46 +61,46 @@ export default function TripTimeline({
     const futureTrips = (trips || []).filter(t => !t.isPast);
     const pastTrips   = (trips || []).filter(t =>  t.isPast);
 
-    const getDepartDate = (seg) => {
+    const getDepartDate = useCallback((seg) => {
         if (!seg?.date || !seg?.time) return null;
         const d = new Date(`${seg.date}T${seg.time}:00`);
         return isNaN(d.getTime()) ? null : d;
-    };
+    }, []);
 
-    const getArrivalDate = (seg) => {
+    const getArrivalDate = useCallback((seg) => {
         if (seg?.arrivalDate && seg?.arrivalTime) {
             const d = new Date(`${seg.arrivalDate}T${seg.arrivalTime}:00`);
             if (!isNaN(d.getTime())) return d;
         }
         const depart = getDepartDate(seg);
         return depart ? new Date(depart.getTime() + 2 * 60 * 60 * 1000) : null;
-    };
+    }, [getDepartDate]);
 
-    const formatDuration = (ms) => {
+    const formatDuration = useCallback((ms) => {
         const totalMin = Math.round(ms / 60000);
         const h = Math.floor(totalMin / 60);
         const m = totalMin % 60;
         if (h <= 0) return `${m} 分`;
         if (m === 0) return `${h} 小時`;
         return `${h} 小時 ${m} 分`;
-    };
+    }, []);
 
-    const handleStartEditing = (tripId, currentLabel) => {
+    const handleStartEditing = useCallback((tripId, currentLabel) => {
         setEditingLabelId(tripId);
         setEditLabelValue(currentLabel || '');
-    };
+    }, []);
 
-    const handleSaveLabel = (tripId) => {
+    const handleSaveLabel = useCallback((tripId) => {
         onUpdateLabel(tripId, editLabelValue);
         setEditingLabelId(null);
-    };
+    }, [editLabelValue, onUpdateLabel]);
 
-    const handleCancelEditing = () => {
+    const handleCancelEditing = useCallback(() => {
         setEditingLabelId(null);
         setEditLabelValue('');
-    };
+    }, []);
 
-    const sharedCardProps = {
+    const sharedCardProps = useMemo(() => ({
         tripLabels,
         tripIdOptions,
         onRemoveSegment,
@@ -117,7 +117,12 @@ export default function TripTimeline({
         getDepartDate,
         getArrivalDate,
         formatDuration,
-    };
+    }), [
+        tripLabels, tripIdOptions, onRemoveSegment, onMoveSegmentToTrip,
+        editingLabelId, editLabelValue, handleStartEditing, handleSaveLabel, handleCancelEditing,
+        displayOptions, viewMode, onSelectHotelForMap, onSelectTripForMap,
+        getDepartDate, getArrivalDate, formatDuration
+    ]);
 
     if (!trips || trips.length === 0) {
         return (

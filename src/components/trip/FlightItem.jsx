@@ -3,9 +3,9 @@ import { ArrowRight, PlaneTakeoff, PlaneLanding, Clock } from 'lucide-react';
 import { formatDateWithDay } from '../../utils/dateHelpers';
 import { getFlightAwareUrl } from '../../utils/flightUtils';
 
-export default function FlightItem({ 
+const FlightItem = ({ 
     seg, isFirst, isLast, onRemove, onMove, onSelectMap, comboKey, tripIdOptions 
-}) {
+}) => {
     return (
         <div
             className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-50/80 rounded-xl hover:bg-indigo-50/50 hover:border-indigo-100 transition-all border border-slate-100 shadow-sm hover:shadow"
@@ -70,4 +70,6 @@ export default function FlightItem({
             </div>
         </div>
     );
-}
+};
+
+export default React.memo(FlightItem);

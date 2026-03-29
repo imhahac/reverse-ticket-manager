@@ -7,10 +7,19 @@ import TripCalendar from './TripCalendar';
 import TripMap from './TripMap';
 
 import { useAppContext } from '../contexts/AppContext';
+import { useUIContext } from '../contexts/UIContext';
 
 export default function TabContent() {
     const { 
-        activeTab, 
+        activeTab,
+        handleSelectHotelForMap,
+        handleSelectTripForMap,
+        handleClearSelectedTripForMap,
+        selectedHotelIdForMap,
+        selectedTripIdForMap
+    } = useUIContext();
+
+    const { 
         filteredItinerary, 
         tripLabels, 
         setTripLabels,
@@ -19,8 +28,6 @@ export default function TabContent() {
         restoreSegment,
         moveSegmentToTrip,
         clearAllOverrides,
-        handleSelectHotelForMap,
-        handleSelectTripForMap,
         filteredTickets,
         handleDeleteTicket,
         handleEditTicket,
@@ -32,9 +39,6 @@ export default function TabContent() {
         handleDeleteActivity,
         itineraryForMap,
         hotelsForMap,
-        handleClearSelectedTripForMap,
-        selectedHotelIdForMap,
-        selectedTripIdForMap
     } = useAppContext();
 
     if (activeTab === 'timeline') {
