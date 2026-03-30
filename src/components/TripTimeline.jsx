@@ -59,8 +59,8 @@ export default function TripTimeline({
             : 'bg-transparent text-slate-500 hover:bg-slate-200/50 hover:text-slate-700';
     };
 
-    const futureTrips = (trips || []).filter(t => !t.isPast);
-    const pastTrips   = (trips || []).filter(t =>  t.isPast);
+    const futureTrips = useMemo(() => (trips || []).filter(t => !t.isPast), [trips]);
+    const pastTrips   = useMemo(() => (trips || []).filter(t =>  t.isPast), [trips]);
 
     const getDepartDate = useCallback((seg) => {
         if (!seg?.date || !seg?.time) return null;

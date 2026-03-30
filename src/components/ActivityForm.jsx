@@ -37,6 +37,12 @@ export default function ActivityForm() {
             return;
         }
 
+        const price = Number(formData.price);
+        if (isNaN(price) || price < 0) {
+            toast.error('價格不能為負數');
+            return;
+        }
+
         if (formData.endDate && new Date(formData.endDate) < new Date(formData.startDate)) {
             toast.error('結束日期不能早於開始日期喔！');
             return;

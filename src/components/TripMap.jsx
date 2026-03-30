@@ -10,6 +10,8 @@ export default function TripMap({ itinerary, hotels, onClearSelectedTrip, select
 
     useEffect(() => {
         let isMounted = true;
+        let map = null;
+
         const initMap = async () => {
             const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
             if (!apiKey) {
@@ -21,16 +23,18 @@ export default function TripMap({ itinerary, hotels, onClearSelectedTrip, select
             }
             try {
                 await loadGoogleMapsApi(apiKey);
-                if (!mapRef.current) return;
+                if (!isMounted || !mapRef.current) return;
                 
                 if (!window.google || !window.google.maps) {
                     throw new Error('Google Maps API failed to load properly.');
                 }
 
-                // 避免 React StrictMode 造成重複初始化
-                if (mapRef.current.querySelector('div')) return; 
+                // 避免記憶體洩漏：確保清除前一次可能的殘留
+                if (mapRef.current.firstChild) {
+                   mapRef.current.innerHTML = '';
+                }
 
-                const map = new window.google.maps.Map(mapRef.current, {
+                map = new window.google.maps.Map(mapRef.current, {
                     center: { lat: 23.6978, lng: 120.9605 }, // 預設中心：台灣
                     zoom: 6,
                     mapTypeId: 'roadmap',
@@ -53,7 +57,12 @@ export default function TripMap({ itinerary, hotels, onClearSelectedTrip, select
         };
         initMap();
         
-        return () => { isMounted = false; };
+        return () => { 
+            isMounted = false; 
+            if (map && window.google) {
+                window.google.maps.event.clearInstanceListeners(map);
+            }
+        };
     }, []);
 
     useEffect(() => {

@@ -72,6 +72,13 @@ export default function HotelForm() {
             toast.error('請填寫飯店名稱、入住日期與退房日期');
             return;
         }
+
+        const price = parseFloat(form.priceTotal);
+        if (form.priceTotal && (isNaN(price) || price < 0)) {
+            toast.error('飯店金額不能為負數');
+            return;
+        }
+
         if (nights === null || nights <= 0) {
             toast.error('退房日期必須晚於入住日期');
             return;

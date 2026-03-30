@@ -19,7 +19,9 @@ const updateSW = registerSW({
     },
 });
 
-const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'dummy_client_id.apps.googleusercontent.com';
+import { CONFIG } from './constants/config.js'
+
+const clientId = CONFIG.googleClientId || 'MISSING_CLIENT_ID';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>

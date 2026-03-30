@@ -122,6 +122,16 @@ export default function TicketForm() {
             return;
         }
 
+        if (Number(formData.price) <= 0) {
+            toast.error('機票價格必須大於 0');
+            return;
+        }
+
+        if (!formData.departRegion || !formData.returnRegion) {
+            toast.error('出發與抵達機場不能為空！');
+            return;
+        }
+
         if (formData.type !== 'oneway') {
             if (!formData.inboundDate) {
                 toast.error('請填寫第 2 段日期');
@@ -130,11 +140,28 @@ export default function TicketForm() {
         }
 
         const outDateTimeStr = buildLocalDateTimeStr(formData.outboundDate, formData.outboundTime);
-        const inDateTimeStr = buildLocalDateTimeStr(formData.inboundDate, formData.inboundTime);
+        const outDateObj = new Date(outDateTimeStr || formData.outboundDate);
 
-        if (formData.type !== 'oneway' && inDateTimeStr && outDateTimeStr && new Date(inDateTimeStr) < new Date(outDateTimeStr)) {
-            toast.error('同一張發票中，回程段的日期時間不能早於去程段喔！');
+        if (isNaN(outDateObj.getTime())) {
+            toast.error('去程日期無效，請檢查輸入格式');
             return;
+        }
+
+        let inDateTimeStr = null;
+
+        if (formData.type !== 'oneway') {
+            inDateTimeStr = buildLocalDateTimeStr(formData.inboundDate, formData.inboundTime);
+            const inDateObj = new Date(inDateTimeStr || formData.inboundDate);
+
+            if (isNaN(inDateObj.getTime())) {
+                toast.error('回程日期無效，請檢查輸入格式');
+                return;
+            }
+
+            if (inDateTimeStr && outDateTimeStr && inDateObj < outDateObj) {
+                toast.error('同一張發票中，回程段的日期時間不能早於去程段喔！');
+                return;
+            }
         }
 
         const seg1Fix = autoFixArrival('第 1 段航班', formData.outboundDate, formData.outboundTime, formData.outboundArrivalDate, formData.outboundArrivalTime);

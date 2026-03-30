@@ -110,7 +110,8 @@ export function useGoogleAuth() {
     // ── 背景 interval：token 剩 10 分鐘時自動嘗試更新 ─────────────────────
     useEffect(() => {
         if (!accessToken) return;
-        const interval = setInterval(() => {
+
+        const checkExpiration = () => {
             if (
                 !accessToken || 
                 !accessTokenExpiresAt || 
@@ -119,7 +120,12 @@ export function useGoogleAuth() {
             ) {
                 trySilentRefresh();
             }
-        }, 5 * 60 * 1000);
+        };
+
+        // 首次掛載時立即檢查一次，避免帶著已過期的 token 等待 5 分鐘
+        checkExpiration();
+
+        const interval = setInterval(checkExpiration, 5 * 60 * 1000);
         return () => clearInterval(interval);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [accessToken, accessTokenExpiresAt]);
