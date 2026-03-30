@@ -65,3 +65,24 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # 3. 部署 Cloudflare Worker (Deploy Worker)
+  deploy-worker:
+    runs-on: ubuntu-latest
+    name: Deploy Worker
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Inject KV ID from GitHub Vars
+        shell: bash
+        run: |
+          # 將 wrangler.toml 中的 __KV_ID__ 替換為 GitHub Variables 中的值
+          # 本機路徑為 cloudflare-worker/wrangler.toml
+          sed -i "s/__KV_ID__/${{ vars.SHARED_TRIPS_KV_ID }}/g" cloudflare-worker/wrangler.toml
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: 'cloudflare-worker'

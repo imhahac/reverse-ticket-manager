@@ -1,4 +1,4 @@
-name = "rtm-flight-proxy"
+name = "flight-api-proxy"
 main = "worker.js"
 compatibility_date = "2024-01-01"
 
@@ -11,5 +11,5 @@ compatibility_date = "2024-01-01"
 
 [[kv_namespaces]]
 binding = "SHARED_TRIPS"
-id = "your_kv_namespace_id_here"
+id = "__KV_ID__"
 # preview_id = "your_preview_kv_id"  # 本地開發用（可選）
