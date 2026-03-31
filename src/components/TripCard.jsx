@@ -41,10 +41,12 @@ const TripCard = ({
     const multiDayVouchers = matchedActivities.filter(a => a.endDate && a.endDate !== a.startDate);
     const hotelWarns = trip.hotelWarnings || [];
 
-    const borderColor = isExternalOnly ? 'border-blue-300' : !trip.isComplete ? 'border-amber-300' : isOpenJaw ? 'border-yellow-300' : 'border-emerald-300';
-    const badgeBg = isExternalOnly ? 'bg-blue-500' : !trip.isComplete ? 'bg-amber-500' : isOpenJaw ? 'bg-yellow-500' : 'bg-emerald-500';
-    const badgeLabel = isExternalOnly ? '外站獨立行程' : !trip.isComplete ? '未完結行程' : isOpenJaw ? '不同點進出' : '配對成功';
-    const BadgeIcon = (isExternalOnly || (trip.isComplete && !isOpenJaw)) ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <AlertTriangle className="w-3 h-3 mr-1" />;
+    const isVirtual = trip.isVirtual || segments.length === 0;
+
+    const borderColor = isVirtual ? 'border-purple-200' : isExternalOnly ? 'border-blue-300' : !trip.isComplete ? 'border-amber-300' : isOpenJaw ? 'border-yellow-300' : 'border-emerald-300';
+    const badgeBg = isVirtual ? 'bg-purple-500' : isExternalOnly ? 'bg-blue-500' : !trip.isComplete ? 'bg-amber-500' : isOpenJaw ? 'bg-yellow-500' : 'bg-emerald-500';
+    const badgeLabel = isVirtual ? '獨立項目' : isExternalOnly ? '外站獨立行程' : !trip.isComplete ? '未完結行程' : isOpenJaw ? '不同點進出' : '配對成功';
+    const BadgeIcon = isVirtual ? <Ticket className="w-3 h-3 mr-1" /> : (isExternalOnly || (trip.isComplete && !isOpenJaw)) ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <AlertTriangle className="w-3 h-3 mr-1" />;
 
     const layovers = {};
     segments.forEach((seg, i) => {

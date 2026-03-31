@@ -31,7 +31,7 @@ export default function TripCostPanel({
                     <span>NT$ {Math.round(grandTotalTWD / tripDays).toLocaleString()} / 天</span>
                 </div>
             )}
-            <div className="text-xs font-bold text-slate-400 bg-slate-200/50 px-2 py-1.5 rounded-md mt-1 border border-slate-200/50">🛫 共 {segmentsCount} 段航班</div>
+            {segmentsCount > 0 && <div className="text-xs font-bold text-slate-400 bg-slate-200/50 px-2 py-1.5 rounded-md mt-1 border border-slate-200/50">🛫 共 {segmentsCount} 段航班</div>}
         </div>
     );
 }
