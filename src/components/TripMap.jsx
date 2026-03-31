@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { AIRPORT_COORDINATES, loadGoogleMapsApi } from '../utils/geoUtils';
+import { logger } from '../utils/logger';
 import { MAP } from '../constants/config';
 import { HotelForMapPropType, TripForMapPropType } from '../types/propTypes';
 
@@ -51,7 +52,7 @@ export default function TripMap({ itinerary, hotels, onClearSelectedTrip, select
                     setIsLoading(false);
                 }
             } catch (e) {
-                console.error('Map init error:', e);
+                logger.error('Map init error:', e);
                 if (isMounted) {
                     setError('地圖載入失敗，請檢查網路連線或 API 金鑰權限。');
                     setIsLoading(false);

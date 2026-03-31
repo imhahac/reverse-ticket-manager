@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { logger } from '../utils/logger';
 
 /**
  * useLocalStorage ── 帶持久化的 useState
@@ -20,7 +21,7 @@ export function useLocalStorage(key, initialValue) {
             const parsed = JSON.parse(item);
             return (parsed === null || parsed === undefined) ? initialValue : parsed;
         } catch (error) {
-            console.warn(`Error reading localStorage key "${key}":`, error);
+            logger.warn(`Error reading localStorage key "${key}":`, error);
             return initialValue;
         }
     });
@@ -43,7 +44,7 @@ export function useLocalStorage(key, initialValue) {
                 return valueToStore;
             });
         } catch (error) {
-            console.warn(`Error setting localStorage key "${key}":`, error);
+            logger.warn(`Error setting localStorage key "${key}":`, error);
         }
     }, [key]);
 

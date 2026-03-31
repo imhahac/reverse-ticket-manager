@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import PropTypes from 'prop-types';
 import { toast } from 'sonner';
 import { Plane, ChevronDown, ChevronUp } from 'lucide-react';
 import { lookupFlight, getOffsetDate } from '../services/flightService';
 import { buildLocalDateTimeStr, autoFixArrival, validateFlightNo, validatePositiveNumber } from '../utils/formUtils';
 import { useAppContext } from '../contexts/AppContext';
 import { ERRORS } from '../constants/errors';
-import { TIMING } from '../constants/timing';
 
 // 匯入子組件
 import FlightSegmentInput from './ticket/FlightSegmentInput';

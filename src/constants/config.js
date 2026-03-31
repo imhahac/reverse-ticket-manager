@@ -21,17 +21,6 @@ export const CONFIG = {
     }
 };
 
-/** Google OAuth Token 相關常數 */
-export const TOKEN = {
-    /** API 回傳 expires_in 缺失時的預設有效秒數 */
-    DEFAULT_EXPIRES_IN_S: 3600,
-    /** trySilentRefresh 等待 callback 的最長時間（ms），超時視為失敗 */
-    SILENT_REFRESH_TIMEOUT_MS: 8000,
-    /** 距離到期多少毫秒內觸發主動 refresh（10 分鐘） */
-    REFRESH_THRESHOLD_MS: 10 * 60 * 1000,
-    /** 背景檢查 token 過期狀態的間隔（5 分鐘） */
-    CHECK_INTERVAL_MS: 5 * 60 * 1000,
-};
 
 /** Google Maps 地圖相關常數 */
 export const MAP = {

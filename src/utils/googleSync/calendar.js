@@ -1,6 +1,7 @@
 import { addHours, format } from 'date-fns';
 import { getFlightAwareUrl } from '../flightUtils';
 import { addHoursToLocalStr, getIanaTimeZone } from './mapper';
+import { logger } from '../logger';
 
 /**
  * 同步到 Google Calendar
@@ -35,9 +36,12 @@ export const syncToCalendar = async (segments, hotels = [], activities = [], acc
         state.count += actRes.count;
         state.updatedActivityCalendarIds = actRes.updatedActivityCalendarIds;
 
-        return { success: state.count > 0 || state.errorLog === '', ...state, error: state.errorLog };
+        if (state.count === 0 && state.deletedCount === 0 && state.errorLog === '') {
+            return { success: false, ...state, error: '目前沒有行程事件需要同步' };
+        }
+        return { success: state.errorLog === '' || state.count > 0 || state.deletedCount > 0, ...state, error: state.errorLog };
     } catch (e) {
-        console.error(e);
+        logger.error('Calendar Sync Error:', e);
         return { success: false, count: 0, deletedCount: 0, error: e.message };
     }
 };

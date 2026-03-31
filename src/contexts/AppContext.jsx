@@ -1,3 +1,6 @@
+import React, { createContext, useContext } from 'react';
+import { DataProvider, useDataContext } from './DataContext';
+import { SyncProvider, useSyncContext } from './SyncContext';
 import { UIProvider } from './UIContext';
 import { FilterProvider, useFilterContext } from './FilterContext';
 

@@ -4,6 +4,7 @@
  */
 
 import { geocodeAddress } from './geoUtils';
+import { logger } from './logger';
 
 /**
  * 處理實體資料的地理編碼 (Geocoding) 擴充
@@ -25,7 +26,7 @@ export const processGeocodedEntity = async (item, titleField, locationField) => 
                 geoSuccess = true;
             }
         } catch (e) {
-            console.error('Failed to geocode address:', e);
+            logger.error('Failed to geocode address:', e);
         }
     }
 

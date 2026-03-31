@@ -164,7 +164,7 @@ export async function geocodeAddress(address) {
                 return { lat, lng, source: 'google' };
             }
         } catch (e) {
-            console.warn('Google Maps Geocoding (JavaScript API) failed:', e);
+            logger.warn('Google Maps Geocoding (JavaScript API) failed:', e);
         }
     }
 
@@ -180,7 +180,7 @@ export async function geocodeAddress(address) {
                 return { lat, lng, source: 'mapbox' };
             }
         } catch (e) {
-            console.warn('Mapbox geocoding failed:', e);
+            logger.warn('Mapbox geocoding failed:', e);
         }
     }
     

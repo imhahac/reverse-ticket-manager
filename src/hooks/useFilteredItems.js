@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { logger } from '../utils/logger';
 
 const safeMatch = (val, search) => {
     try {
@@ -61,7 +62,7 @@ export function useFilteredItems(items, searchTerm, filterStatus, type, tripLabe
                 return matchesSearch;
             });
         } catch (e) { 
-            console.error(`Filter ${type} error:`, e); 
+            logger.error(`Filter ${type} error:`, e); 
             return Array.isArray(items) ? items : []; 
         }
     }, [items, searchTerm, filterStatus, type, tripLabels]);

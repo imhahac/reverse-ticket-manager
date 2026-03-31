@@ -18,6 +18,7 @@
 
 import { useMemo } from 'react';
 import { isTaiwan } from '../utils/airportUtils';
+import { logger } from '../utils/logger';
 
 /**
  * 主要 Hook：將 tickets 陣列計算出 segments 與 trips。
@@ -45,11 +46,11 @@ export const useTrips = (tickets) => {
 
             // Fallback for Invalid Date issues
             if (isNaN(outDateTime.getTime())) {
-                console.warn(`[useTrips] Invalid outbound date for ticket ${t.id}: ${outDateTimeStr}`);
+                logger.warn(`[useTrips] Invalid outbound date for ticket ${t.id}: ${outDateTimeStr}`);
                 outDateTime = new Date(0);
             }
             if (isNaN(inDateTime.getTime())) {
-                console.warn(`[useTrips] Invalid inbound date for ticket ${t.id}: ${inDateTimeStr}`);
+                logger.warn(`[useTrips] Invalid inbound date for ticket ${t.id}: ${inDateTimeStr}`);
                 inDateTime = new Date(0);
             }
 

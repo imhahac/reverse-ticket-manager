@@ -4,6 +4,7 @@
  */
 
 import { CONFIG } from '../constants/config';
+import { logger } from '../utils/logger';
 
 /**
  * SECURITY NOTE: 
@@ -12,8 +13,7 @@ import { CONFIG } from '../constants/config';
  * these calls should be proxied through a server to hide the keys from the browser.
  */
 
-// Caching Setup
-const CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 1 week
+import { TIMING } from '../constants/timing';
 
 const getSafeDateFromISO = (isoStr, fallback) => {
     if (!isoStr) return fallback;
@@ -57,7 +57,7 @@ const fetchWithPublicProxy = async (targetUrl) => {
             if (text) return JSON.parse(text);
         }
     } catch (e) {
-        console.warn('corsproxy.io failed, trying allorigins...');
+        logger.warn('corsproxy.io failed, trying allorigins...');
     }
 
     // 2. 嘗試 allorigins.win
@@ -68,7 +68,7 @@ const fetchWithPublicProxy = async (targetUrl) => {
             if (wrapped.contents) return JSON.parse(wrapped.contents);
         }
     } catch (e) {
-        console.warn('allorigins.win failed');
+        logger.warn('allorigins.win failed');
     }
 
     return null;
@@ -95,10 +95,10 @@ const tryAviationStack = async (flightNo, flightDate) => {
                 data = await res.json();
                 sourceLabel = 'AviationStack (Proxy)';
             } else {
-                console.warn(`[Proxy] AviationStack returned status ${res.status}`);
+                logger.warn(`[Proxy] AviationStack returned status ${res.status}`);
             }
         } catch (e) {
-            console.error('AviationStack self-hosted proxy failed:', e);
+            logger.error('AviationStack self-hosted proxy failed:', e);
         }
         // 注意：若已設定 Proxy 但失敗，不再嘗試直連金鑰以防洩漏
     } else if (avKey) {
@@ -154,10 +154,10 @@ const tryAirLabs = async (flightNo) => {
                 data = await res.json();
                 sourceLabel = 'AirLabs (Proxy)';
             } else {
-                console.warn(`[Proxy] AirLabs returned status ${res.status}`);
+                logger.warn(`[Proxy] AirLabs returned status ${res.status}`);
             }
         } catch (e) {
-            console.error('AirLabs self-hosted proxy failed:', e);
+            logger.error('AirLabs self-hosted proxy failed:', e);
         }
         // 為了安全，若已設定 Proxy 但失敗，不再嘗試直連金鑰
     } else if (alKey) {
@@ -212,7 +212,7 @@ export const lookupFlight = async (flightNo, flightDate) => {
     if (cachedValue) {
         try {
             const { timestamp, data } = JSON.parse(cachedValue);
-            if (Date.now() - timestamp < CACHE_EXPIRY) {
+            if (Date.now() - timestamp < TIMING.FLIGHT_CACHE_TTL) {
                 return { ...data, isCache: true, sourceLabel: '本地快取' };
             }
         } catch (e) {

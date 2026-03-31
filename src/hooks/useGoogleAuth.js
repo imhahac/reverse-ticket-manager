@@ -14,7 +14,6 @@ import { useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useGoogleLogin, googleLogout } from '@react-oauth/google';
 import { useLocalStorage } from './useLocalStorage';
-import { TOKEN } from '../constants/config';
 import { logger } from '../utils/logger';
 import { TIMING } from '../constants/timing';
 import { ERRORS } from '../constants/errors';
@@ -35,13 +34,17 @@ export function useGoogleAuth() {
     // 用 ref 儲存 silentRefresh 的 resolve callback，避免閉包問題
     const refreshResolverRef = useRef(null);
 
+    const parseTokenResponse = (codeResponse) => {
+        const expiresAt = Date.now() + Number(codeResponse.expires_in || TIMING.AUTH_DEFAULT_EXPIRES_IN_S) * 1000;
+        setAccessTokenState({ token: codeResponse.access_token, expiresAt });
+    };
+
     // ── silentLogin：瀏覽器背景靜默更新（不彈窗，best-effort）─────────────
     const silentLogin = useGoogleLogin({
         prompt: 'none',
         scope: GOOGLE_SCOPE,
         onSuccess: (codeResponse) => {
-            const expiresAt = Date.now() + Number(codeResponse.expires_in || TOKEN.DEFAULT_EXPIRES_IN_S) * 1000;
-            setAccessTokenState({ token: codeResponse.access_token, expiresAt });
+            parseTokenResponse(codeResponse);
             refreshResolverRef.current?.(true);
             refreshResolverRef.current = null;
         },
@@ -56,8 +59,7 @@ export function useGoogleAuth() {
     const login = useGoogleLogin({
         scope: GOOGLE_SCOPE,
         onSuccess: (codeResponse) => {
-            const expiresAt = Date.now() + Number(codeResponse.expires_in || TOKEN.DEFAULT_EXPIRES_IN_S) * 1000;
-            setAccessTokenState({ token: codeResponse.access_token, expiresAt });
+            parseTokenResponse(codeResponse);
             toast.success('Google 登入成功！');
         },
         onError: (error) => {
@@ -117,12 +119,9 @@ export function useGoogleAuth() {
                     refreshResolverRef.current = null;
                     toast.error('Google Token 更新超時', { description: '若持續出現異常，請手動重新登入。' });
                 }
-            }, TOKEN.SILENT_REFRESH_TIMEOUT_MS);
+            }, TIMING.SILENT_REFRESH_TIMEOUT_MS);
         });
     };
-
-
-// ... (inside useGoogleAuth)
 
     // ── 背景 interval：token 剩阈值時自動嘗試更新 ─────────────────────
     useEffect(() => {

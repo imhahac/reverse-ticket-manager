@@ -1,24 +1,34 @@
+import { logger } from '../logger';
+
+async function findDriveFile(accessToken) {
+    const query = encodeURIComponent(`name="reverse-tickets.json" and trashed=false`);
+    const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    
+    if (searchRes.status === 401) return { expired: true };
+    if (!searchRes.ok) throw new Error(`搜尋 Drive 失敗: [${searchRes.status}] ${await searchRes.text()}`);
+    
+    let searchData;
+    try {
+        searchData = await searchRes.json();
+    } catch (e) {
+        throw new Error('Google Drive 搜尋回傳格式錯誤 (非 JSON)');
+    }
+
+    const files = Array.isArray(searchData.files) ? searchData.files : [];
+    return { files };
+}
+
 /**
  * 上傳/覆寫資料到 Google Drive 的 reverse-tickets.json
  */
 export const syncToDrive = async (tickets, tripLabels, hotels = [], accessToken, activities = []) => {
     try {
-        const query = encodeURIComponent(`name="reverse-tickets.json" and trashed=false`);
-        const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive`, {
-            headers: { Authorization: `Bearer ${accessToken}` }
-        });
+        const findRes = await findDriveFile(accessToken);
+        if (findRes.expired) return { success: false, expired: true };
         
-        if (searchRes.status === 401) return { success: false, expired: true };
-        if (!searchRes.ok) throw new Error(`搜尋 Drive 失敗: [${searchRes.status}] ${await searchRes.text()}`);
-        
-        let searchData;
-        try {
-            searchData = await searchRes.json();
-        } catch (e) {
-            throw new Error('Google Drive 搜尋回傳格式錯誤 (非 JSON)');
-        }
-
-        const files = Array.isArray(searchData.files) ? searchData.files : [];
+        const files = findRes.files;
         const existingFile = files.length > 0 ? files[0] : null;
 
         const fileContent = { tickets, tripLabels, hotels, activities };
@@ -59,7 +69,7 @@ export const syncToDrive = async (tickets, tripLabels, hotels = [], accessToken,
             throw new Error(`上傳檔案失敗: [${res.status}] ${await res.text()}`);
         }
     } catch (e) {
-        console.error(e);
+        logger.error('Drive API Error:', e);
         return { success: false, error: e.message };
     }
 };
@@ -69,24 +79,10 @@ export const syncToDrive = async (tickets, tripLabels, hotels = [], accessToken,
  */
 export const loadFromDrive = async (accessToken) => {
     try {
-        const query = encodeURIComponent(`name="reverse-tickets.json" and trashed=false`);
-        const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&spaces=drive`, {
-            headers: { Authorization: `Bearer ${accessToken}` }
-        });
+        const findRes = await findDriveFile(accessToken);
+        if (findRes.expired) return { success: false, expired: true };
         
-        if (searchRes.status === 401) return { success: false, expired: true };
-        if (!searchRes.ok) {
-            throw new Error(`搜尋 Drive 失敗: [${searchRes.status}] ${await searchRes.text()}`);
-        }
-
-        let searchData;
-        try {
-            searchData = await searchRes.json();
-        } catch (e) {
-            throw new Error('Google Drive 搜尋回傳格式錯誤 (非 JSON)');
-        }
-        
-        const files = Array.isArray(searchData.files) ? searchData.files : [];
+        const files = findRes.files;
         if (files.length === 0) {
             return { success: false, error: `雲端找不到 reverse-tickets.json 的檔案。\n近期您是否有清除資料或變更帳號？` };
         }
@@ -128,7 +124,7 @@ export const loadFromDrive = async (accessToken) => {
 
         return { success: true, tickets, tripLabels, hotels, activities, foundFilesLog: allFoundFiles };
     } catch (e) {
-        console.error(e);
+        logger.error('Drive API Error:', e);
         return { success: false, error: e.message };
     }
 };

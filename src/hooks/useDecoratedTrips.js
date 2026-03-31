@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { calculateTripDays } from '../utils/dateHelpers';
+import { logger } from '../utils/logger';
 
 export function useDecoratedTrips(displayTrips, tickets, hotels, activities) {
     return useMemo(() => {
@@ -84,7 +85,7 @@ export function useDecoratedTrips(displayTrips, tickets, hotels, activities) {
                 safeActivities
             };
         } catch (e) {
-            console.error("Critical calculation error:", e);
+            logger.error("Critical calculation error:", e);
             return { 
                 decoratedTrips: [], totalPriceTWD: 0, totalHotelTWD: 0, totalActivityTWD: 0,
                 pastCostTWD: 0, futureCostTWD: 0, totalTripDays: 0, 

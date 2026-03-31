@@ -50,21 +50,51 @@ export function useGoogleSync({
             ? accessTokenState
             : accessTokenState?.token || accessToken;
 
-    // ── 備份到 Drive ──────────────────────────────────────────────────────
-    const handleSyncToDrive = async () => {
-        if (!accessToken) return toast.error('請先登入 Google');
-        // 主動檢查 token 是否已過期，避免帶過期 token 送請求
+    // ── 高階函式：封裝 Token 檢查與 Refresh 重試邏輯 ───────────────────
+    const withAuthGuard = async (actionFn, loadMsg) => {
+        if (!accessToken) {
+            toast.error('請先登入 Google');
+            return null;
+        }
+
         if (isTokenExpired?.()) {
             const ok = await trySilentRefresh();
             if (!ok) {
                 toast.error('登入已過期，請重新登入 Google');
-                return logout();
+                logout();
+                return null;
             }
         }
+
         setIsSyncing(true);
-        const toastId = toast.loading('正在備份至 Google Drive…');
-        let res = await syncToDrive(tickets, tripLabels, rawHotels, accessToken, activities);
+        const toastId = toast.loading(loadMsg);
+        let res = await actionFn(getCurrentToken());
         setIsSyncing(false);
+
+        if (!res.success && res.expired) {
+            const ok = await trySilentRefresh();
+            if (ok) {
+                setIsSyncing(true);
+                res = await actionFn(getCurrentToken());
+                setIsSyncing(false);
+            } else {
+                toast.error('登入已過期，請重新登入 Google', { id: toastId });
+                logout();
+                return null;
+            }
+        }
+
+        return { res, toastId };
+    };
+
+    // ── 備份到 Drive ──────────────────────────────────────────────────────
+    const handleSyncToDrive = async () => {
+        const guard = await withAuthGuard(
+            (token) => syncToDrive(tickets, tripLabels, rawHotels, token, activities),
+            '正在備份至 Google Drive…'
+        );
+        if (!guard) return;
+        const { res, toastId } = guard;
 
         if (res.success) {
             toast.success('雲端備份成功！', {
@@ -72,38 +102,18 @@ export function useGoogleSync({
                 description: `資料已備份至 Google Drive。(檔案 ID: ${res.fileId})`,
             });
         } else {
-            if (res.expired) {
-                const ok = await trySilentRefresh();
-                if (ok) {
-                    setIsSyncing(true);
-                    res = await syncToDrive(tickets, tripLabels, rawHotels, getCurrentToken(), activities);
-                    setIsSyncing(false);
-                    if (res.success) {
-                        return toast.success('雲端備份成功！', { id: toastId, description: `資料已備份至 Google Drive。(檔案 ID: ${res.fileId})` });
-                    }
-                }
-                toast.error('登入已過期，請重新登入 Google', { id: toastId });
-                return logout();
-            }
             toast.error('雲端備份失敗', { id: toastId, description: res.error });
         }
     };
 
     // ── 從 Drive 載入 ─────────────────────────────────────────────────────
     const handleLoadFromDrive = async () => {
-        if (!accessToken) return toast.error('請先登入 Google');
-        // 主動檢查 token
-        if (isTokenExpired?.()) {
-            const ok = await trySilentRefresh();
-            if (!ok) {
-                toast.error('登入已過期，請重新登入 Google');
-                return logout();
-            }
-        }
-        setIsSyncing(true);
-        const toastId = toast.loading('正在從 Google Drive 載入…');
-        let res = await loadFromDrive(accessToken);
-        setIsSyncing(false);
+        const guard = await withAuthGuard(
+            (token) => loadFromDrive(token),
+            '正在從 Google Drive 載入…'
+        );
+        if (!guard) return;
+        const { res, toastId } = guard;
 
         const confirmImport = (result) => {
             toast.dismiss(toastId);
@@ -114,12 +124,8 @@ export function useGoogleSync({
                     onClick: () => {
                         setTickets(result.tickets);
                         setTripLabels(result.tripLabels || {});
-                        if (result.hotels?.length > 0 && setHotels) {
-                            setHotels(result.hotels || []);
-                        }
-                        if (result.activities?.length > 0 && setActivities) {
-                            setActivities(result.activities || []);
-                        }
+                        if (result.hotels?.length > 0 && setHotels) setHotels(result.hotels);
+                        if (result.activities?.length > 0 && setActivities) setActivities(result.activities);
                         toast.success('雲端資料載入成功！');
                     },
                 },
@@ -131,47 +137,18 @@ export function useGoogleSync({
         if (res.success) {
             confirmImport(res);
         } else {
-            if (res.expired) {
-                const ok = await trySilentRefresh();
-                if (ok) {
-                    setIsSyncing(true);
-                    res = await loadFromDrive(getCurrentToken());
-                    setIsSyncing(false);
-                    if (res.success) return confirmImport(res);
-                }
-                toast.error('登入已過期，請重新登入 Google', { id: toastId });
-                return logout();
-            }
             toast.error('雲端載入失敗', { id: toastId, description: res.error });
         }
     };
 
     // ── 同步到 Google Calendar ────────────────────────────────────────────
     const handleSyncToCalendar = async () => {
-        if (!accessToken) return toast.error('請先登入 Google');
-        // 主動檢查 token
-        if (isTokenExpired?.()) {
-            const ok = await trySilentRefresh();
-            if (!ok) {
-                toast.error('登入已過期，請重新登入 Google');
-                return logout();
-            }
-        }
-        setIsSyncing(true);
-        const toastId = toast.loading('正在同步至 Google Calendar…');
-        let res = await syncToCalendar(segments, hotels, activities, accessToken);
-        setIsSyncing(false);
-
-        const showCalendarSuccess = (result) => {
-            const deletedNote = result.deletedCount > 0
-                ? `，已自動清除 ${result.deletedCount} 個廢棄事件`
-                : '';
-            toast.success('日曆同步成功！', {
-                id: toastId,
-                description: `共同步 ${result.count} 個航班事件${deletedNote}。${result.error ? `\n⚠️ 部分警告：${result.error}` : ''}`,
-                duration: 6000,
-            });
-        };
+        const guard = await withAuthGuard(
+            (token) => syncToCalendar(segments, hotels, activities, token),
+            '正在同步至 Google Calendar…'
+        );
+        if (!guard) return;
+        const { res, toastId } = guard;
 
         if (res.success) {
             // 將新的 calendarIds 回寫到 tickets
@@ -194,25 +171,16 @@ export function useGoogleSync({
                     updateActivityCalendarId(activityId, calendarId);
                 });
             }
-            showCalendarSuccess(res);
+            
+            const deletedNote = res.deletedCount > 0
+                ? `，已自動清除 ${res.deletedCount} 個廢棄事件`
+                : '';
+            toast.success('日曆同步成功！', {
+                id: toastId,
+                description: `共同步 ${res.count} 個航班事件${deletedNote}。${res.error ? `\n⚠️ 部分警告：${res.error}` : ''}`,
+                duration: 6000,
+            });
         } else {
-            // 只有 token 過期且 silent refresh 也失敗時才強制登出
-            if (res.expired) {
-                const ok = await trySilentRefresh();
-                if (ok) {
-                    setIsSyncing(true);
-                    res = await syncToCalendar(segments, hotels, activities, getCurrentToken());
-                    setIsSyncing(false);
-                    if (res.success) {
-                        toast.dismiss(toastId);
-                        return showCalendarSuccess(res);
-                    }
-                }
-                // refresh 失敗：token 真的過期，才登出
-                toast.error('登入已過期，請重新登入 Google', { id: toastId });
-                return logout();
-            }
-            // 其他錯誤（網路、API quota 等）只顯示錯誤訊息，不登出
             toast.error('日曆同步失敗', {
                 id: toastId,
                 description: res.error || '同步過程中發生錯誤，請稍後再試。',
