@@ -20,9 +20,9 @@ import { useAppContext } from '../contexts/AppContext';
 
 export default function Dashboard() {
     const {
-        safeTickets, trips, safeHotels, safeActivities,
-        totalPriceTWD, totalHotelTWD = 0, totalActivityTWD = 0,
-        futureCostTWD, pastCostTWD, sunkCostTWD, totalTripDays = 0,
+        safeTickets = [], trips = [], safeHotels = [], safeActivities = [],
+        totalPriceTWD = 0, totalHotelTWD = 0, totalActivityTWD = 0,
+        futureCostTWD = 0, pastCostTWD = 0, sunkCostTWD = 0, totalTripDays = 0,
     } = useAppContext();
 
     const ticketCount = safeTickets.length;

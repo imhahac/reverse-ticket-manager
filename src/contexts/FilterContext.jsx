@@ -54,6 +54,10 @@ export function FilterProvider({ children }) {
     const value = {
         displayTrips,
         decoratedTrips,
+        trips: decoratedTrips, // 增加別名以相容 Dashboard 解構
+        safeTickets,
+        safeHotels,
+        safeActivities,
         totalPriceTWD, totalHotelTWD, totalActivityTWD,
         pastCostTWD, futureCostTWD, totalTripDays, sunkCostTWD,
         renderError,
