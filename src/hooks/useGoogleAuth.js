@@ -16,6 +16,8 @@ import { useGoogleLogin, googleLogout } from '@react-oauth/google';
 import { useLocalStorage } from './useLocalStorage';
 import { TOKEN } from '../constants/config';
 import { logger } from '../utils/logger';
+import { TIMING } from '../constants/timing';
+import { ERRORS } from '../constants/errors';
 
 const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events';
 
@@ -119,29 +121,41 @@ export function useGoogleAuth() {
         });
     };
 
-    // ── 背景 interval：token 剩 10 分鐘時自動嘗試更新 ─────────────────────
+
+// ... (inside useGoogleAuth)
+
+    // ── 背景 interval：token 剩阈值時自動嘗試更新 ─────────────────────
     useEffect(() => {
         if (!accessToken) return;
 
         const checkExpiration = () => {
-            // 只在 token 存在、expiresAt 有效、且距到期不足閾值時才 refresh
-            if (
-                accessToken &&
-                accessTokenExpiresAt &&
-                !isNaN(accessTokenExpiresAt) &&
-                accessTokenExpiresAt - Date.now() < TOKEN.REFRESH_THRESHOLD_MS
-            ) {
+            if (!accessTokenState || !accessTokenState.expiresAt) return;
+
+            const now = Date.now();
+            const timeRemaining = accessTokenState.expiresAt - now;
+
+            // 情況 1：token 已徹底過期（超過 1 分鐘緩衝）-> 直接登出，不嘗試背景刷新
+            if (timeRemaining < -60000) {
+                logger.warn('Token severely expired, clearing state.');
+                logout();
+                toast.error(ERRORS.AUTH_EXPIRED);
+                return;
+            }
+
+            // 情況 2：token 快到期了 -> 嘗試靜默更新
+            if (timeRemaining < TIMING.TOKEN_EXPIRY_THRESHOLD) {
+                logger.info('Token near expiry, attempting silent refresh...');
                 trySilentRefresh();
             }
         };
 
-        // 首次掛載時立即檢查一次，避免帶著已過期的 token 等待 5 分鐘
+        // 首次掛載時立即檢查一次
         checkExpiration();
 
-        const interval = setInterval(checkExpiration, TOKEN.CHECK_INTERVAL_MS);
+        const interval = setInterval(checkExpiration, TIMING.AUTH_CHECK_INTERVAL);
         return () => clearInterval(interval);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [accessToken, accessTokenExpiresAt]);
+    }, [accessToken, accessTokenState]);
 
     return { accessToken, accessTokenState, login, logout, isTokenExpired, trySilentRefresh };
 }

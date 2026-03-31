@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useUIContext } from '../contexts/UIContext';
 import { useDebounce } from '../hooks/useDebounce';
+import { TIMING } from '../constants/timing';
 
 export default function SearchFilterBar() {
     const { searchTerm, setSearchTerm, filterStatus, setFilterStatus } = useUIContext();
     // 本地 state 控制 input 即時顯示，debounce 後才寫入 context
     const [inputValue, setInputValue] = useState(searchTerm);
-    const debouncedValue = useDebounce(inputValue, 300);
+    const debouncedValue = useDebounce(inputValue, TIMING.DEBOUNCE_SEARCH);
 
     useEffect(() => {
         setSearchTerm(debouncedValue);

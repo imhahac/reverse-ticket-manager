@@ -108,10 +108,8 @@ function AppContent() {
 
 export default function App() {
     return (
-        <UIProvider>
-            <AppProvider>
-                <AppContent />
-            </AppProvider>
-        </UIProvider>
+        <AppProvider>
+            <AppContent />
+        </AppProvider>
     );
 }

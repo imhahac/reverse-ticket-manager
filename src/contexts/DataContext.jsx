@@ -1,70 +1,30 @@
-import React, { createContext, useContext, useState, useMemo } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import { useTrips } from '../hooks/useTrips';
 import { useTripOverrides } from '../hooks/useTripOverrides';
 import { useHotels } from '../features/hotels/hooks/useHotels';
 import { useActivities } from '../hooks/useActivities';
-import { useDecoratedTrips } from '../hooks/useDecoratedTrips';
-import { useFilteredItems } from '../hooks/useFilteredItems';
 import { useEntityManager } from '../hooks/useEntityManager';
 import { exportData, importData } from '../utils/importExportUtils';
-import { applyTripOverrides } from '../utils/tripOverrides';
-import { useItinerary } from '../hooks/useItinerary';
 import { toast } from 'sonner';
-import { useUIContext } from './UIContext';
 
 export const DataContext = createContext();
 
 export function DataProvider({ children }) {
-    const { searchTerm, filterStatus, selectedTripIdForMap } = useUIContext();
-
     // ── 持久化資料 ───────────────────────────────────────────────────────────
     const [tickets, setTickets] = useLocalStorage('reverse-tickets', []);
     const [tripLabels, setTripLabels] = useLocalStorage('reverse-trip-labels', {});
 
-    // ── UI 狀態 (剩餘) ──────────────────────────────────────────────────────────────
+    // ── UI 狀態 (僅保留表單編輯狀態) ──────────────────────────────────────────
     const [editingTicket, setEditingTicket] = useState(null);
 
-    // ── Hooks ────────────────────────────────────────────────────────
+    // ── 原始資料 Hooks ──────────────────────────────────────────────────────
     const { exchangeRates } = useExchangeRates();
     const { segments = [], trips = [] } = useTrips(Array.isArray(tickets) ? tickets : []);
     const { overrides: tripOverrides, removeSegment, restoreSegment, moveSegmentToTrip, clearAllOverrides } = useTripOverrides();
     const { hotels = [], rawHotels = [], addHotel, updateHotel, deleteHotel, updateHotelCalendarIds, setHotels } = useHotels();
     const { activities = [], setActivities, addActivity, updateActivity, deleteActivity, updateActivityCalendarId } = useActivities();
-
-    // ── 衍生資料預運算 ────────────────────────────────────────────────────────
-    const displayTrips = useMemo(() => applyTripOverrides(trips, tripOverrides), [trips, tripOverrides]);
-    const {
-        decoratedTrips, totalPriceTWD, totalHotelTWD, totalActivityTWD,
-        pastCostTWD, futureCostTWD, totalTripDays, sunkCostTWD,
-        renderError, safeTickets, safeHotels, safeActivities
-    } = useDecoratedTrips(displayTrips, tickets, hotels, activities);
-
-    const itinerary = useItinerary(
-        Array.isArray(decoratedTrips) ? decoratedTrips : [],
-        Array.isArray(hotels) ? hotels : [],
-        Array.isArray(activities) ? activities : []
-    );
-
-    // ── 智慧搜尋與篩選引擎 ──────────────────────────────────────────────────
-    const filteredTickets = useFilteredItems(safeTickets, searchTerm, filterStatus, 'tickets');
-    const filteredHotels = useFilteredItems(safeHotels, searchTerm, filterStatus, 'hotels');
-    const filteredActivities = useFilteredItems(safeActivities, searchTerm, filterStatus, 'activities');
-    const filteredItinerary = useFilteredItems(itinerary, searchTerm, filterStatus, 'itinerary', tripLabels);
-
-    const itineraryForMap = useMemo(() => {
-        if (selectedTripIdForMap) return filteredItinerary.filter(trip => trip.id === selectedTripIdForMap);
-        return filteredItinerary;
-    }, [filteredItinerary, selectedTripIdForMap]);
-
-    const hotelsForMap = useMemo(() => {
-        if (selectedTripIdForMap && itineraryForMap.length > 0) {
-            const tripHotelIds = new Set((itineraryForMap[0].matchedHotels ?? []).map(h => h.id));
-            return filteredHotels.filter(hotel => tripHotelIds.has(hotel.id));
-        }
-        return filteredHotels;
-    }, [filteredHotels, selectedTripIdForMap, itineraryForMap]);
 
     // ── 機票 CRUD ─────────────────────────────────────────────────────────────
     const handleSaveTicket = (ticket) => {
@@ -75,7 +35,7 @@ export function DataProvider({ children }) {
     const handleCancelEdit = () => setEditingTicket(null);
     const handleDeleteTicket = (id) => {
         toast('確定要刪除這筆機票訂單嗎？', {
-            description: '相關的趟次配驚將會被移除。',
+            description: '相關的趟次配對將會被移除。',
             action: { label: '確認刪除', onClick: () => setTickets(prev => prev.filter(t => t.id !== id)) },
             cancel: { label: '取消', onClick: () => {} },
             duration: 8000,
@@ -110,26 +70,21 @@ export function DataProvider({ children }) {
     };
 
     const value = {
-        // Raw & Hooks APIs mapped for Sync
+        // Raw Data & Source Hooks
         tickets, setTickets, 
         tripLabels, setTripLabels,
         hotels, rawHotels, setHotels, updateHotelCalendarIds,
         activities, setActivities, updateActivityCalendarId,
-        segments,
+        segments, trips, tripOverrides,
+        exchangeRates,
         
-        // Context outputs
-        exchangeRates, trips, displayTrips,
-        safeTickets, safeHotels, safeActivities,
-        filteredTickets, filteredHotels, filteredActivities, filteredItinerary,
-        totalPriceTWD, totalHotelTWD, totalActivityTWD,
-        pastCostTWD, futureCostTWD, totalTripDays, sunkCostTWD, renderError,
-
+        // CRUD Handlers
         editingTicket, setEditingTicket, handleSaveTicket, handleEditTicket, handleCancelEdit, handleDeleteTicket,
         editingHotel, handleSaveHotel, handleEditHotel, handleCancelEditHotel, handleDeleteHotel, isSavingHotel,
         editingActivity, handleSaveActivity, handleEditActivity, handleCancelEditActivity, handleDeleteActivity, isSavingActivity,
 
-        itineraryForMap, hotelsForMap,
-        tripOverrides, removeSegment, restoreSegment, moveSegmentToTrip, clearAllOverrides,
+        // Overrides Handlers
+        removeSegment, restoreSegment, moveSegmentToTrip, clearAllOverrides,
 
         handleExport, handleImport
     };

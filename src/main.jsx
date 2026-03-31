@@ -20,8 +20,12 @@ const updateSW = registerSW({
 });
 
 import { CONFIG } from './constants/config.js'
+import { validateEnv } from './config/env.js'
 
-const clientId = CONFIG.googleClientId || 'MISSING_CLIENT_ID';
+// 在啟動前執行嚴格驗證。若失敗將拋出 Error 並由後續的渲染流程或 ErrorBoundary 處理。
+validateEnv();
+
+const clientId = CONFIG.googleClientId;
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>

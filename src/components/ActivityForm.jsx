@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { Ticket, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { validateNonNegativeNumber, validatePositiveNumber } from '../utils/formUtils';
+import { ERRORS } from '../constants/errors';
 
 export default function ActivityForm() {
     const { handleSaveActivity: onSaveActivity, editingActivity, handleCancelEditActivity: onCancelEdit, exchangeRates, isSavingActivity: isSaving } = useAppContext();
@@ -34,12 +35,12 @@ export default function ActivityForm() {
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!formData.title || !formData.startDate || !formData.location || !formData.price) {
-            toast.error('請填寫完整資訊 (活動名稱、開始日期、地點、價格)');
+            toast.error(ERRORS.ACTIVITY_MISSING_FIELDS);
             return;
         }
 
         if (!validateNonNegativeNumber(formData.price)) {
-            toast.error('價格必須為有效數字且不能為負數');
+            toast.error(ERRORS.ACTIVITY_NEGATIVE_PRICE);
             return;
         }
 
@@ -49,7 +50,7 @@ export default function ActivityForm() {
         }
 
         if (formData.endDate && new Date(formData.endDate) < new Date(formData.startDate)) {
-            toast.error('結束日期不能早於開始日期喔！');
+            toast.error(ERRORS.ACTIVITY_INVALID_DATE_ORDER);
             return;
         }
 

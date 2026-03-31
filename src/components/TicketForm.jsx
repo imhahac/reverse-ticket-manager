@@ -5,6 +5,8 @@ import { Plane, ChevronDown, ChevronUp } from 'lucide-react';
 import { lookupFlight, getOffsetDate } from '../services/flightService';
 import { buildLocalDateTimeStr, autoFixArrival, validateFlightNo, validatePositiveNumber } from '../utils/formUtils';
 import { useAppContext } from '../contexts/AppContext';
+import { ERRORS } from '../constants/errors';
+import { TIMING } from '../constants/timing';
 
 // 匯入子組件
 import FlightSegmentInput from './ticket/FlightSegmentInput';
@@ -118,12 +120,12 @@ export default function TicketForm() {
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!formData.airline || !formData.price || !formData.outboundDate) {
-            toast.error('請填寫完整資訊 (航空公司、價格、去程日期)');
+            toast.error(ERRORS.TICKET_MISSING_FIELDS);
             return;
         }
 
         if (!validatePositiveNumber(formData.price)) {
-            toast.error('機票價格必須大於 0');
+            toast.error(ERRORS.TICKET_NEGATIVE_PRICE);
             return;
         }
 
@@ -143,7 +145,7 @@ export default function TicketForm() {
         }
 
         if (!formData.departRegion || !formData.returnRegion) {
-            toast.error('出發與抵達機場不能為空！');
+            toast.error(ERRORS.TICKET_AIRPORT_EMPTY);
             return;
         }
 
@@ -158,7 +160,7 @@ export default function TicketForm() {
         const outDateObj = new Date(outDateTimeStr || formData.outboundDate);
 
         if (isNaN(outDateObj.getTime())) {
-            toast.error('去程日期無效，請檢查輸入格式');
+            toast.error(ERRORS.TICKET_INVALID_DATE_FORMAT);
             return;
         }
 
@@ -169,12 +171,12 @@ export default function TicketForm() {
             const inDateObj = new Date(inDateTimeStr || formData.inboundDate);
 
             if (isNaN(inDateObj.getTime())) {
-                toast.error('回程日期無效，請檢查輸入格式');
+                toast.error(ERRORS.TICKET_INVALID_DATE_FORMAT);
                 return;
             }
 
             if (inDateTimeStr && outDateTimeStr && inDateObj < outDateObj) {
-                toast.error('同一張發票中，回程段的日期時間不能早於去程段喔！');
+                toast.error(ERRORS.TICKET_INVALID_DATE_ORDER);
                 return;
             }
         }
