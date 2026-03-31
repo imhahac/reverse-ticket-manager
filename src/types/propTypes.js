@@ -45,3 +45,24 @@ export const TripPropType = PropTypes.shape({
     matchedActivities: PropTypes.arrayOf(ActivityPropType),
     hotelWarnings: PropTypes.arrayOf(PropTypes.string),
 });
+
+/** TripMap 用：含座標的飯店 */
+export const HotelForMapPropType = PropTypes.shape({
+    id: PropTypes.string.isRequired,
+    name: PropTypes.string,
+    address: PropTypes.string,
+    lat: PropTypes.number,
+    lng: PropTypes.number,
+});
+
+/** TripMap 用：含 segments 與 matchedActivities 的行程 */
+export const TripForMapPropType = PropTypes.shape({
+    id: PropTypes.string.isRequired,
+    segments: PropTypes.arrayOf(FlightSegmentPropType),
+    matchedActivities: PropTypes.arrayOf(PropTypes.shape({
+        title: PropTypes.string,
+        location: PropTypes.string,
+        lat: PropTypes.number,
+        lng: PropTypes.number,
+    })),
+});

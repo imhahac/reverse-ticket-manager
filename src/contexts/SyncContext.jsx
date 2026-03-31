@@ -6,7 +6,7 @@ import { useDataContext } from './DataContext';
 export const SyncContext = createContext();
 
 export function SyncProvider({ children }) {
-    const { accessToken, accessTokenState, login, logout, trySilentRefresh } = useGoogleAuth();
+    const { accessToken, accessTokenState, login, logout, isTokenExpired, trySilentRefresh } = useGoogleAuth();
     
     // 從 DataContext 取得同步所需之狀態與 setters
     const { 
@@ -17,7 +17,7 @@ export function SyncProvider({ children }) {
     } = useDataContext();
 
     const { isSyncing, handleSyncToDrive, handleLoadFromDrive, handleSyncToCalendar } = useGoogleSync({
-        accessToken, accessTokenState, trySilentRefresh, logout,
+        accessToken, accessTokenState, trySilentRefresh, isTokenExpired, logout,
         tickets, tripLabels, setTickets, setTripLabels,
         hotels, rawHotels,
         activities,
@@ -29,7 +29,7 @@ export function SyncProvider({ children }) {
     });
 
     const value = {
-        accessToken, accessTokenState, login, logout, trySilentRefresh,
+        accessToken, accessTokenState, login, logout, isTokenExpired, trySilentRefresh,
         isSyncing, handleSyncToDrive, handleLoadFromDrive, handleSyncToCalendar
     };
 

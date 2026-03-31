@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Ticket, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
+import { validateNonNegativeNumber, validatePositiveNumber } from '../utils/formUtils';
 
 export default function ActivityForm() {
     const { handleSaveActivity: onSaveActivity, editingActivity, handleCancelEditActivity: onCancelEdit, exchangeRates, isSavingActivity: isSaving } = useAppContext();
@@ -37,9 +38,13 @@ export default function ActivityForm() {
             return;
         }
 
-        const price = Number(formData.price);
-        if (isNaN(price) || price < 0) {
-            toast.error('價格不能為負數');
+        if (!validateNonNegativeNumber(formData.price)) {
+            toast.error('價格必須為有效數字且不能為負數');
+            return;
+        }
+
+        if (!validatePositiveNumber(formData.exchangeRate)) {
+            toast.error('匯率必須大於 0');
             return;
         }
 

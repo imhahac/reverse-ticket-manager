@@ -27,6 +27,7 @@ export function useGoogleSync({
     accessToken,
     accessTokenState,
     trySilentRefresh,
+    isTokenExpired,
     logout,
     tickets,
     tripLabels,
@@ -52,6 +53,14 @@ export function useGoogleSync({
     // ── 備份到 Drive ──────────────────────────────────────────────────────
     const handleSyncToDrive = async () => {
         if (!accessToken) return toast.error('請先登入 Google');
+        // 主動檢查 token 是否已過期，避免帶過期 token 送請求
+        if (isTokenExpired?.()) {
+            const ok = await trySilentRefresh();
+            if (!ok) {
+                toast.error('登入已過期，請重新登入 Google');
+                return logout();
+            }
+        }
         setIsSyncing(true);
         const toastId = toast.loading('正在備份至 Google Drive…');
         let res = await syncToDrive(tickets, tripLabels, rawHotels, accessToken, activities);
@@ -83,6 +92,14 @@ export function useGoogleSync({
     // ── 從 Drive 載入 ─────────────────────────────────────────────────────
     const handleLoadFromDrive = async () => {
         if (!accessToken) return toast.error('請先登入 Google');
+        // 主動檢查 token
+        if (isTokenExpired?.()) {
+            const ok = await trySilentRefresh();
+            if (!ok) {
+                toast.error('登入已過期，請重新登入 Google');
+                return logout();
+            }
+        }
         setIsSyncing(true);
         const toastId = toast.loading('正在從 Google Drive 載入…');
         let res = await loadFromDrive(accessToken);
@@ -132,6 +149,14 @@ export function useGoogleSync({
     // ── 同步到 Google Calendar ────────────────────────────────────────────
     const handleSyncToCalendar = async () => {
         if (!accessToken) return toast.error('請先登入 Google');
+        // 主動檢查 token
+        if (isTokenExpired?.()) {
+            const ok = await trySilentRefresh();
+            if (!ok) {
+                toast.error('登入已過期，請重新登入 Google');
+                return logout();
+            }
+        }
         setIsSyncing(true);
         const toastId = toast.loading('正在同步至 Google Calendar…');
         let res = await syncToCalendar(segments, hotels, activities, accessToken);
@@ -171,6 +196,7 @@ export function useGoogleSync({
             }
             showCalendarSuccess(res);
         } else {
+            // 只有 token 過期且 silent refresh 也失敗時才強制登出
             if (res.expired) {
                 const ok = await trySilentRefresh();
                 if (ok) {
@@ -182,12 +208,15 @@ export function useGoogleSync({
                         return showCalendarSuccess(res);
                     }
                 }
+                // refresh 失敗：token 真的過期，才登出
+                toast.error('登入已過期，請重新登入 Google', { id: toastId });
+                return logout();
             }
+            // 其他錯誤（網路、API quota 等）只顯示錯誤訊息，不登出
             toast.error('日曆同步失敗', {
                 id: toastId,
-                description: res.error || 'Access Token 可能已過期，請重新登入。',
+                description: res.error || '同步過程中發生錯誤，請稍後再試。',
             });
-            logout();
         }
     };
 

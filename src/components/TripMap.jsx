@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
+import PropTypes from 'prop-types';
 import { AIRPORT_COORDINATES, loadGoogleMapsApi } from '../utils/geoUtils';
+import { MAP } from '../constants/config';
+import { HotelForMapPropType, TripForMapPropType } from '../types/propTypes';
 
 export default function TripMap({ itinerary, hotels, onClearSelectedTrip, selectedTripId, selectedHotelId }) {
     const mapRef = useRef(null);
@@ -35,8 +38,8 @@ export default function TripMap({ itinerary, hotels, onClearSelectedTrip, select
                 }
 
                 map = new window.google.maps.Map(mapRef.current, {
-                    center: { lat: 23.6978, lng: 120.9605 }, // 預設中心：台灣
-                    zoom: 6,
+                    center: MAP.DEFAULT_CENTER,
+                    zoom: MAP.DEFAULT_ZOOM,
                     mapTypeId: 'roadmap',
                     mapTypeControl: false,
                     streetViewControl: false,
@@ -173,12 +176,12 @@ export default function TripMap({ itinerary, hotels, onClearSelectedTrip, select
                 const targetHotel = hotels.find(h => h.id === selectedHotelId);
                 if (targetHotel && targetHotel.lat && targetHotel.lng) {
                     mapInstance.setCenter({ lat: targetHotel.lat, lng: targetHotel.lng });
-                    mapInstance.setZoom(14); // 放大到一個合適的級別
+                    mapInstance.setZoom(MAP.HOTEL_FOCUS_ZOOM);
                 }
             } else {
                 // 避免如果只有一個點時放得太大
                 const listener = window.google.maps.event.addListener(mapInstance, "idle", () => {
-                    if (mapInstance.getZoom() > 10) mapInstance.setZoom(10);
+                    if (mapInstance.getZoom() > MAP.MAX_SINGLE_POINT_ZOOM) mapInstance.setZoom(MAP.MAX_SINGLE_POINT_ZOOM);
                     window.google.maps.event.removeListener(listener);
                 });
             }
@@ -214,3 +217,16 @@ export default function TripMap({ itinerary, hotels, onClearSelectedTrip, select
         </div>
     );
 }
+TripMap.propTypes = {
+    itinerary:           PropTypes.arrayOf(TripForMapPropType).isRequired,
+    hotels:              PropTypes.arrayOf(HotelForMapPropType).isRequired,
+    onClearSelectedTrip: PropTypes.func,
+    selectedTripId:      PropTypes.string,
+    selectedHotelId:     PropTypes.string,
+};
+
+TripMap.defaultProps = {
+    onClearSelectedTrip: undefined,
+    selectedTripId:      null,
+    selectedHotelId:     null,
+};

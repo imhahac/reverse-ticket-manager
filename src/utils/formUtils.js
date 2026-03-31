@@ -1,5 +1,38 @@
 import { toast } from 'sonner';
 
+/** 航班號格式：2~8 位，允許字母+數字（例 BR192、CX456、NH0081） */
+const FLIGHT_NO_REGEX = /^[A-Z0-9]{2,8}$/i;
+
+/**
+ * 驗證航班號格式。
+ * @param {string} flightNo
+ * @returns {boolean} 通過為 true；為空字串時視為「選填」回傳 true
+ */
+export const validateFlightNo = (flightNo) => {
+    if (!flightNo) return true; // 選填
+    return FLIGHT_NO_REGEX.test(flightNo.trim());
+};
+
+/**
+ * 驗證數值為有效正數（> 0）。
+ * @param {string|number} value
+ * @returns {boolean}
+ */
+export const validatePositiveNumber = (value) => {
+    const n = Number(value);
+    return !isNaN(n) && n > 0;
+};
+
+/**
+ * 驗證數值為有效非負數（>= 0）。
+ * @param {string|number} value
+ * @returns {boolean}
+ */
+export const validateNonNegativeNumber = (value) => {
+    const n = Number(value);
+    return !isNaN(n) && n >= 0;
+};
+
 /**
  * 組合日期與時間為本地字串
  */

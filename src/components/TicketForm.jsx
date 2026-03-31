@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import { toast } from 'sonner';
 import { Plane, ChevronDown, ChevronUp } from 'lucide-react';
 import { lookupFlight, getOffsetDate } from '../services/flightService';
-import { buildLocalDateTimeStr, autoFixArrival } from '../utils/formUtils';
+import { buildLocalDateTimeStr, autoFixArrival, validateFlightNo, validatePositiveNumber } from '../utils/formUtils';
 import { useAppContext } from '../contexts/AppContext';
 
 // 匯入子組件
@@ -122,8 +122,23 @@ export default function TicketForm() {
             return;
         }
 
-        if (Number(formData.price) <= 0) {
+        if (!validatePositiveNumber(formData.price)) {
             toast.error('機票價格必須大於 0');
+            return;
+        }
+
+        if (!validatePositiveNumber(formData.exchangeRate)) {
+            toast.error('匯率必須大於 0');
+            return;
+        }
+
+        if (!validateFlightNo(formData.outboundFlightNo)) {
+            toast.error('去程航班號格式不正確 (例如 BR192)');
+            return;
+        }
+
+        if (formData.type !== 'oneway' && !validateFlightNo(formData.inboundFlightNo)) {
+            toast.error('回程航班號格式不正確 (例如 BR192)');
             return;
         }
 

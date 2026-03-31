@@ -1,3 +1,6 @@
+import { MAP } from '../constants/config';
+import { logger } from './logger';
+
 export const AIRPORT_COORDINATES = {
     'TPE': { lat: 25.0797, lng: 121.2342 }, // 桃園
     'TSA': { lat: 25.0697, lng: 121.5526 }, // 松山
@@ -49,7 +52,7 @@ export const AIRPORT_COORDINATES = {
  */
 export function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
     if (!lat1 || !lon1 || !lat2 || !lon2) return null;
-    const R = 6371; // 地球半徑 (km)
+    const R = MAP.EARTH_RADIUS_KM;
     const dLat = (lat2 - lat1) * (Math.PI / 180);
     const dLon = (lon2 - lon1) * (Math.PI / 180);
     const a =
@@ -83,15 +86,20 @@ export function loadGoogleMapsApi(apiKey) {
         // Check if the script tag already exists to prevent duplicates
         const existingScript = document.querySelector(`script[src*="maps.googleapis.com/maps/api/js"]`);
         if (existingScript) {
-            // If script exists, assume it's loading or loaded.
-            // We need to wait for the global `window.google.maps` object to be available.
+            // script 已存在，poll 等待 window.google.maps 可用
+            // 加 timeout guard 防止無限等待
+            const pollStart = Date.now();
             const checkGoogleMapsInterval = setInterval(() => {
                 if (window.google && window.google.maps) {
                     clearInterval(checkGoogleMapsInterval);
                     googleMapsApiLoaded = true;
                     resolve();
+                } else if (Date.now() - pollStart > MAP.GEOCODE_POLL_TIMEOUT_MS) {
+                    clearInterval(checkGoogleMapsInterval);
+                    googleMapsApiLoadPromise = null;
+                    reject(new Error('Google Maps API poll timeout: window.google.maps unavailable after 10s'));
                 }
-            }, 100); // Check every 100ms
+            }, MAP.GEOCODE_POLL_INTERVAL_MS);
             return;
         }
 
@@ -109,8 +117,9 @@ export function loadGoogleMapsApi(apiKey) {
         };
 
         script.onerror = (e) => {
-            console.error("Google Maps API script failed to load:", e);
-            googleMapsApiLoadPromise = null; // Reset promise on error
+            logger.error('Google Maps API script failed to load:', e);
+            googleMapsApiLoaded = false;
+            googleMapsApiLoadPromise = null;
             reject(e);
         };
         document.head.appendChild(script);

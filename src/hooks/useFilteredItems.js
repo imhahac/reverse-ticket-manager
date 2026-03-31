@@ -8,9 +8,8 @@ const safeMatch = (val, search) => {
 };
 
 export function useFilteredItems(items, searchTerm, filterStatus, type, tripLabels) {
-    const searchLower = (searchTerm || '').toLowerCase();
-
     return useMemo(() => {
+        const searchLower = (searchTerm || '').toLowerCase();
         try {
             const safeItems = Array.isArray(items) ? items : [];
             return safeItems.filter(item => {
@@ -65,5 +64,5 @@ export function useFilteredItems(items, searchTerm, filterStatus, type, tripLabe
             console.error(`Filter ${type} error:`, e); 
             return Array.isArray(items) ? items : []; 
         }
-    }, [items, searchTerm, filterStatus, searchLower, type, tripLabels]);
+    }, [items, searchTerm, filterStatus, type, tripLabels]);
 }
