@@ -21,9 +21,36 @@
 3. **Mapbox API Key (選配)**  
    - 註冊 [Mapbox](https://www.mapbox.com/) 取得 Public Token。僅作為 Geocoding 的備援方案，若已有 Google Maps 則非必填 (`VITE_MAPBOX_API_KEY`)。
 
-4. **航班查詢 API (選配，需搭配 Proxy 隱減)**  
-   - 申請 [AviationStack](https://aviationstack.com/) 或 [AirLabs](https://airlabs.co/)。
-   - ⚠️ **切勿**將這兩支 API 的金鑰直接寫在前端環境變數中，後續將說明如何利用 [Cloudflare Workers Proxy](#第二步-航班-api-安全性部署-cloudflare-workers-proxy) 保護它們。
+4. **LINE Bot 推播金鑰 (推薦且安全)**  
+    - 前往 [LINE Developers](https://developers.line.biz/)，建立一個 Messaging API Channel。
+    - 取得 `LINE_CHANNEL_ACCESS_TOKEN` 與 `LINE_USER_ID`。
+    - **Google 授權升級**：本版本已全面升級至 **OAuth2 Refresh Token** 傳送模式，您不再需要手動共用檔案給服務帳號。
+
+---
+
+## 🔐 第二步：LINE Bot OAuth2 零摩擦認證設定
+
+為了讓 GitHub Actions 能夠安全且自動地讀取資料，我們需要設定 OAuth2 授權：
+
+1. **獲取 Client Secret**：
+   - 前往 [Google Cloud Console](https://console.cloud.google.com/apis/credentials)。
+   - 在您的 OAuth 2.0 Web Client ID 旁，點擊下載 JSON 或直接複製 **Client Secret** (`GOOGLE_CLIENT_SECRET`)。
+
+2. **生成 Refresh Token (一次性)**：
+   - 在您的本地終端機執行本專案提供的工具：
+     ```bash
+     node scripts/get-refresh-token.js
+     ```
+   - 依照提示輸入 `Client ID` 與 `Client Secret`，並在瀏覽器完成授權。
+   - 將獲得的 `GOOGLE_REFRESH_TOKEN` 存入 GitHub Secrets。
+
+3. **GitHub Secrets 最終清單**：
+   請確保您的 Repo Secrets 包含以下內容：
+   - `GOOGLE_CLIENT_ID` (由第一步取得)
+   - `GOOGLE_CLIENT_SECRET` (由上一步取得)
+   - `GOOGLE_REFRESH_TOKEN` (由上一步取得)
+   - `LINE_CHANNEL_ACCESS_TOKEN`
+   - `LINE_USER_ID`
 
 ---
 

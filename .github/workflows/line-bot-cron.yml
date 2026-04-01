@@ -2,40 +2,57 @@ name: LINE Bot Cron Job
 
 on:
   schedule:
-    # 每天早上 8 點執行 (UTC +8 的早上 8 點 = UTC 0 點)
-    - cron: '0 0 * * *'
-  workflow_dispatch: # 允許手動觸發測試
+    # 每天早上 8 點執行 (UTC 0 點) - 調整為 0:15 以避開整點高峰
+    - cron: '15 0 * * *'
+  workflow_dispatch:
+    inputs:
+      test_date:
+        description: '測試日期 (YYYY-MM-DD)，留空則使用今天'
+        required: false
+        default: ''
 
 jobs:
-  # 所需 GitHub Secrets：
-  #   GOOGLE_SERVICE_ACCOUNT_CREDENTIALS: Google 服務帳戶 JSON 金鑰（整份內容）
-  #                                        需將 Drive 備份檔案共用給此服務帳戶（檢視者）
-  #   LINE_CHANNEL_ACCESS_TOKEN:           LINE Messaging API Channel Access Token
-  #   LINE_USER_ID:                        推播目標的 LINE User ID
   notify:
     runs-on: ubuntu-latest
     
     steps:
     - name: Checkout Repository
-      env:
-        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       uses: actions/checkout@v4
 
     - name: Setup Node.js
-      env:
-        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       uses: actions/setup-node@v4
       with:
-        node-version: '24'
+        node-version: '20' # LTS version
         cache: 'npm'
 
     - name: Install Dependencies
-      run: npm install
+      run: npm ci
 
     - name: Run LINE Notify Script
+      id: run_bot
       env:
         TZ: Asia/Taipei
-        GOOGLE_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS }}
+        GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+        GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
         LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
         LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+        TEST_DATE: ${{ github.event.inputs.test_date }}
       run: node scripts/line-bot.js
+
+    - name: Notify on Failure
+      if: failure()
+      env:
+        LINE_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+        LINE_USER: ${{ secrets.LINE_USER_ID }}
+      run: |
+        curl -v -X POST https://api.line.me/v2/bot/message/push \
+        -H 'Content-Type: application/json' \
+        -H "Authorization: Bearer $LINE_TOKEN" \
+        -d "{
+          \"to\": \"$LINE_USER\",
+          \"messages\": [{
+            \"type\": \"text\",
+            \"text\": \"⚠️ 【系統警報】航班管理機器人執行失敗！\nRepo: ${{ github.repository }}\nWorkflow: ${{ github.workflow }}\n請檢查 GitHub Actions 日誌。\"
+          }]
+        }"
