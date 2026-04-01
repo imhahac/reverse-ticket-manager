@@ -170,7 +170,7 @@ const renderTripBubble = (trip, tripLabels) => {
         header: {
             type: "box", layout: "vertical", backgroundColor: headerColor,
             contents: [
-                { type: "text", text: isVirtual ? "獨立項目" : "行程通知", color: "#ffffff", size: "xs", weight: "bold", opacity: "0.8" },
+                { type: "text", text: isVirtual ? "獨立項目" : "行程通知", color: "#ffffff", size: "xs", weight: "bold" },
                 { type: "text", text: label, color: "#ffffff", size: "lg", weight: "bold", margin: "xs" }
             ]
         },
