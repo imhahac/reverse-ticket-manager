@@ -32,6 +32,7 @@ jobs:
       id: run_bot
       env:
         TZ: Asia/Taipei
+        GITHUB_REPOSITORY: ${{ github.repository }}
         GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
         GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
         GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
@@ -46,6 +47,9 @@ jobs:
         LINE_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
         LINE_USER: ${{ secrets.LINE_USER_ID }}
       run: |
+        REPO_NAME="${{ github.repository }}"
+        RUN_ID="${{ github.run_id }}"
+        RUN_NUM="${{ github.run_number }}"
         curl -v -X POST https://api.line.me/v2/bot/message/push \
         -H 'Content-Type: application/json' \
         -H "Authorization: Bearer $LINE_TOKEN" \
@@ -53,6 +57,6 @@ jobs:
           \"to\": \"$LINE_USER\",
           \"messages\": [{
             \"type\": \"text\",
-            \"text\": \"⚠️ 【系統警報】航班管理機器人執行失敗！\nRepo: ${{ github.repository }}\nWorkflow: ${{ github.workflow }}\n請檢查 GitHub Actions 日誌。\"
+            \"text\": \"🚨 【系統警報】執行失敗！\n\n專案: $REPO_NAME\n編號: #$RUN_NUM\n日誌: https://github.com/$REPO_NAME/actions/runs/$RUN_ID\n\n請儘速檢查配置或憑證狀態。\"
           }]
         }"

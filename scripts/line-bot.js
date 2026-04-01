@@ -143,25 +143,62 @@ const createFlexMessage = (altText, contents) => ({
 const renderTripBubble = (trip, tripLabels) => {
     const isVirtual = trip.isVirtual;
     const segments = trip.segments || [];
+    const hotels = trip.hotels || [];
+    const repoLabel = process.env.GITHUB_REPOSITORY ? `[${process.env.GITHUB_REPOSITORY.split('/')[1]}] ` : '';
     const label = isVirtual ? (trip.label || "未命名項目") : (tripLabels[trip.id] || `${(segments[0]?.to || "未知").split(' ')[0]} 趟次`);
     const dateRange = (trip.start === trip.end) ? (trip.start || "未知日期") : `${trip.start} ~ ${trip.end}`;
     const headerColor = isVirtual ? "#8B5CF6" : ((trip.warnings?.length > 0) ? "#F59E0B" : "#10B981");
 
-    // 構建警告區塊
+    // 1. 警告區塊
     const warningNodes = (trip.warnings || []).map(w => ({
         type: "text", text: w, size: "xxs", color: "#DC2626", margin: "md", wrap: true, weight: "bold"
     }));
 
-    // 構建航段區塊 (如果沒有航段，顯示佔位文字避免 Box 為空)
-    let segmentNodes = segments.map(s => ({
-        type: "box", layout: "horizontal", contents: [
-            { type: "text", text: `✈️ ${s.flightNo || '航班'}`, size: "xs", color: "#4B5563", flex: 2 },
-            { type: "text", text: `${(s.from || "??").split(' ')[0]} ➔ ${(s.to || "??").split(' ')[0]}`, size: "xs", color: "#111111", align: "end", flex: 3 }
+    // 2. 航段區塊 (含 FlightAware)
+    let segmentNodes = segments.map(s => {
+        const flightLabel = s.flightNo ? `✈️ ${s.flightNo}` : '✈️ 航班';
+        const timeLabel = s.time ? ` (${s.time})` : '';
+        const flightAwareUrl = s.flightNo ? `https://zh.flightaware.com/live/flight/${s.flightNo.replace(/\s+/g, '')}` : null;
+        
+        return {
+            type: "box", layout: "vertical", margin: "md",
+            contents: [
+                {
+                    type: "box", layout: "horizontal", contents: [
+                        { type: "text", text: flightLabel + timeLabel, size: "xs", color: "#4B5563", flex: 3, weight: "bold", 
+                          action: flightAwareUrl ? { type: "uri", label: "FlightAware", uri: flightAwareUrl } : undefined,
+                          decoration: flightAwareUrl ? "underline" : "none" },
+                        { type: "text", text: `${(s.from || "??").split(' ')[0]} ➔ ${(s.to || "??").split(' ')[0]}`, size: "xs", color: "#111111", align: "end", flex: 4 }
+                    ]
+                }
+            ]
+        };
+    });
+
+    // 3. 住宿區塊
+    const hotelNodes = hotels.map(h => ({
+        type: "box", layout: "vertical", margin: "md", spacing: "xs",
+        contents: [
+            { type: "text", text: `🏨 ${h.name}`, size: "sm", weight: "bold", color: "#111111", wrap: true },
+            { type: "text", text: `📅 ${h.checkIn} ➔ ${h.checkOut}`, size: "xxs", color: "#666666" },
+            { type: "text", text: `📍 ${h.address || '無地址資訊'}`, size: "xxs", color: "#999999", wrap: true }
         ]
     }));
 
-    if (segmentNodes.length === 0) {
-        segmentNodes = [{ type: "text", text: isVirtual ? "（獨立住宿/活動）" : "（無航班資訊）", size: "xs", color: "#999999", style: "italic" }];
+    // 整合列表
+    let listNodes = [];
+    if (segmentNodes.length > 0) {
+        listNodes.push({ type: "text", text: "航班資訊", size: "xs", weight: "bold", color: "#999999", margin: "md" });
+        listNodes.push(...segmentNodes);
+    }
+    if (hotelNodes.length > 0) {
+        if (listNodes.length > 0) listNodes.push({ type: "separator", margin: "lg" });
+        listNodes.push({ type: "text", text: "住宿資訊", size: "xs", weight: "bold", color: "#999999", margin: "md" });
+        listNodes.push(...hotelNodes);
+    }
+
+    if (listNodes.length === 0) {
+        listNodes = [{ type: "text", text: "（無詳細查驗資訊）", size: "xs", color: "#999999", style: "italic" }];
     }
 
     return {
@@ -171,24 +208,21 @@ const renderTripBubble = (trip, tripLabels) => {
             type: "box", layout: "vertical", backgroundColor: headerColor,
             contents: [
                 { type: "text", text: isVirtual ? "獨立項目" : "行程通知", color: "#ffffff", size: "xs", weight: "bold" },
-                { type: "text", text: label, color: "#ffffff", size: "lg", weight: "bold", margin: "xs" }
+                { type: "text", text: repoLabel + label, color: "#ffffff", size: "lg", weight: "bold", margin: "xs", wrap: true }
             ]
         },
         body: {
             type: "box", layout: "vertical", spacing: "md",
             contents: [
-                { type: "box", layout: "horizontal", contents: [{ type: "text", text: "📅 日期", size: "sm", color: "#666666", flex: 2 }, { type: "text", text: dateRange, size: "sm", color: "#111111", flex: 5, weight: "bold", align: "end" }] },
+                { type: "box", layout: "horizontal", contents: [{ type: "text", text: "📅 行程日期", size: "sm", color: "#666666", flex: 3 }, { type: "text", text: dateRange, size: "sm", color: "#111111", flex: 7, weight: "bold", align: "end" }] },
                 ...warningNodes,
                 { type: "separator", margin: "lg" },
-                {
-                    type: "box", layout: "vertical", margin: "lg", spacing: "sm",
-                    contents: segmentNodes
-                }
+                { type: "box", layout: "vertical", contents: listNodes }
             ]
         },
         footer: {
             type: "box", layout: "vertical",
-            contents: [{ type: "button", action: { type: "uri", label: "查看詳情", uri: "https://imhahac.github.io/reverse-ticket-manager/" }, style: "primary", color: headerColor }]
+            contents: [{ type: "button", action: { type: "uri", label: "點此打開 App 查看", uri: "https://imhahac.github.io/reverse-ticket-manager/" }, style: "primary", color: headerColor }]
         }
     };
 };
