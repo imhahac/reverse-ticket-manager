@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import axios from 'axios';
 import { format, addDays, parseISO } from 'date-fns';
+import { getFlightAwareUrl } from '../src/utils/flightUtils.js';
 
 /**
  * LINE Bot Cron Job v2
@@ -95,31 +96,6 @@ function getItinerary(tickets, hotels, activities = []) {
 
     return [...itineraries, ...orphans].sort((a, b) => a.start.localeCompare(b.start));
 }
-
-const IATA_TO_ICAO = {
-    'CI': 'CAL', 'BR': 'EVA', 'JX': 'SJX', 'AE': 'MDA', 'B7': 'UIA', 'IT': 'TTW',
-    'CX': 'CPA', 'KA': 'HDA', 'UO': 'HKE', 'HB': 'HGB',
-    'JL': 'JAL', 'NH': 'ANA', 'MM': 'APJ', 'GK': 'JJP',
-    'KE': 'KAL', 'OZ': 'AAR', '7C': 'JJA', 'TW': 'TWB', 'LJ': 'JNA',
-    'SQ': 'SIA', 'TR': 'TGW', 'MH': 'MAS', 'AK': 'AXM', 'FD': 'AIQ',
-    'VN': 'HVN', 'VJ': 'VJC', 'HX': 'CRK'
-};
-
-const getFlightAwareUrl = (flightNo) => {
-    if (!flightNo) return null;
-    let code = flightNo.trim().toUpperCase();
-    
-    // 嘗試轉換 IATA (2碼) 為 ICAO (3碼)
-    for (const [iata, icao] of Object.entries(IATA_TO_ICAO)) {
-        if (code.startsWith(iata)) {
-            code = code.replace(iata, icao);
-            break;
-        }
-    }
-    
-    return `https://zh.flightaware.com/live/flight/${code.replace(/\s+/g, '')}`;
-};
-
 // ==========================================
 // 2. 文字訊息渲染邏輯
 // ==========================================
