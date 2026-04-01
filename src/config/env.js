@@ -25,7 +25,7 @@ export const validateEnv = () => {
     
     const required = [
         { key: 'VITE_GOOGLE_CLIENT_ID', error: ERRORS.MISSING_CLIENT_ID },
-        { key: 'VITE_MAPBOX_API_KEY', error: '遺失 VITE_MAPBOX_API_KEY：此為渲染地圖所需的必備金鑰。' },
+        { key: 'VITE_GOOGLE_MAPS_API_KEY', error: '遺失 VITE_GOOGLE_MAPS_API_KEY：此為渲染地圖與地址定位所需的必備金鑰。' },
     ];
 
     required.forEach(item => {
@@ -45,8 +45,8 @@ export const validateEnv = () => {
         logger.warn('建議設定 VITE_FLIGHT_PROXY_URL 以隱藏航班 API 金鑰。');
     }
     
-    if (!import.meta.env.VITE_GOOGLE_MAPS_API_KEY) {
-        logger.warn('建議設定 VITE_GOOGLE_MAPS_API_KEY 以啟用完整地圖防呆功能。');
+    if (!import.meta.env.VITE_MAPBOX_API_KEY) {
+        logger.warn('Mapbox 金鑰未設定，系統將僅使用 Google Maps。');
     }
 
     return { valid: true, errors: [] };
