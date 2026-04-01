@@ -166,7 +166,7 @@ const renderTripBubble = (trip, tripLabels) => {
 
     return {
         type: "bubble",
-        size: "medium",
+        size: "mega",
         header: {
             type: "box", layout: "vertical", backgroundColor: headerColor,
             contents: [
