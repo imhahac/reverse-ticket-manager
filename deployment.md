@@ -37,12 +37,19 @@
    - 在您的 OAuth 2.0 Web Client ID 旁，點擊下載 JSON 或直接複製 **Client Secret** (`GOOGLE_CLIENT_SECRET`)。
 
 2. **生成 Refresh Token (一次性)**：
-   - 在您的本地終端機執行本專案提供的工具：
-     ```bash
-     node scripts/get-refresh-token.js
-     ```
-   - 依照提示輸入 `Client ID` 與 `Client Secret`，並在瀏覽器完成授權。
-   - 將獲得的 `GOOGLE_REFRESH_TOKEN` 存入 GitHub Secrets。
+   本步驟是為了讓 GitHub Actions 獲得持久授權。您可以選擇以下任一方式：
+
+   #### 方法 A：使用 Google OAuth Playground (推薦，雲端免安裝)
+   1. 前往 GCP 控制台的 [憑證頁面](https://console.cloud.google.com/apis/credentials)，編輯您的 OAuth Client ID。
+   2. 在 **已授權的重新導向 URI** 中新增：`https://developers.google.com/oauthplayground`。
+   3. 打開 [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/)。
+   4. 點擊右側 **Settings (齒輪)** -> 勾選 **Use your own OAuth credentials** -> 填入您的 Client ID 與 Secret。
+   5. 在左側輸入 Scope：`https://www.googleapis.com/auth/drive.readonly` -> 點擊 **Authorize APIs**。
+   6. 授權後點擊 **Exchange authorization code for tokens**，複製產生的 `refresh_token`。
+
+   #### 方法 B：使用本地腳本 (進階)
+   1. 在您的本地終端機執行：`node scripts/get-refresh-token.js`。
+   2. 依照提示完成授權並獲得 `GOOGLE_REFRESH_TOKEN`。
 
 3. **GitHub Secrets 最終清單**：
    請確保您的 Repo Secrets 包含以下內容：
