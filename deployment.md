@@ -13,15 +13,41 @@
    - 前往 [Google Cloud Console](https://console.cloud.google.com/)，建立並啟用 `Google Drive API` 與 `Google Calendar API`。
    - 建立 OAuth 2.0 Web Client ID 憑證 (`VITE_GOOGLE_CLIENT_ID`)。確保您將 **Authorized JavaScript origins** 和 **Authorized redirect URIs** 設為您的 GitHub Pages 網址。
 
-2. **Mapbox API Key (必備)**  
-   - 註冊 [Mapbox](https://www.mapbox.com/) 取得 Public Token，以渲染系統世界地圖 (`VITE_MAPBOX_API_KEY`)。
+2. **Google Maps API Key (必備)**  
+   - 啟用 [Geocoding API](https://developers.google.com/maps/documentation/geocoding/overview) 與 [Maps JavaScript API](https://developers.google.com/maps/documentation/javascript/overview)。
+   - 此金鑰用於渲染系統核心地圖與自動轉座標功能 (`VITE_GOOGLE_MAPS_API_KEY`)。
+   - ⚠️ **安全性必要步驟**：由於此金鑰會暴露在前端，請務必執行下方 [Google Maps 憑證安全性強化](#🛡️-第四步-google-maps-api-key-安全性強化) 的設定。
 
-3. **Google Maps API Key (極度推薦)**  
-   - 啟用 [Geocoding API](https://developers.google.com/maps/documentation/geocoding/overview)，將飯店地址或地標字串自動轉為精確經緯度 (`VITE_GOOGLE_MAPS_API_KEY`)，這是地圖「距離防呆警告」的核心。
+3. **Mapbox API Key (選配)**  
+   - 註冊 [Mapbox](https://www.mapbox.com/) 取得 Public Token。僅作為 Geocoding 的備援方案，若已有 Google Maps 則非必填 (`VITE_MAPBOX_API_KEY`)。
 
-4. **航班查詢 API (選配，需搭配 Proxy 隱藏)**  
+4. **航班查詢 API (選配，需搭配 Proxy 隱減)**  
    - 申請 [AviationStack](https://aviationstack.com/) 或 [AirLabs](https://airlabs.co/)。
    - ⚠️ **切勿**將這兩支 API 的金鑰直接寫在前端環境變數中，後續將說明如何利用 [Cloudflare Workers Proxy](#第二步-航班-api-安全性部署-cloudflare-workers-proxy) 保護它們。
+
+---
+
+## 🛡️ 第四步：Google Maps API Key 安全性強化 (重要)
+
+因為本專案是純前端架構，Google Maps API Key 會在載入 JS SDK 時發送給客戶端。為了防止金鑰被盜用並耗盡您的免費額度，**您必須在 Google Cloud Console 設定來源限制**。
+
+### 1. 設定應用程式限制 (Application Restrictions)
+1. 進入 [Google Cloud Console 憑證頁面](https://console.cloud.google.com/google/maps-apis/credentials)。
+2. 點擊進入您為本專案建立的 **API Key**。
+3. 在 **Application restrictions** 區塊中，選擇 **Websites (HTTP referrers)**。
+4. 在下方 **Website restrictions** 中點擊 **ADD**，加入您的 GitHub Pages 網域：
+   - 格式範例：`https://yourname.github.io/*` (請將 yourname 換成您的帳號)。
+   - 如果您有自定義網域，也請一併加入。
+
+### 2. 設定 API 限制 (API Restrictions)
+1. 在同一頁面的 **API restrictions** 區塊中，選擇 **Restrict key**。
+2. 在下拉選單中**僅勾選**以下兩項：
+   - `Geocoding API`
+   - `Maps JavaScript API`
+3. 點擊 **SAVE**。
+
+> [!TIP]
+> 這樣設定後，即便他人拿到您的 API Key，也無法在非您的網域下使用，也無法調用除了地圖與經緯度以外的其他昂貴 API。
 
 ---
 

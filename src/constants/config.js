@@ -4,10 +4,10 @@
  */
 
 export const CONFIG = {
-    googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-    flightProxyUrl: import.meta.env.VITE_FLIGHT_PROXY_URL || '',
-    aviationStackKey: import.meta.env.VITE_AVIATIONSTACK_API_KEY || '',
-    airLabsKey: import.meta.env.VITE_AIRLABS_API_KEY || '',
+    googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+    flightProxyUrl: import.meta.env.VITE_FLIGHT_PROXY_URL,
+    aviationStackKey: import.meta.env.VITE_AVIATIONSTACK_API_KEY,
+    airLabsKey: import.meta.env.VITE_AIRLABS_API_KEY,
     exchangeRates: {
         'TWD': 1,
         'JPY': 0.21,
