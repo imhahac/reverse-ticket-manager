@@ -96,6 +96,30 @@ function getItinerary(tickets, hotels, activities = []) {
     return [...itineraries, ...orphans].sort((a, b) => a.start.localeCompare(b.start));
 }
 
+const IATA_TO_ICAO = {
+    'CI': 'CAL', 'BR': 'EVA', 'JX': 'SJX', 'AE': 'MDA', 'B7': 'UIA', 'IT': 'TTW',
+    'CX': 'CPA', 'KA': 'HDA', 'UO': 'HKE', 'HB': 'HGB',
+    'JL': 'JAL', 'NH': 'ANA', 'MM': 'APJ', 'GK': 'JJP',
+    'KE': 'KAL', 'OZ': 'AAR', '7C': 'JJA', 'TW': 'TWB', 'LJ': 'JNA',
+    'SQ': 'SIA', 'TR': 'TGW', 'MH': 'MAS', 'AK': 'AXM', 'FD': 'AIQ',
+    'VN': 'HVN', 'VJ': 'VJC', 'HX': 'CRK'
+};
+
+const getFlightAwareUrl = (flightNo) => {
+    if (!flightNo) return null;
+    let code = flightNo.trim().toUpperCase();
+    
+    // 嘗試轉換 IATA (2碼) 為 ICAO (3碼)
+    for (const [iata, icao] of Object.entries(IATA_TO_ICAO)) {
+        if (code.startsWith(iata)) {
+            code = code.replace(iata, icao);
+            break;
+        }
+    }
+    
+    return `https://zh.flightaware.com/live/flight/${code.replace(/\s+/g, '')}`;
+};
+
 // ==========================================
 // 2. 文字訊息渲染邏輯
 // ==========================================
@@ -120,8 +144,9 @@ const renderTripText = (trip, tripLabels) => {
         segments.forEach(s => {
             const timeLabel = s.time ? ` (${s.time})` : '';
             msg += `- ${s.flightNo || '航班'}${timeLabel} | ${(s.from || "??").split(' ')[0]} ➔ ${(s.to || "??").split(' ')[0]}\n`;
-            if (s.flightNo) {
-                msg += `  追蹤: https://zh.flightaware.com/live/flight/${s.flightNo.replace(/\s+/g, '')}\n`;
+            const faUrl = getFlightAwareUrl(s.flightNo);
+            if (faUrl) {
+                msg += `  追蹤: ${faUrl}\n`;
             }
         });
     }
