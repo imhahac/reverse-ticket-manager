@@ -142,32 +142,47 @@ const createFlexMessage = (altText, contents) => ({
 
 const renderTripBubble = (trip, tripLabels) => {
     const isVirtual = trip.isVirtual;
-    const label = isVirtual ? trip.label : (tripLabels[trip.id] || `${trip.segments[0].to.split(' ')[0]} 趟次`);
-    const dateRange = trip.start === trip.end ? trip.start : `${trip.start} ~ ${trip.end}`;
-    const headerColor = isVirtual ? "#8B5CF6" : (trip.warnings?.length > 0 ? "#F59E0B" : "#10B981");
+    const segments = trip.segments || [];
+    const label = isVirtual ? (trip.label || "未命名項目") : (tripLabels[trip.id] || `${(segments[0]?.to || "未知").split(' ')[0]} 趟次`);
+    const dateRange = (trip.start === trip.end) ? (trip.start || "未知日期") : `${trip.start} ~ ${trip.end}`;
+    const headerColor = isVirtual ? "#8B5CF6" : ((trip.warnings?.length > 0) ? "#F59E0B" : "#10B981");
+
+    // 構建警告區塊
+    const warningNodes = (trip.warnings || []).map(w => ({
+        type: "text", text: w, size: "xxs", color: "#DC2626", margin: "md", wrap: true, weight: "bold"
+    }));
+
+    // 構建航段區塊 (如果沒有航段，顯示佔位文字避免 Box 為空)
+    let segmentNodes = segments.map(s => ({
+        type: "box", layout: "horizontal", contents: [
+            { type: "text", text: `✈️ ${s.flightNo || '航班'}`, size: "xs", color: "#4B5563", flex: 2 },
+            { type: "text", text: `${(s.from || "??").split(' ')[0]} ➔ ${(s.to || "??").split(' ')[0]}`, size: "xs", color: "#111111", align: "end", flex: 3 }
+        ]
+    }));
+
+    if (segmentNodes.length === 0) {
+        segmentNodes = [{ type: "text", text: isVirtual ? "（獨立住宿/活動）" : "（無航班資訊）", size: "xs", color: "#999999", style: "italic" }];
+    }
 
     return {
         type: "bubble",
         size: "medium",
         header: {
             type: "box", layout: "vertical", backgroundColor: headerColor,
-            contents: [{ type: "text", text: isVirtual ? "獨立項目" : "行程通知", color: "#ffffff", size: "xs", weight: "bold", opacity: "0.8" },
-                       { type: "text", text: label, color: "#ffffff", size: "lg", weight: "bold", margin: "xs" }]
+            contents: [
+                { type: "text", text: isVirtual ? "獨立項目" : "行程通知", color: "#ffffff", size: "xs", weight: "bold", opacity: "0.8" },
+                { type: "text", text: label, color: "#ffffff", size: "lg", weight: "bold", margin: "xs" }
+            ]
         },
         body: {
             type: "box", layout: "vertical", spacing: "md",
             contents: [
                 { type: "box", layout: "horizontal", contents: [{ type: "text", text: "📅 日期", size: "sm", color: "#666666", flex: 2 }, { type: "text", text: dateRange, size: "sm", color: "#111111", flex: 5, weight: "bold", align: "end" }] },
-                ...(trip.warnings || []).map(w => ({ type: "text", text: w, size: "xxs", color: "#DC2626", margin: "md", wrap: true, weight: "bold" })),
+                ...warningNodes,
                 { type: "separator", margin: "lg" },
                 {
                     type: "box", layout: "vertical", margin: "lg", spacing: "sm",
-                    contents: (trip.segments || []).map(s => ({
-                        type: "box", layout: "horizontal", contents: [
-                            { type: "text", text: `✈️ ${s.flightNo || '航班'}`, size: "xs", color: "#4B5563", flex: 2 },
-                            { type: "text", text: `${s.from.split(' ')[0]} ➔ ${s.to.split(' ')[0]}`, size: "xs", color: "#111111", align: "end", flex: 3 }
-                        ]
-                    }))
+                    contents: segmentNodes
                 }
             ]
         },
@@ -233,6 +248,11 @@ const run = async () => {
         const flexBubbles = notifyTrips.map(t => renderTripBubble(t, tripLabels));
         const payload = createFlexMessage("✈️ 您的旅程提醒", flexBubbles);
 
+        // [Debug] 列印完整 Payload 以便除錯
+        console.log("--- START LINE PAYLOAD ---");
+        console.log(JSON.stringify(payload, null, 2));
+        console.log("--- END LINE PAYLOAD ---");
+
         const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
         const lineUser = process.env.LINE_USER_ID;
         
@@ -242,7 +262,11 @@ const run = async () => {
 
         console.log("✨ Notifications sent successfully.");
     } catch (e) {
-        console.error("❌ Error:", e.message);
+        if (e.response && e.response.data) {
+            console.error("❌ LINE API Error Details:", JSON.stringify(e.response.data, null, 2));
+        } else {
+            console.error("❌ Error:", e.message);
+        }
         process.exit(1);
     }
 };
