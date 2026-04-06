@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useMemo, useState } from 'react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import { useTrips } from '../hooks/useTrips';
@@ -8,13 +8,14 @@ import { useActivities } from '../hooks/useActivities';
 import { useEntityManager } from '../hooks/useEntityManager';
 import { exportData, importData } from '../utils/importExportUtils';
 import { toast } from 'sonner';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 export const DataContext = createContext();
 
 export function DataProvider({ children }) {
     // ── 持久化資料 ───────────────────────────────────────────────────────────
-    const [tickets, setTickets] = useLocalStorage('reverse-tickets', []);
-    const [tripLabels, setTripLabels] = useLocalStorage('reverse-trip-labels', {});
+    const [tickets, setTickets] = useLocalStorage(STORAGE_KEYS.TICKETS, []);
+    const [tripLabels, setTripLabels] = useLocalStorage(STORAGE_KEYS.TRIP_LABELS, {});
 
     // ── UI 狀態 (僅保留表單編輯狀態) ──────────────────────────────────────────
     const [editingTicket, setEditingTicket] = useState(null);
@@ -69,29 +70,117 @@ export function DataProvider({ children }) {
         e.target.value = '';
     };
 
-    const value = {
-        // Raw Data & Source Hooks
-        tickets, setTickets, 
-        tripLabels, setTripLabels,
+    const ticketDomain = useMemo(() => ({
+        tickets,
+        setTickets,
+        tripLabels,
+        setTripLabels,
+        segments,
+        trips,
+        editingTicket,
+        setEditingTicket,
+        handleSaveTicket,
+        handleEditTicket,
+        handleCancelEdit,
+        handleDeleteTicket,
+    }), [
+        tickets, setTickets, tripLabels, setTripLabels,
+        segments, trips,
+        editingTicket, setEditingTicket,
+        handleSaveTicket, handleEditTicket, handleCancelEdit, handleDeleteTicket,
+    ]);
+
+    const hotelDomain = useMemo(() => ({
+        hotels,
+        rawHotels,
+        setHotels,
+        updateHotelCalendarIds,
+        editingHotel,
+        handleSaveHotel,
+        handleEditHotel,
+        handleCancelEditHotel,
+        handleDeleteHotel,
+        isSavingHotel,
+    }), [
         hotels, rawHotels, setHotels, updateHotelCalendarIds,
+        editingHotel, handleSaveHotel, handleEditHotel,
+        handleCancelEditHotel, handleDeleteHotel, isSavingHotel,
+    ]);
+
+    const activityDomain = useMemo(() => ({
+        activities,
+        setActivities,
+        updateActivityCalendarId,
+        editingActivity,
+        handleSaveActivity,
+        handleEditActivity,
+        handleCancelEditActivity,
+        handleDeleteActivity,
+        isSavingActivity,
+    }), [
         activities, setActivities, updateActivityCalendarId,
-        segments, trips, tripOverrides,
+        editingActivity, handleSaveActivity, handleEditActivity,
+        handleCancelEditActivity, handleDeleteActivity, isSavingActivity,
+    ]);
+
+    const overrideDomain = useMemo(() => ({
+        tripOverrides,
+        removeSegment,
+        restoreSegment,
+        moveSegmentToTrip,
+        clearAllOverrides,
+    }), [tripOverrides, removeSegment, restoreSegment, moveSegmentToTrip, clearAllOverrides]);
+
+    const systemDomain = useMemo(() => ({
         exchangeRates,
-        
-        // CRUD Handlers
-        editingTicket, setEditingTicket, handleSaveTicket, handleEditTicket, handleCancelEdit, handleDeleteTicket,
-        editingHotel, handleSaveHotel, handleEditHotel, handleCancelEditHotel, handleDeleteHotel, isSavingHotel,
-        editingActivity, handleSaveActivity, handleEditActivity, handleCancelEditActivity, handleDeleteActivity, isSavingActivity,
+        handleExport,
+        handleImport,
+    }), [exchangeRates, handleExport, handleImport]);
 
-        // Overrides Handlers
-        removeSegment, restoreSegment, moveSegmentToTrip, clearAllOverrides,
+    const value = useMemo(() => ({
+        // Structured domains
+        ticketDomain,
+        hotelDomain,
+        activityDomain,
+        overrideDomain,
+        systemDomain,
 
-        handleExport, handleImport
-    };
+        // Backward-compatible flat fields
+        ...ticketDomain,
+        ...hotelDomain,
+        ...activityDomain,
+        ...overrideDomain,
+        ...systemDomain,
+    }), [ticketDomain, hotelDomain, activityDomain, overrideDomain, systemDomain]);
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
 
 export function useDataContext() {
     return useContext(DataContext);
+}
+
+export function useTicketDataContext() {
+    const data = useDataContext();
+    return data.ticketDomain || {};
+}
+
+export function useHotelDataContext() {
+    const data = useDataContext();
+    return data.hotelDomain || {};
+}
+
+export function useActivityDataContext() {
+    const data = useDataContext();
+    return data.activityDomain || {};
+}
+
+export function useOverrideDataContext() {
+    const data = useDataContext();
+    return data.overrideDomain || {};
+}
+
+export function useSystemDataContext() {
+    const data = useDataContext();
+    return data.systemDomain || {};
 }

@@ -1,4 +1,5 @@
 import { useLocalStorage } from './useLocalStorage';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 const DEFAULT_OVERRIDES = {
     version: 1,
@@ -8,7 +9,7 @@ const DEFAULT_OVERRIDES = {
 };
 
 export function useTripOverrides() {
-    const [overrides, setOverrides] = useLocalStorage('reverse-trip-overrides', DEFAULT_OVERRIDES);
+    const [overrides, setOverrides] = useLocalStorage(STORAGE_KEYS.TRIP_OVERRIDES, DEFAULT_OVERRIDES);
 
     const normalized = overrides && typeof overrides === 'object'
         ? { ...DEFAULT_OVERRIDES, ...overrides }

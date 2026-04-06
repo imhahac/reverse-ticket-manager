@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { useUIContext } from './UIContext';
-import { useDataContext } from './DataContext';
+import {
+    useActivityDataContext,
+    useHotelDataContext,
+    useOverrideDataContext,
+    useTicketDataContext,
+} from './DataContext';
 import { useFilteredItems } from '../hooks/useFilteredItems';
 import { useDecoratedTrips } from '../hooks/useDecoratedTrips';
 import { useItinerary } from '../hooks/useItinerary';
@@ -10,9 +15,10 @@ const FilterContext = createContext();
 
 export function FilterProvider({ children }) {
     const { searchTerm, filterStatus, selectedTripIdForMap } = useUIContext();
-    const { 
-        tickets, tripLabels, rawHotels, activities, trips, tripOverrides 
-    } = useDataContext();
+    const { tickets, tripLabels, trips } = useTicketDataContext();
+    const { rawHotels } = useHotelDataContext();
+    const { activities } = useActivityDataContext();
+    const { tripOverrides } = useOverrideDataContext();
 
     // 1. 應用手動重組 (Overrides)
     const displayTrips = useMemo(() => applyTripOverrides(trips, tripOverrides), [trips, tripOverrides]);

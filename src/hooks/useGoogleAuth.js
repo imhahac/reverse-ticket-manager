@@ -17,12 +17,13 @@ import { useLocalStorage } from './useLocalStorage';
 import { logger } from '../utils/logger';
 import { TIMING } from '../constants/timing';
 import { ERRORS } from '../constants/errors';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events';
 
 export function useGoogleAuth() {
     // ── 持久化 token（向後相容舊版 string 格式）──────────────────────────────
-    const [accessTokenState, setAccessTokenState] = useLocalStorage('google-access-token', null);
+    const [accessTokenState, setAccessTokenState] = useLocalStorage(STORAGE_KEYS.GOOGLE_ACCESS_TOKEN, null);
     // 舊版存純 string，新版存 { token, expiresAt }
     const accessToken = typeof accessTokenState === 'string'
         ? accessTokenState

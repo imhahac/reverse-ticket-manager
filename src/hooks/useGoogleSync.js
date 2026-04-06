@@ -19,9 +19,10 @@
  *
  * export：{ isSyncing, handleSyncToDrive, handleLoadFromDrive, handleSyncToCalendar }
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { syncToDrive, loadFromDrive, syncToCalendar } from '../utils/googleSync';
+import { createRefreshTokenManager, runSyncActionSafely } from '../utils/googleSync/guard';
 
 export function useGoogleSync({
     accessToken,
@@ -43,6 +44,10 @@ export function useGoogleSync({
     updateActivityCalendarId,
 }) {
     const [isSyncing, setIsSyncing] = useState(false);
+    const refreshTokenOnce = useMemo(
+        () => createRefreshTokenManager(async () => trySilentRefresh()),
+        [trySilentRefresh]
+    );
 
     // 取得當前最新 token（相容舊版 string 格式）
     const getCurrentToken = () =>
@@ -58,7 +63,7 @@ export function useGoogleSync({
         }
 
         if (isTokenExpired?.()) {
-            const ok = await trySilentRefresh();
+            const ok = await refreshTokenOnce();
             if (!ok) {
                 toast.error('登入已過期，請重新登入 Google');
                 logout();
@@ -68,14 +73,14 @@ export function useGoogleSync({
 
         setIsSyncing(true);
         const toastId = toast.loading(loadMsg);
-        let res = await actionFn(getCurrentToken());
+        let res = await runSyncActionSafely(actionFn, getCurrentToken());
         setIsSyncing(false);
 
         if (!res.success && res.expired) {
-            const ok = await trySilentRefresh();
+            const ok = await refreshTokenOnce();
             if (ok) {
                 setIsSyncing(true);
-                res = await actionFn(getCurrentToken());
+                res = await runSyncActionSafely(actionFn, getCurrentToken());
                 setIsSyncing(false);
             } else {
                 toast.error('登入已過期，請重新登入 Google', { id: toastId });

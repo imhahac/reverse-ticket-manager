@@ -1,7 +1,8 @@
 import React from 'react';
 // import PropTypes from 'prop-types'; // no longer needed
 import { Plane, Calendar, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn } from 'lucide-react';
-import { useAppContext } from '../contexts/AppContext';
+import { useSystemDataContext } from '../contexts/DataContext';
+import { useSyncContext } from '../contexts/SyncContext';
 import { useUIContext } from '../contexts/UIContext';
 
 export default function AppHeader() {
@@ -13,9 +14,8 @@ export default function AppHeader() {
         handleSyncToCalendar,
         logout,
         login,
-        handleExport,
-        handleImport
-    } = useAppContext();
+    } = useSyncContext();
+    const { handleExport, handleImport } = useSystemDataContext();
     const { fileInputRef } = useUIContext();
     return (
         <header className="mb-8 pt-4 flex flex-col md:flex-row justify-between items-center gap-4">

@@ -10,6 +10,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import TripCard from './TripCard';
 import { TripPropType } from '../types/propTypes';
 import ShareButton from './ShareButton';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 export default function TripTimeline({
     trips,
@@ -27,11 +28,11 @@ export default function TripTimeline({
     const [editLabelValue, setEditLabelValue] = useState('');
     
     // ── 視圖狀態（持久化） ──
-    const [showFuture, setShowFuture] = useLocalStorage('timeline-show-future', true);
-    const [showPast,   setShowPast]   = useLocalStorage('timeline-show-past', true);
-    const [viewMode,   setViewMode]   = useLocalStorage('timeline-view-mode', 'time'); // 'time' or 'category'
+    const [showFuture, setShowFuture] = useLocalStorage(STORAGE_KEYS.TIMELINE_SHOW_FUTURE, true);
+    const [showPast,   setShowPast]   = useLocalStorage(STORAGE_KEYS.TIMELINE_SHOW_PAST, true);
+    const [viewMode,   setViewMode]   = useLocalStorage(STORAGE_KEYS.TIMELINE_VIEW_MODE, 'time'); // 'time' or 'category'
 
-    const [displayOptions, setDisplayOptions] = useLocalStorage('timeline-display-options', {
+    const [displayOptions, setDisplayOptions] = useLocalStorage(STORAGE_KEYS.TIMELINE_DISPLAY_OPTIONS, {
         flights: true,
         hotels: true,
         activities: true,

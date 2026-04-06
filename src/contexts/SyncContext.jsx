@@ -1,7 +1,7 @@
 import React, { createContext, useContext } from 'react';
 import { useGoogleAuth } from '../hooks/useGoogleAuth';
 import { useGoogleSync } from '../hooks/useGoogleSync';
-import { useDataContext } from './DataContext';
+import { useActivityDataContext, useHotelDataContext, useTicketDataContext } from './DataContext';
 
 export const SyncContext = createContext();
 
@@ -9,12 +9,9 @@ export function SyncProvider({ children }) {
     const { accessToken, accessTokenState, login, logout, isTokenExpired, trySilentRefresh } = useGoogleAuth();
     
     // 從 DataContext 取得同步所需之狀態與 setters
-    const { 
-        tickets, tripLabels, setTickets, setTripLabels, 
-        hotels, rawHotels, setHotels, updateHotelCalendarIds,
-        activities, setActivities, updateActivityCalendarId,
-        segments
-    } = useDataContext();
+    const { tickets, tripLabels, setTickets, setTripLabels, segments } = useTicketDataContext();
+    const { hotels, rawHotels, setHotels, updateHotelCalendarIds } = useHotelDataContext();
+    const { activities, setActivities, updateActivityCalendarId } = useActivityDataContext();
 
     const { isSyncing, handleSyncToDrive, handleLoadFromDrive, handleSyncToCalendar } = useGoogleSync({
         accessToken, accessTokenState, trySilentRefresh, isTokenExpired, logout,

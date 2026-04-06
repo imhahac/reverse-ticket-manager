@@ -5,6 +5,7 @@
 
 import { CONFIG } from '../constants/config';
 import { logger } from '../utils/logger';
+import { getSafeDateFromISO, parseLocalDate, getTimeFromISO } from '../utils/dateHelpers';
 
 /**
  * SECURITY NOTE: 
@@ -15,19 +16,6 @@ import { logger } from '../utils/logger';
 
 import { TIMING } from '../constants/timing';
 
-const getSafeDateFromISO = (isoStr, fallback) => {
-    if (!isoStr) return fallback;
-    const datePart = isoStr.includes('T') ? isoStr.split('T')[0] : (isoStr.includes(' ') ? isoStr.split(' ')[0] : isoStr);
-    return datePart;
-};
-
-const parseLocalDate = (dateStr) => {
-    if (!dateStr) return new Date();
-    const [y, m, d] = dateStr.split('-').map(Number);
-    if (isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
-    return new Date(y, m - 1, d);
-};
-
 export const getOffsetDate = (baseDateStr, offset) => {
     if (!baseDateStr || isNaN(offset)) return baseDateStr;
     const d = parseLocalDate(baseDateStr);
@@ -36,12 +24,6 @@ export const getOffsetDate = (baseDateStr, offset) => {
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd}`;
-};
-
-const getTimeFromISO = (isoStr) => {
-    if (!isoStr) return '';
-    const tech = isoStr.includes('T') ? isoStr.split('T')[1] : (isoStr.includes(' ') ? isoStr.split(' ')[1] : '');
-    return tech ? tech.substring(0, 5) : '';
 };
 
 /**
@@ -57,7 +39,7 @@ const fetchWithPublicProxy = async (targetUrl) => {
             if (text) return JSON.parse(text);
         }
     } catch (e) {
-        logger.warn('corsproxy.io failed, trying allorigins...');
+        logger.warn('corsproxy.io failed, trying allorigins...', e);
     }
 
     // 2. 嘗試 allorigins.win
@@ -68,7 +50,7 @@ const fetchWithPublicProxy = async (targetUrl) => {
             if (wrapped.contents) return JSON.parse(wrapped.contents);
         }
     } catch (e) {
-        logger.warn('allorigins.win failed');
+        logger.warn('allorigins.win failed', e);
     }
 
     return null;
@@ -169,7 +151,9 @@ const tryAirLabs = async (flightNo) => {
             if (res.ok) {
                 data = await res.json();
             }
-        } catch (e) { }
+        } catch (e) {
+            logger.warn('AirLabs direct fetch failed, fallback to public proxy...', e);
+        }
 
         if (!data) {
             data = await fetchWithPublicProxy(targetUrl);
@@ -216,6 +200,7 @@ export const lookupFlight = async (flightNo, flightDate) => {
                 return { ...data, isCache: true, sourceLabel: '本地快取' };
             }
         } catch (e) {
+            logger.warn(`Invalid flight cache entry removed: ${cacheKey}`, e);
             localStorage.removeItem(cacheKey);
         }
     }
@@ -223,7 +208,7 @@ export const lookupFlight = async (flightNo, flightDate) => {
     // 2. Try APIs
     let flightData = await tryAviationStack(flightNo, flightDate);
     if (!flightData) {
-        console.log('AviationStack failed/empty, trying AirLabs...');
+        logger.info('AviationStack failed/empty, trying AirLabs...');
         flightData = await tryAirLabs(flightNo);
     }
 

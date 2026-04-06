@@ -28,8 +28,7 @@ import { logger } from '../utils/logger';
  *   - segments: 所有拆解後並排序的航空業語境航段（供 TripCalendar 月曆視圖使用，不含行程邏輯）
  *   - trips:    經過 Smart Grouping 配對後的完整趟次（供 TripTimeline 行程視圖使用，包含飯店/活動關聯）
  */
-export const useTrips = (tickets) => {
-    return useMemo(() => {
+export const buildTripsFromTickets = (tickets) => {
 
         // ── Step 1：拆票成航段 ────────────────────────────────────────────────
         const validTickets = Array.isArray(tickets) ? tickets : [];
@@ -177,5 +176,8 @@ export const useTrips = (tickets) => {
         });
 
         return { segments, trips };
-    }, [tickets]);
+};
+
+export const useTrips = (tickets) => {
+    return useMemo(() => buildTripsFromTickets(tickets), [tickets]);
 };

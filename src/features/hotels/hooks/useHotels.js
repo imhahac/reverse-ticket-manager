@@ -17,9 +17,10 @@
  */
 import { useMemo } from 'react';
 import { useLocalStorage } from '../../../hooks/useLocalStorage';
+import { STORAGE_KEYS } from '../../../constants/storageKeys';
 
 export function useHotels() {
-    const [hotels, setHotels] = useLocalStorage('travel-hotels', []);
+    const [hotels, setHotels] = useLocalStorage(STORAGE_KEYS.HOTELS, []);
 
     // ── 衍生欄位裝飾 ──────────────────────────────────────────────────────
     const decoratedHotels = useMemo(() => {

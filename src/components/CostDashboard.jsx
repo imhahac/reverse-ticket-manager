@@ -10,7 +10,7 @@ import {
     PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
 } from 'recharts';
-import { useAppContext } from '../contexts/AppContext';
+import { useFilterContext } from '../contexts/FilterContext';
 
 const COLORS = {
     flights: '#6366f1',
@@ -35,7 +35,7 @@ export default function CostDashboard() {
         totalPriceTWD = 0, totalHotelTWD = 0, totalActivityTWD = 0,
         filteredItinerary = [], safeTickets = [], safeHotels = [], safeActivities = [],
         trips = []
-    } = useAppContext();
+    } = useFilterContext();
 
     const grandTotal = totalPriceTWD + totalHotelTWD + totalActivityTWD;
 

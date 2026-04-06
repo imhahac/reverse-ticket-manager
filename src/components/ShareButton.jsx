@@ -7,14 +7,16 @@ import React, { useState } from 'react';
 import { Share2, Check, Loader2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { createShareSnapshot } from '../services/shareService';
-import { useAppContext } from '../contexts/AppContext';
+import { useFilterContext } from '../contexts/FilterContext';
+import { useTicketDataContext } from '../contexts/DataContext';
 
 const PROXY_BASE = import.meta.env.VITE_FLIGHT_PROXY_URL || '';
 
 export default function ShareButton() {
     const [isSharing, setIsSharing] = useState(false);
     const [copied, setCopied] = useState(false);
-    const { filteredItinerary, tripLabels, safeHotels, safeActivities } = useAppContext();
+    const { filteredItinerary, safeHotels, safeActivities } = useFilterContext();
+    const { tripLabels } = useTicketDataContext();
 
     const handleShare = async () => {
         if (!PROXY_BASE) {

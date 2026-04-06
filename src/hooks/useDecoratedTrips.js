@@ -62,7 +62,10 @@ export function useDecoratedTrips(displayTrips, tickets, hotels, activities) {
                     const costPerDay = (tripDays && tripDays > 0) ? Math.round(_cost / tripDays) : null;
 
                     return { ...trip, segments: segs, tripStartAt, tripEndAt, isPast, totalCostTWD: _cost, isOpenJaw, tripDays, costPerDay };
-                } catch (e) { return null; }
+                } catch (e) {
+                    logger.warn('[useDecoratedTrips] Skip invalid trip item', { tripId: trip?.id, error: e?.message || e });
+                    return null;
+                }
             }).filter(Boolean);
 
             const _past = _decoratedTrips.reduce((s, t) => s + (t.isPast ? (t.totalCostTWD || 0) : 0), 0);

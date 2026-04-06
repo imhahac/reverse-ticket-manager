@@ -6,7 +6,13 @@ import ActivityList from './ActivityList';
 import TripCalendar from './TripCalendar';
 import TripMap from './TripMap';
 
-import { useAppContext } from '../contexts/AppContext';
+import {
+    useActivityDataContext,
+    useHotelDataContext,
+    useOverrideDataContext,
+    useTicketDataContext,
+} from '../contexts/DataContext';
+import { useFilterContext } from '../contexts/FilterContext';
 import { useUIContext } from '../contexts/UIContext';
 
 export default function TabContent() {
@@ -19,27 +25,18 @@ export default function TabContent() {
         selectedTripIdForMap
     } = useUIContext();
 
-    const { 
-        filteredItinerary, 
-        tripLabels, 
-        setTripLabels,
-        tripOverrides,
-        removeSegment,
-        restoreSegment,
-        moveSegmentToTrip,
-        clearAllOverrides,
+    const {
+        filteredItinerary,
         filteredTickets,
-        handleDeleteTicket,
-        handleEditTicket,
         filteredHotels,
-        handleEditHotel,
-        handleDeleteHotel,
         filteredActivities,
-        handleEditActivity,
-        handleDeleteActivity,
         itineraryForMap,
         hotelsForMap,
-    } = useAppContext();
+    } = useFilterContext();
+    const { tripLabels, setTripLabels, handleDeleteTicket, handleEditTicket } = useTicketDataContext();
+    const { handleEditHotel, handleDeleteHotel } = useHotelDataContext();
+    const { handleEditActivity, handleDeleteActivity } = useActivityDataContext();
+    const { tripOverrides, removeSegment, restoreSegment, moveSegmentToTrip, clearAllOverrides } = useOverrideDataContext();
 
     if (activeTab === 'timeline') {
         return (

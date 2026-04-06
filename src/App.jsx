@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { AppProvider, useAppContext } from './contexts/AppContext';
+import { AppProvider } from './contexts/AppContext';
+import { useFilterContext } from './contexts/FilterContext';
 import { UIProvider, useUIContext } from './contexts/UIContext';
 
 // ── UI Components ──────────────────────────────────────────────────────────
@@ -26,11 +27,22 @@ const TABS = [
     { key: 'analytics',  label: '📊 成本分析' },
 ];
 
+const FORM_COMPONENT_BY_TAB = {
+    timeline: TicketForm,
+    list: TicketForm,
+    hotels: HotelForm,
+    activities: ActivityForm,
+};
+
+const CONTENT_COMPONENT_BY_TAB = {
+    analytics: CostDashboard,
+};
+
 function AppContent() {
     const { 
         activeTab, setActiveTab, configWarnings, setConfigWarnings 
     } = useUIContext();
-    const { renderError } = useAppContext();
+    const { renderError } = useFilterContext();
 
     if (renderError) {
         return (
@@ -50,6 +62,9 @@ function AppContent() {
             </div>
         );
     }
+
+    const ActiveForm = FORM_COMPONENT_BY_TAB[activeTab] || null;
+    const ActiveContent = CONTENT_COMPONENT_BY_TAB[activeTab] || TabContent;
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
@@ -71,14 +86,7 @@ function AppContent() {
                 <Dashboard />
                 <SearchFilterBar />
 
-                {activeTab === 'timeline' || activeTab === 'list' 
-                    ? <TicketForm />
-                    : activeTab === 'hotels' 
-                    ? <HotelForm />
-                    : activeTab === 'activities' 
-                    ? <ActivityForm />
-                    : null
-                }
+                {ActiveForm ? <ActiveForm /> : null}
 
                 <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="hidden md:flex border-b border-gray-200 p-1 bg-slate-50/50">
@@ -93,7 +101,7 @@ function AppContent() {
                         ))}
                     </div>
                     <div className="p-4 md:p-6 bg-white min-h-[400px]">
-                        {activeTab === 'analytics' ? <CostDashboard /> : <TabContent />}
+                        <ActiveContent />
                     </div>
                 </div>
 

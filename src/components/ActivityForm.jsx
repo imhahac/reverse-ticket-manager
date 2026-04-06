@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Ticket, ChevronDown, ChevronUp } from 'lucide-react';
-import { useAppContext } from '../contexts/AppContext';
+import { useActivityDataContext, useSystemDataContext } from '../contexts/DataContext';
 import { validateNonNegativeNumber, validatePositiveNumber } from '../utils/formUtils';
 import { ERRORS } from '../constants/errors';
 
 export default function ActivityForm() {
-    const { handleSaveActivity: onSaveActivity, editingActivity, handleCancelEditActivity: onCancelEdit, exchangeRates, isSavingActivity: isSaving } = useAppContext();
+    const {
+        handleSaveActivity: onSaveActivity,
+        editingActivity,
+        handleCancelEditActivity: onCancelEdit,
+        isSavingActivity: isSaving,
+    } = useActivityDataContext();
+    const { exchangeRates } = useSystemDataContext();
     const defaultFormData = {
         title: '',
         category: 'attraction', // attraction, transport, dining, other

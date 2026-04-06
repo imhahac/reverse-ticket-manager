@@ -1,7 +1,8 @@
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { STORAGE_KEYS } from '../constants/storageKeys';
 
 export function useActivities() {
-    const [activities, setActivities] = useLocalStorage('reverse-activities', []);
+    const [activities, setActivities] = useLocalStorage(STORAGE_KEYS.ACTIVITIES, []);
 
     const addActivity = (activity) => {
         setActivities(prev => [...prev, { ...activity, id: Date.now().toString() }]);

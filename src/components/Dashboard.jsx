@@ -16,14 +16,14 @@
 import React from 'react';
 // import PropTypes from 'prop-types';
 import { ListFilter, Plane, Building2 } from 'lucide-react';
-import { useAppContext } from '../contexts/AppContext';
+import { useFilterContext } from '../contexts/FilterContext';
 
 export default function Dashboard() {
     const {
         safeTickets = [], trips = [], safeHotels = [], safeActivities = [],
         totalPriceTWD = 0, totalHotelTWD = 0, totalActivityTWD = 0,
         futureCostTWD = 0, pastCostTWD = 0, sunkCostTWD = 0, totalTripDays = 0,
-    } = useAppContext();
+    } = useFilterContext();
 
     const ticketCount = safeTickets.length;
     const tripCount = trips.length;
@@ -119,7 +119,7 @@ export default function Dashboard() {
                         </div>
                     </div>
                 </div>
-                <div className="text-7xl font-black absolute -right-2 -bottom-8 text-white opacity-[0.03] select-none select-none group-hover:opacity-[0.05] transition-opacity font-mono">$</div>
+                <div className="text-7xl font-black absolute -right-2 -bottom-8 text-white opacity-[0.03] select-none group-hover:opacity-[0.05] transition-opacity font-mono">$</div>
             </div>
         </div>
     );

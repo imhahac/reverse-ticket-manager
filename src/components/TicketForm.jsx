@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { Plane, ChevronDown, ChevronUp } from 'lucide-react';
 import { lookupFlight, getOffsetDate } from '../services/flightService';
-import { buildLocalDateTimeStr, autoFixArrival, validateFlightNo, validatePositiveNumber } from '../utils/formUtils';
-import { useAppContext } from '../contexts/AppContext';
-import { ERRORS } from '../constants/errors';
+import { autoFixArrival } from '../utils/formUtils';
+import { validateTicketForm, buildTicketPayload } from '../utils/ticketFormUtils';
+import { useSystemDataContext, useTicketDataContext } from '../contexts/DataContext';
 
 // 匯入子組件
 import FlightSegmentInput from './ticket/FlightSegmentInput';
@@ -18,7 +18,8 @@ const AIRPORTS = [
 ];
 
 export default function TicketForm() {
-    const { handleSaveTicket: onAddTicket, editingTicket, handleCancelEdit: onCancelEdit, exchangeRates = { JPY: 0.21, USD: 32.5 } } = useAppContext();
+    const { handleSaveTicket: onAddTicket, editingTicket, handleCancelEdit: onCancelEdit } = useTicketDataContext();
+    const { exchangeRates = { JPY: 0.21, USD: 32.5 } } = useSystemDataContext();
     const defaultFormData = {
         airline: '',
         price: '',
@@ -117,66 +118,10 @@ export default function TicketForm() {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (!formData.airline || !formData.price || !formData.outboundDate) {
-            toast.error(ERRORS.TICKET_MISSING_FIELDS);
+        const validationError = validateTicketForm(formData);
+        if (validationError) {
+            toast.error(validationError);
             return;
-        }
-
-        if (!validatePositiveNumber(formData.price)) {
-            toast.error(ERRORS.TICKET_NEGATIVE_PRICE);
-            return;
-        }
-
-        if (!validatePositiveNumber(formData.exchangeRate)) {
-            toast.error('匯率必須大於 0');
-            return;
-        }
-
-        if (!validateFlightNo(formData.outboundFlightNo)) {
-            toast.error('去程航班號格式不正確 (例如 BR192)');
-            return;
-        }
-
-        if (formData.type !== 'oneway' && !validateFlightNo(formData.inboundFlightNo)) {
-            toast.error('回程航班號格式不正確 (例如 BR192)');
-            return;
-        }
-
-        if (!formData.departRegion || !formData.returnRegion) {
-            toast.error(ERRORS.TICKET_AIRPORT_EMPTY);
-            return;
-        }
-
-        if (formData.type !== 'oneway') {
-            if (!formData.inboundDate) {
-                toast.error('請填寫第 2 段日期');
-                return;
-            }
-        }
-
-        const outDateTimeStr = buildLocalDateTimeStr(formData.outboundDate, formData.outboundTime);
-        const outDateObj = new Date(outDateTimeStr || formData.outboundDate);
-
-        if (isNaN(outDateObj.getTime())) {
-            toast.error(ERRORS.TICKET_INVALID_DATE_FORMAT);
-            return;
-        }
-
-        let inDateTimeStr = null;
-
-        if (formData.type !== 'oneway') {
-            inDateTimeStr = buildLocalDateTimeStr(formData.inboundDate, formData.inboundTime);
-            const inDateObj = new Date(inDateTimeStr || formData.inboundDate);
-
-            if (isNaN(inDateObj.getTime())) {
-                toast.error(ERRORS.TICKET_INVALID_DATE_FORMAT);
-                return;
-            }
-
-            if (inDateTimeStr && outDateTimeStr && inDateObj < outDateObj) {
-                toast.error(ERRORS.TICKET_INVALID_DATE_ORDER);
-                return;
-            }
         }
 
         const seg1Fix = autoFixArrival('第 1 段航班', formData.outboundDate, formData.outboundTime, formData.outboundArrivalDate, formData.outboundArrivalTime);
@@ -188,20 +133,12 @@ export default function TicketForm() {
             if (seg2Fix === null) return;
         }
 
-        const newTicket = {
-            ...formData,
-            outboundArrivalDate: seg1Fix.arrivalDate,
-            outboundArrivalTime: seg1Fix.arrivalTime,
-            inboundArrivalDate: seg2Fix.arrivalDate,
-            inboundArrivalTime: seg2Fix.arrivalTime,
-            id: editingTicket ? editingTicket.id : Date.now().toString(),
-            calendarIds: editingTicket ? editingTicket.calendarIds : undefined,
-            price: Number(formData.price),
-            exchangeRate: Number(formData.exchangeRate),
-            priceTWD: Math.round(Number(formData.price) * Number(formData.exchangeRate)),
-            outboundFlightNo: formData.outboundFlightNo.toUpperCase(),
-            inboundFlightNo: formData.inboundFlightNo.toUpperCase()
-        };
+        const newTicket = buildTicketPayload({
+            formData,
+            editingTicket,
+            seg1Fix,
+            seg2Fix,
+        });
 
         onAddTicket(newTicket);
         setFormData(defaultFormData);
