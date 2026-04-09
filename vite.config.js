@@ -48,6 +48,18 @@ export default defineConfig({
     ],
     // 記得將 'reverse-ticket-manager' 換成你實際的 GitHub Repository 名稱
     base: '/reverse-ticket-manager/',
+    server: {
+        headers: {
+            'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+            'Cross-Origin-Embedder-Policy': 'unsafe-none',
+        }
+    },
+    preview: {
+        headers: {
+            'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+            'Cross-Origin-Embedder-Policy': 'unsafe-none',
+        }
+    },
     build: {
         target: 'es2015',
     },

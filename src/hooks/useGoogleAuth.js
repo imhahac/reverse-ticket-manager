@@ -50,6 +50,7 @@ export function useGoogleAuth() {
             refreshResolverRef.current = null;
         },
         onError: (error) => {
+            lastSilentRefreshFailRef.current = Date.now();
             logger.warn('Silent refresh failed:', error);
             refreshResolverRef.current?.(false);
             refreshResolverRef.current = null;
@@ -96,12 +97,23 @@ export function useGoogleAuth() {
      * trySilentRefresh：嘗試靜默更新，回傳 Promise<boolean>。
      * 超過 8 秒視為失敗，避免永久 hang。
      */
+    const lastSilentRefreshFailRef = useRef(0);
+
+    // ── login：主動登入（彈窗）────────────────────────────────────────────
+...
     const trySilentRefresh = () => {
-        // 競態 guard：若已有進行中的 refresh，直接回傳 false，
-        // 避免覆蓋舊 resolver 導致舊 Promise 永遠 hang 到 8 秒 timeout。
+        // 1. 競態 guard
         if (refreshResolverRef.current) {
             return Promise.resolve(false);
         }
+
+        // 2. 冷卻 guard：若 1 分鐘內才剛失敗過，則不再嘗試背景刷新，避免控制台噴錯迴圈
+        const now = Date.now();
+        if (now - lastSilentRefreshFailRef.current < 60000) {
+            logger.info('Silent refresh in cooldown, skipping...');
+            return Promise.resolve(false);
+        }
+
         return new Promise((resolve) => {
             refreshResolverRef.current = resolve;
             
@@ -109,6 +121,7 @@ export function useGoogleAuth() {
                 silentLogin();
             } catch (e) {
                 logger.error('Silent login trigger failed:', e);
+                lastSilentRefreshFailRef.current = Date.now();
                 refreshResolverRef.current(false);
                 refreshResolverRef.current = null;
                 return;
@@ -116,6 +129,7 @@ export function useGoogleAuth() {
 
             setTimeout(() => {
                 if (refreshResolverRef.current) {
+                    lastSilentRefreshFailRef.current = Date.now();
                     refreshResolverRef.current(false);
                     refreshResolverRef.current = null;
                     toast.error('Google Token 更新超時', { description: '若持續出現異常，請手動重新登入。' });
