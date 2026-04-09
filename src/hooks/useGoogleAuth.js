@@ -136,7 +136,7 @@ export function useGoogleAuth() {
 
             // 情況 1：token 已徹底過期（超過 1 分鐘緩衝）-> 直接登出，不嘗試背景刷新
             if (timeRemaining < -60000) {
-                logger.warn('Token severely expired, clearing state.');
+                logger.info('Token severely expired, clearing state.');
                 logout();
                 toast.error(ERRORS.AUTH_EXPIRED);
                 return;

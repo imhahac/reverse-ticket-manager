@@ -46,7 +46,7 @@ export const validateEnv = () => {
     }
     
     if (!import.meta.env.VITE_MAPBOX_API_KEY) {
-        logger.warn('Mapbox 金鑰未設定，系統將僅使用 Google Maps。');
+        logger.info('Mapbox 金鑰未設定，系統將僅使用 Google Maps。');
     }
 
     return { valid: true, errors: [] };
