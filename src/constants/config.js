@@ -3,6 +3,8 @@
  * 集中管理環境變數與靜態配置，提供統一的驗證機制
  */
 
+import { logger } from '../utils/logger';
+
 export const CONFIG = {
     googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID,
     flightProxyUrl: import.meta.env.VITE_FLIGHT_PROXY_URL,
@@ -49,7 +51,7 @@ export const validateConfig = () => {
         warnings.push('遺失航班 API 配置：請設定 VITE_FLIGHT_PROXY_URL (推薦) 或直接填入 API Keys。');
     } else if (!CONFIG.flightProxyUrl) {
         // 如果有 Key 但沒 Proxy，給個建議但不算嚴重警告
-        console.info('Tip: 設定 VITE_FLIGHT_PROXY_URL 可以更安全地隱藏您的 API 金鑰。');
+        logger.info('Tip: 設定 VITE_FLIGHT_PROXY_URL 可以更安全地隱藏您的 API 金鑰。');
     }
     
     return warnings;
