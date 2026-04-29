@@ -23,7 +23,7 @@ import { createStableId } from '../../../utils/id';
 const EMPTY = {
     name: '', address: '', checkIn: '', checkOut: '',
     currency: 'TWD', priceTotal: '', priceTWD: 0,
-    confirmationNo: '', notes: '',
+    confirmationNo: '', notes: '', isPaid: false,
 };
 
 
@@ -226,6 +226,20 @@ export default function HotelForm() {
                         className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
                     />
                 </div>
+            </div>
+
+            {/* 付款狀態 */}
+            <div className="mt-4 flex items-center bg-teal-50 p-3 rounded-lg border border-teal-100">
+                <input 
+                    type="checkbox" 
+                    id="hotel-isPaid"
+                    checked={form.isPaid}
+                    onChange={e => set('isPaid', e.target.checked)}
+                    className="w-5 h-5 text-teal-600 bg-white border-gray-300 rounded focus:ring-teal-500 cursor-pointer"
+                />
+                <label htmlFor="hotel-isPaid" className="ml-3 block text-sm font-bold text-teal-900 cursor-pointer">
+                    ✅ 此筆住宿已完成付款
+                </label>
             </div>
 
             {/* 送出 */}

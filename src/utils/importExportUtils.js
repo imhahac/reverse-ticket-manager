@@ -3,8 +3,8 @@
  * 獨立處理應用程式資料的 JSON 匯出入邏輯
  */
 
-export const exportData = (tickets, tripLabels, rawHotels, activities) => {
-    const blob = new Blob([JSON.stringify({ tickets, tripLabels, hotels: rawHotels, activities }, null, 2)], { type: 'application/json' });
+export const exportData = (tickets, tripLabels, rawHotels, activities, tripBudgets) => {
+    const blob = new Blob([JSON.stringify({ tickets, tripLabels, hotels: rawHotels, activities, tripBudgets }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     Object.assign(document.createElement('a'), {
         href: url,
@@ -21,6 +21,7 @@ export const importData = (file, onSuccess, onError) => {
             const data = JSON.parse(target.result);
             const newTickets = Array.isArray(data) ? data : (data.tickets || []);
             const newLabels  = data.tripLabels || {};
+            const newBudgets = data.tripBudgets || {};
             const newHotels  = data.hotels || [];
             const newActivities = data.activities || [];
             
@@ -36,6 +37,7 @@ export const importData = (file, onSuccess, onError) => {
             onSuccess({
                 newTickets,
                 newLabels,
+                newBudgets,
                 newHotels,
                 newActivities
             });

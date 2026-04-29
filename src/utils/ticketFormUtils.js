@@ -58,6 +58,7 @@ export const validateTicketForm = (formData) => {
 
 export const buildTicketPayload = ({ formData, editingTicket, seg1Fix, seg2Fix }) => ({
     ...formData,
+    isPaid: formData.isPaid ?? false,
     outboundArrivalDate: seg1Fix.arrivalDate,
     outboundArrivalTime: seg1Fix.arrivalTime,
     inboundArrivalDate: seg2Fix.arrivalDate,

@@ -24,7 +24,8 @@ export default function ActivityForm() {
         price: '',
         currency: 'TWD',
         exchangeRate: '1',
-        notes: ''
+        notes: '',
+        isPaid: false
     };
 
     const [formData, setFormData] = useState(defaultFormData);
@@ -184,6 +185,19 @@ export default function ActivityForm() {
                         <div className="col-span-1 md:col-span-2 lg:col-span-2">
                             <label className="block text-sm font-bold text-gray-700 mb-1">備註 / 憑證號碼 (選填)</label>
                             <input type="text" placeholder="例如兌換碼、取票指引..." className="w-full p-2 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-orange-500" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
+                        </div>
+
+                        <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-2 flex items-center bg-orange-50 p-3 rounded-lg border border-orange-100">
+                            <input 
+                                type="checkbox" 
+                                id="activity-isPaid"
+                                checked={formData.isPaid}
+                                onChange={e => setFormData({ ...formData, isPaid: e.target.checked })}
+                                className="w-5 h-5 text-orange-600 bg-white border-gray-300 rounded focus:ring-orange-500 cursor-pointer"
+                            />
+                            <label htmlFor="activity-isPaid" className="ml-3 block text-sm font-bold text-orange-900 cursor-pointer">
+                                ✅ 此筆活動已完成付款
+                            </label>
                         </div>
 
                         <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-2 flex flex-col sm:flex-row gap-3">

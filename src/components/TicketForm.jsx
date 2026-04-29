@@ -35,9 +35,9 @@ export default function TicketForm() {
         inboundTime: '',
         inboundArrivalDate: '',
         inboundArrivalTime: '',
-        outboundFlightNo: '',
         inboundFlightNo: '',
         type: 'normal',
+        isPaid: false,
     };
 
     const [formData, setFormData] = useState(defaultFormData);
@@ -263,6 +263,19 @@ export default function TicketForm() {
                                     isFetchingFlight={isFetchingFlight}
                                 />
                             )}
+                        </div>
+
+                        <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-2 flex items-center bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                            <input 
+                                type="checkbox" 
+                                id="ticket-isPaid"
+                                checked={formData.isPaid}
+                                onChange={e => setFormData({ ...formData, isPaid: e.target.checked })}
+                                className="w-5 h-5 text-indigo-600 bg-white border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <label htmlFor="ticket-isPaid" className="ml-3 block text-sm font-bold text-indigo-900 cursor-pointer">
+                                ✅ 此筆訂單已完成付款
+                            </label>
                         </div>
 
                         <div className="col-span-1 md:col-span-2 lg:col-span-4 mt-2 flex flex-col sm:flex-row gap-3">

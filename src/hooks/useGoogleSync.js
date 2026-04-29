@@ -12,6 +12,8 @@
  * @param {Object}      params.tripLabels         - 行程標籤 map
  * @param {Function}    params.setTickets         - 更新 tickets 的 setter
  * @param {Function}    params.setTripLabels      - 更新 tripLabels 的 setter
+ * @param {Object}      params.tripBudgets        - 行程預算 map
+ * @param {Function}    params.setTripBudgets     - 更新 tripBudgets 的 setter
  * @param {Array}       params.hotels             - 食店住宿資料（已裝飾）
  * @param {Array}       params.rawHotels          - 食店住宿原始資料（不含衍生欄位）
  * @param {Function}    params.setHotels          - 更新 hotels 的 setter
@@ -34,6 +36,8 @@ export function useGoogleSync({
     tripLabels,
     setTickets,
     setTripLabels,
+    tripBudgets,
+    setTripBudgets,
     hotels = [],
     rawHotels = [],
     activities = [],
@@ -95,7 +99,7 @@ export function useGoogleSync({
     // ── 備份到 Drive ──────────────────────────────────────────────────────
     const handleSyncToDrive = async () => {
         const guard = await withAuthGuard(
-            (token) => syncToDrive(tickets, tripLabels, rawHotels, token, activities),
+            (token) => syncToDrive(tickets, tripLabels, rawHotels, token, activities, tripBudgets),
             '正在備份至 Google Drive…'
         );
         if (!guard) return;
@@ -129,6 +133,7 @@ export function useGoogleSync({
                     onClick: () => {
                         setTickets(result.tickets);
                         setTripLabels(result.tripLabels || {});
+                        if (setTripBudgets) setTripBudgets(result.tripBudgets || {});
                         if (setHotels) {
                             setHotels(Array.isArray(result.hotels) ? result.hotels : []);
                         }

@@ -16,6 +16,7 @@ export function DataProvider({ children }) {
     // ── 持久化資料 ───────────────────────────────────────────────────────────
     const [tickets, setTickets] = useLocalStorage(STORAGE_KEYS.TICKETS, []);
     const [tripLabels, setTripLabels] = useLocalStorage(STORAGE_KEYS.TRIP_LABELS, {});
+    const [tripBudgets, setTripBudgets] = useLocalStorage(STORAGE_KEYS.TRIP_BUDGETS, {});
 
     // ── UI 狀態 (僅保留表單編輯狀態) ──────────────────────────────────────────
     const [editingTicket, setEditingTicket] = useState(null);
@@ -54,12 +55,13 @@ export function DataProvider({ children }) {
     });
 
     // ── 本地 JSON 匯出入 ──────────────────────────────────────────────────────
-    const handleExport = () => exportData(tickets, tripLabels, rawHotels, activities);
+    const handleExport = () => exportData(tickets, tripLabels, rawHotels, activities, tripBudgets);
     const handleImport = (e) => {
         importData(e.target.files[0], (data) => {
             toast(`成功讀取 ${data.newTickets.length} 筆機票、${data.newHotels.length} 筆住宿、${data.newActivities.length} 筆活動`, {
                 action: { label: '確認覆寫', onClick: () => {
                     setTickets(data.newTickets); setTripLabels(data.newLabels);
+                    if (data.newBudgets) setTripBudgets(data.newBudgets);
                     // Always replace imported collections so users can intentionally clear existing data.
                     setHotels(Array.isArray(data.newHotels) ? data.newHotels : []);
                     setActivities(Array.isArray(data.newActivities) ? data.newActivities : []);
@@ -76,6 +78,8 @@ export function DataProvider({ children }) {
         setTickets,
         tripLabels,
         setTripLabels,
+        tripBudgets,
+        setTripBudgets,
         segments,
         trips,
         editingTicket,
@@ -85,7 +89,7 @@ export function DataProvider({ children }) {
         handleCancelEdit,
         handleDeleteTicket,
     }), [
-        tickets, setTickets, tripLabels, setTripLabels,
+        tickets, setTickets, tripLabels, setTripLabels, tripBudgets, setTripBudgets,
         segments, trips,
         editingTicket, setEditingTicket,
         handleSaveTicket, handleEditTicket, handleCancelEdit, handleDeleteTicket,

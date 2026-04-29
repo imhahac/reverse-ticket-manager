@@ -26,6 +26,7 @@ export function FilterProvider({ children }) {
     // 2. 裝飾行程 (計算費用、安全性檢查)
     const {
         decoratedTrips, totalPriceTWD, totalHotelTWD, totalActivityTWD,
+        totalPaidTWD, totalPendingTWD,
         pastCostTWD, futureCostTWD, totalTripDays, sunkCostTWD,
         renderError, safeTickets, safeHotels, safeActivities
     } = useDecoratedTrips(displayTrips, tickets, rawHotels, activities);
@@ -65,6 +66,7 @@ export function FilterProvider({ children }) {
         safeHotels,
         safeActivities,
         totalPriceTWD, totalHotelTWD, totalActivityTWD,
+        totalPaidTWD, totalPendingTWD,
         pastCostTWD, futureCostTWD, totalTripDays, sunkCostTWD,
         renderError,
         filteredTickets, filteredHotels, filteredActivities, filteredItinerary,

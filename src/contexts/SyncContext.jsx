@@ -9,13 +9,14 @@ export function SyncProvider({ children }) {
     const { accessToken, accessTokenState, login, logout, isTokenExpired, trySilentRefresh } = useGoogleAuth();
     
     // 從 DataContext 取得同步所需之狀態與 setters
-    const { tickets, tripLabels, setTickets, setTripLabels, segments } = useTicketDataContext();
+    const { tickets, tripLabels, setTickets, setTripLabels, tripBudgets, setTripBudgets, segments } = useTicketDataContext();
     const { hotels, rawHotels, setHotels, updateHotelCalendarIds } = useHotelDataContext();
     const { activities, setActivities, updateActivityCalendarId } = useActivityDataContext();
 
     const { isSyncing, handleSyncToDrive, handleLoadFromDrive, handleSyncToCalendar } = useGoogleSync({
         accessToken, accessTokenState, trySilentRefresh, isTokenExpired, logout,
         tickets, tripLabels, setTickets, setTripLabels,
+        tripBudgets, setTripBudgets,
         hotels, rawHotels,
         activities,
         segments,

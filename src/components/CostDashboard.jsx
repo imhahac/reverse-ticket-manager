@@ -33,9 +33,12 @@ const CustomTooltip = ({ active, payload }) => {
 export default function CostDashboard() {
     const {
         totalPriceTWD = 0, totalHotelTWD = 0, totalActivityTWD = 0,
+        totalPaidTWD = 0, totalPendingTWD = 0,
         filteredItinerary = [], safeTickets = [], safeHotels = [], safeActivities = [],
         trips = []
     } = useFilterContext();
+
+    const { tripBudgets } = useTicketDataContext();
 
     const grandTotal = totalPriceTWD + totalHotelTWD + totalActivityTWD;
 
@@ -71,16 +74,17 @@ export default function CostDashboard() {
     return (
         <div className="space-y-8">
             {/* 頂部總覽卡 */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 {[
-                    { label: '💰 旅費總計', value: NT(grandTotal), sub: `${safeTickets.length} 套機票`, color: 'indigo' },
+                    { label: '💰 旅費總計', value: NT(grandTotal), sub: `已付: ${NT(totalPaidTWD)}`, color: 'indigo' },
+                    { label: '⏳ 待付款項', value: NT(totalPendingTWD), sub: '即將到來', color: 'rose' },
                     { label: '✈️ 機票支出', value: NT(totalPriceTWD), sub: `${trips.length} 趟行程`, color: 'indigo' },
                     { label: '🏨 住宿支出', value: NT(totalHotelTWD), sub: `${safeHotels.length} 筆住宿`, color: 'teal' },
                     { label: '🎫 活動支出', value: NT(totalActivityTWD), sub: `${safeActivities.length} 項活動`, color: 'orange' },
                 ].map(card => (
-                    <div key={card.label} className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
+                    <div key={card.label} className={`bg-white rounded-2xl border border-slate-100 p-4 shadow-sm ${card.label.includes('待付款項') && totalPendingTWD > 0 ? 'bg-rose-50 border-rose-200' : ''}`}>
                         <p className="text-xs text-slate-500 font-bold mb-1">{card.label}</p>
-                        <p className="text-2xl font-extrabold text-slate-800 font-mono">{card.value}</p>
+                        <p className={`text-2xl font-extrabold font-mono ${card.label.includes('待付款項') && totalPendingTWD > 0 ? 'text-rose-600' : 'text-slate-800'}`}>{card.value}</p>
                         <p className="text-xs text-slate-400 mt-1">{card.sub}</p>
                     </div>
                 ))}
@@ -165,18 +169,42 @@ export default function CostDashboard() {
                                 const hotelCost = trip.totalHotelCostTWD ?? 0;
                                 const total = flightCost + hotelCost;
                                 const perDay = trip.tripDays > 0 ? Math.round(total / trip.tripDays) : null;
+                                const tripBudget = tripBudgets?.[trip.id] || 0;
+                                const budgetPercent = tripBudget > 0 ? Math.min(100, Math.round((total / tripBudget) * 100)) : 0;
+                                const isOverBudget = budgetPercent >= 100;
+
                                 return (
-                                    <tr key={trip.id ?? i} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                        <td className="py-2.5 px-2 font-medium text-slate-700">
-                                            {trip.customLabel || `Trip ${i + 1}`}
-                                            {trip.isPast && <span className="ml-2 text-[10px] bg-slate-100 text-slate-400 px-1.5 rounded">已過</span>}
-                                        </td>
-                                        <td className="py-2.5 px-2 text-right text-slate-500">{trip.tripDays ?? '—'} 天</td>
-                                        <td className="py-2.5 px-2 text-right font-mono text-indigo-600">{NT(flightCost)}</td>
-                                        <td className="py-2.5 px-2 text-right font-mono text-teal-600">{NT(hotelCost)}</td>
-                                        <td className="py-2.5 px-2 text-right font-mono font-bold text-slate-800">{NT(total)}</td>
-                                        <td className="py-2.5 px-2 text-right font-mono text-slate-500">{perDay ? NT(perDay) : '—'}</td>
-                                    </tr>
+                                    <React.Fragment key={trip.id ?? i}>
+                                        <tr className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                            <td className="py-2.5 px-2 font-medium text-slate-700">
+                                                {trip.customLabel || `Trip ${i + 1}`}
+                                                {trip.isPast && <span className="ml-2 text-[10px] bg-slate-100 text-slate-400 px-1.5 rounded">已過</span>}
+                                            </td>
+                                            <td className="py-2.5 px-2 text-right text-slate-500">{trip.tripDays ?? '—'} 天</td>
+                                            <td className="py-2.5 px-2 text-right font-mono text-indigo-600">{NT(flightCost)}</td>
+                                            <td className="py-2.5 px-2 text-right font-mono text-teal-600">{NT(hotelCost)}</td>
+                                            <td className="py-2.5 px-2 text-right font-mono font-bold text-slate-800">{NT(total)}</td>
+                                            <td className="py-2.5 px-2 text-right font-mono text-slate-500">{perDay ? NT(perDay) : '—'}</td>
+                                        </tr>
+                                        {tripBudget > 0 && (
+                                            <tr className="border-b border-slate-100 bg-slate-50/30">
+                                                <td colSpan="6" className="py-2 px-3">
+                                                    <div className="flex items-center gap-3 text-xs">
+                                                        <span className="text-slate-500 font-bold w-12">預算</span>
+                                                        <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                                                            <div 
+                                                                className={`h-2 rounded-full ${isOverBudget ? 'bg-red-500' : budgetPercent > 80 ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                                                                style={{ width: `${budgetPercent}%` }}
+                                                            ></div>
+                                                        </div>
+                                                        <span className={`font-mono font-bold ${isOverBudget ? 'text-red-500' : 'text-slate-600'}`}>
+                                                            {NT(total)} / {NT(tripBudget)} ({budgetPercent}%)
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
                                 );
                             })}
                         </tbody>

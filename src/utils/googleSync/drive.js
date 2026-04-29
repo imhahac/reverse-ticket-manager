@@ -23,7 +23,7 @@ async function findDriveFile(accessToken) {
 /**
  * 上傳/覆寫資料到 Google Drive 的 reverse-tickets.json
  */
-export const syncToDrive = async (tickets, tripLabels, hotels = [], accessToken, activities = []) => {
+export const syncToDrive = async (tickets, tripLabels, hotels = [], accessToken, activities = [], tripBudgets = {}) => {
     try {
         const findRes = await findDriveFile(accessToken);
         if (findRes.expired) return { success: false, expired: true };
@@ -31,7 +31,7 @@ export const syncToDrive = async (tickets, tripLabels, hotels = [], accessToken,
         const files = findRes.files;
         const existingFile = files.length > 0 ? files[0] : null;
 
-        const fileContent = { tickets, tripLabels, hotels, activities };
+        const fileContent = { tickets, tripLabels, hotels, activities, tripBudgets };
 
         let uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=media';
         let method = 'POST';
@@ -108,6 +108,7 @@ export const loadFromDrive = async (accessToken) => {
         
         let tickets = [];
         let tripLabels = {};
+        let tripBudgets = {};
         let hotels = [];
         let activities = [];
         
@@ -116,13 +117,14 @@ export const loadFromDrive = async (accessToken) => {
         } else if (data && typeof data === 'object') {
             tickets = Array.isArray(data.tickets) ? data.tickets : [];
             tripLabels = (data.tripLabels && typeof data.tripLabels === 'object') ? data.tripLabels : {};
+            tripBudgets = (data.tripBudgets && typeof data.tripBudgets === 'object') ? data.tripBudgets : {};
             hotels = Array.isArray(data.hotels) ? data.hotels : [];
             activities = Array.isArray(data.activities) ? data.activities : [];
         } else {
             throw new Error('雲端檔案內容格式毀損或不相容');
         }
 
-        return { success: true, tickets, tripLabels, hotels, activities, foundFilesLog: allFoundFiles };
+        return { success: true, tickets, tripLabels, hotels, activities, tripBudgets, foundFilesLog: allFoundFiles };
     } catch (e) {
         logger.error('Drive API Error:', e);
         return { success: false, error: e.message };

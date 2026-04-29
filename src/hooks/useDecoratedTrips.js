@@ -9,10 +9,20 @@ export function useDecoratedTrips(displayTrips, tickets, hotels, activities) {
             const safeHotels = Array.isArray(hotels) ? hotels : [];
             const safeActivities = Array.isArray(activities) ? activities : [];
 
-            // 1. 基本費用
-            const _totalPriceTWD = safeTickets.reduce((s, t) => s + (Number(t?.priceTWD || t?.price || 0)), 0);
-            const _totalHotelTWD = safeHotels.reduce((s, h) => s + (Number(h?.priceTWD || 0)), 0);
-            const _totalActivityTWD = safeActivities.reduce((s, a) => s + (Number(a?.priceTWD || 0)), 0);
+            // 1. 基本費用與付款狀態
+            let _totalPaidTWD = 0;
+            let _totalPendingTWD = 0;
+
+            const calcCost = (items) => items.reduce((s, item) => {
+                const cost = Number(item?.priceTWD || item?.price || 0);
+                if (item?.isPaid !== false) _totalPaidTWD += cost;
+                else _totalPendingTWD += cost;
+                return s + cost;
+            }, 0);
+
+            const _totalPriceTWD = calcCost(safeTickets);
+            const _totalHotelTWD = calcCost(safeHotels);
+            const _totalActivityTWD = calcCost(safeActivities);
 
             // 2. 裝飾趟次
             const getSegs = (trip) => {
@@ -78,6 +88,8 @@ export function useDecoratedTrips(displayTrips, tickets, hotels, activities) {
                 totalPriceTWD: _totalPriceTWD,
                 totalHotelTWD: _totalHotelTWD,
                 totalActivityTWD: _totalActivityTWD,
+                totalPaidTWD: _totalPaidTWD,
+                totalPendingTWD: _totalPendingTWD,
                 pastCostTWD: _past,
                 futureCostTWD: _future,
                 totalTripDays: _days,
@@ -91,6 +103,7 @@ export function useDecoratedTrips(displayTrips, tickets, hotels, activities) {
             logger.error("Critical calculation error:", e);
             return { 
                 decoratedTrips: [], totalPriceTWD: 0, totalHotelTWD: 0, totalActivityTWD: 0,
+                totalPaidTWD: 0, totalPendingTWD: 0,
                 pastCostTWD: 0, futureCostTWD: 0, totalTripDays: 0, 
                 sunkCostTWD: 0, renderError: e.message,
                 safeTickets: [], safeHotels: [], safeActivities: []

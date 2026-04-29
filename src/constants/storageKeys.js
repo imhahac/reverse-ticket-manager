@@ -14,4 +14,5 @@ export const STORAGE_KEYS = {
     TIMELINE_SHOW_PAST: 'timeline-show-past',
     TIMELINE_VIEW_MODE: 'timeline-view-mode',
     TIMELINE_DISPLAY_OPTIONS: 'timeline-display-options',
+    TRIP_BUDGETS: 'reverse-trip-budgets',
 };
