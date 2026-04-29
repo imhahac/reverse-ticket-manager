@@ -4,6 +4,7 @@ import { Ticket, ChevronDown, ChevronUp } from 'lucide-react';
 import { useActivityDataContext, useSystemDataContext } from '../contexts/DataContext';
 import { validateNonNegativeNumber, validatePositiveNumber } from '../utils/formUtils';
 import { ERRORS } from '../constants/errors';
+import { createStableId } from '../utils/id';
 
 export default function ActivityForm() {
     const {
@@ -62,7 +63,7 @@ export default function ActivityForm() {
 
         const newActivity = {
             ...formData,
-            id: editingActivity ? editingActivity.id : Date.now().toString(),
+            id: editingActivity ? editingActivity.id : createStableId('activity-'),
             price: Number(formData.price),
             exchangeRate: Number(formData.exchangeRate),
             priceTWD: Math.round(Number(formData.price) * Number(formData.exchangeRate)),

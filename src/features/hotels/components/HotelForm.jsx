@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { convertToTWD } from '../../../utils/currency';
 import { ERRORS } from '../../../constants/errors';
 import { useHotelDataContext, useSystemDataContext } from '../../../contexts/DataContext';
+import { createStableId } from '../../../utils/id';
 
 const EMPTY = {
     name: '', address: '', checkIn: '', checkOut: '',
@@ -88,7 +89,7 @@ export default function HotelForm() {
             ...form,
             priceTotal: parseFloat(form.priceTotal) || 0,
             priceTWD: form.priceTWD || 0,
-            id: editingHotel?.id ?? `hotel-${Date.now()}`,
+            id: editingHotel?.id ?? createStableId('hotel-'),
         };
         onSaveHotel(hotel);
         setForm(EMPTY);

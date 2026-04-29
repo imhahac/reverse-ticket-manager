@@ -1,5 +1,6 @@
 import { ERRORS } from '../constants/errors';
 import { buildLocalDateTimeStr, validateFlightNo, validatePositiveNumber } from './formUtils';
+import { createStableId } from './id';
 
 /**
  * 回傳第一個驗證錯誤訊息；若通過則回傳 null。
@@ -61,7 +62,7 @@ export const buildTicketPayload = ({ formData, editingTicket, seg1Fix, seg2Fix }
     outboundArrivalTime: seg1Fix.arrivalTime,
     inboundArrivalDate: seg2Fix.arrivalDate,
     inboundArrivalTime: seg2Fix.arrivalTime,
-    id: editingTicket ? editingTicket.id : Date.now().toString(),
+    id: editingTicket ? editingTicket.id : createStableId('ticket-'),
     calendarIds: editingTicket ? editingTicket.calendarIds : undefined,
     price: Number(formData.price),
     exchangeRate: Number(formData.exchangeRate),
