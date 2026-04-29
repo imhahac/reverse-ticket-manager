@@ -11,6 +11,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
 } from 'recharts';
 import { useFilterContext } from '../contexts/FilterContext';
+import { useTicketDataContext } from '../contexts/DataContext';
 
 const COLORS = {
     flights: '#6366f1',
