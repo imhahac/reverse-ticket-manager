@@ -18,6 +18,7 @@
 import { useMemo } from 'react';
 import { useLocalStorage } from '../../../hooks/useLocalStorage';
 import { STORAGE_KEYS } from '../../../constants/storageKeys';
+import { createStableId } from '../../../utils/id';
 
 export function useHotels() {
     const [hotels, setHotels] = useLocalStorage(STORAGE_KEYS.HOTELS, []);
@@ -45,7 +46,7 @@ export function useHotels() {
 
     // ── CRUD ──────────────────────────────────────────────────────────────
     const addHotel = (hotel) =>
-        setHotels(prev => [...prev, { ...hotel, id: `hotel-${Date.now()}` }]);
+        setHotels(prev => [...prev, { ...hotel, id: createStableId('hotel-') }]);
 
     const updateHotel = (hotel) =>
         setHotels(prev => prev.map(h => h.id === hotel.id ? hotel : h));

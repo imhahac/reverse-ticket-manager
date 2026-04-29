@@ -1,11 +1,12 @@
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { STORAGE_KEYS } from '../constants/storageKeys';
+import { createStableId } from '../utils/id';
 
 export function useActivities() {
     const [activities, setActivities] = useLocalStorage(STORAGE_KEYS.ACTIVITIES, []);
 
     const addActivity = (activity) => {
-        setActivities(prev => [...prev, { ...activity, id: Date.now().toString() }]);
+        setActivities(prev => [...prev, { ...activity, id: createStableId('activity-') }]);
     };
 
     const updateActivity = (updatedActivity) => {

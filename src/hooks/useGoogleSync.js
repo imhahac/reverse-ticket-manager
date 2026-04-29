@@ -129,8 +129,12 @@ export function useGoogleSync({
                     onClick: () => {
                         setTickets(result.tickets);
                         setTripLabels(result.tripLabels || {});
-                        if (result.hotels?.length > 0 && setHotels) setHotels(result.hotels);
-                        if (result.activities?.length > 0 && setActivities) setActivities(result.activities);
+                        if (setHotels) {
+                            setHotels(Array.isArray(result.hotels) ? result.hotels : []);
+                        }
+                        if (setActivities) {
+                            setActivities(Array.isArray(result.activities) ? result.activities : []);
+                        }
                         toast.success('雲端資料載入成功！');
                     },
                 },

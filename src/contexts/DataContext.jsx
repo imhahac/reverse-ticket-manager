@@ -60,13 +60,14 @@ export function DataProvider({ children }) {
             toast(`成功讀取 ${data.newTickets.length} 筆機票、${data.newHotels.length} 筆住宿、${data.newActivities.length} 筆活動`, {
                 action: { label: '確認覆寫', onClick: () => {
                     setTickets(data.newTickets); setTripLabels(data.newLabels);
-                    if (data.newHotels.length > 0) setHotels(data.newHotels);
-                    if (data.newActivities.length > 0) setActivities(data.newActivities);
+                    // Always replace imported collections so users can intentionally clear existing data.
+                    setHotels(Array.isArray(data.newHotels) ? data.newHotels : []);
+                    setActivities(Array.isArray(data.newActivities) ? data.newActivities : []);
                     toast.success('匯入成功！');
                 }},
                 cancel: { label: '取消', onClick: () => {} }, duration: 10000,
             });
-        }, (err) => toast.error('匯入失敗', { description: err.message || '檔案格式錯誤 or 損毀。' }));
+        }, (err) => toast.error('匯入失敗', { description: err.message || '檔案格式錯誤或損毀。' }));
         e.target.value = '';
     };
 

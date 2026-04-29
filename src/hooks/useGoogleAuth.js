@@ -99,8 +99,6 @@ export function useGoogleAuth() {
      */
     const lastSilentRefreshFailRef = useRef(0);
 
-    // ── login：主動登入（彈窗）────────────────────────────────────────────
-...
     const trySilentRefresh = () => {
         // 1. 競態 guard
         if (refreshResolverRef.current) {
@@ -168,7 +166,6 @@ export function useGoogleAuth() {
 
         const interval = setInterval(checkExpiration, TIMING.AUTH_CHECK_INTERVAL);
         return () => clearInterval(interval);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [accessToken, accessTokenState]);
 
     return { accessToken, accessTokenState, login, logout, isTokenExpired, trySilentRefresh };

@@ -18,25 +18,31 @@ export function useEntityManager({
 
     const handleSave = async (item) => {
         setIsSaving(true);
-        const { enrichedItem, geoSuccess, query } = await processGeocodedEntity(item, titleField, locationField);
+        try {
+            const { enrichedItem, geoSuccess, query } = await processGeocodedEntity(item, titleField, locationField);
 
-        if (editingItem) {
-            updateFn(enrichedItem);
-        } else {
-            addFn(enrichedItem);
-        }
-        setEditingItem(null);
-        setIsSaving(false);
+            if (editingItem) {
+                updateFn(enrichedItem);
+            } else {
+                addFn(enrichedItem);
+            }
+            setEditingItem(null);
 
-        if (geoSuccess || (item.lat && item.lng)) {
-            toast.success(`${itemName}已成功儲存！`, { description: '已成功取得精確地圖座標。' });
-        } else if (query) {
-            toast.warning(`${itemName}已儲存，但無法解析地圖座標`, {
-                description: '無法找到該地點的地圖位置，這將無法為您計算地點落差警告。請檢查拼寫。',
-                duration: 6000
-            });
-        } else {
-            toast.success(`${itemName}已成功儲存！`);
+            if (geoSuccess || (item.lat && item.lng)) {
+                toast.success(`${itemName}已成功儲存！`, { description: '已成功取得精確地圖座標。' });
+            } else if (query) {
+                toast.warning(`${itemName}已儲存，但無法解析地圖座標`, {
+                    description: '無法找到該地點的地圖位置，這將無法為您計算地點落差警告。請檢查拼寫。',
+                    duration: 6000
+                });
+            } else {
+                toast.success(`${itemName}已成功儲存！`);
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : '儲存時發生未知錯誤';
+            toast.error(`${itemName}儲存失敗`, { description: message });
+        } finally {
+            setIsSaving(false);
         }
     };
 
