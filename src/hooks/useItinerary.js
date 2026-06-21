@@ -84,27 +84,49 @@ export function useItinerary(decoratedTrips, hotels, activities = []) {
 
                 const checkLocationWarnings = (validHotels) => {
                     const locWarns = [];
-                    const uniqueCodes = [...new Set(segs.flatMap(s => [s.from?.split(' ')[0], s.to?.split(' ')[0]]))]
-                        .filter(code => code && !isTaiwan(code));
+                    validHotels.forEach(h => {
+                        if (!h.lat || !h.lng) return;
 
-                    if (uniqueCodes.length > 0 && validHotels.length > 0) {
-                        validHotels.forEach(h => {
-                            if (h.lat && h.lng) {
-                                let minDistance = Infinity;
-                                let nearestAirport = null;
-                                uniqueCodes.forEach(code => {
-                                    const coords = getCachedAirportCoords(code);
-                                    if (coords) {
-                                        const dist = getDistanceFromLatLonInKm(h.lat, h.lng, coords.lat, coords.lng);
-                                        if (dist !== null && dist < minDistance) { minDistance = dist; nearestAirport = code; }
-                                    }
-                                });
-                                if (minDistance !== Infinity && minDistance > 120) {
-                                    locWarns.push(`⚠️ 地點落差警告：「${h.name}」距離最近的機場 (${nearestAirport}) 達 ${Math.round(minDistance)} 公里`);
-                                }
+                        // 預設比對該趟行程所有外站機場
+                        const uniqueCodes = [...new Set(segs.flatMap(s => [s.from?.split(' ')[0], s.to?.split(' ')[0]]))]
+                            .filter(code => code && !isTaiwan(code));
+                        
+                        let targetAirports = uniqueCodes;
+
+                        // ── 時序精準比對：修正 Open-Jaw 盲區 ──
+                        if (trip.isOpenJaw && segs.length >= 2) {
+                            const firstSeg = segs[0];
+                            const lastSeg = segs[segs.length - 1];
+                            const arrDateOfGo = firstSeg.arrivalDate || firstSeg.date;
+                            const depDateOfBack = lastSeg.date;
+                            
+                            // 剛抵達首日：住宿必須靠近「去程目的地機場」
+                            if (h.checkIn === arrDateOfGo || h.checkIn === firstSeg.date) {
+                                const code = firstSeg.to?.split(' ')[0];
+                                if (code && !isTaiwan(code)) targetAirports = [code];
                             }
-                        });
-                    }
+                            // 準備回程當日退房：住宿必須靠近「回程出發地機場」
+                            else if (h.checkOut === depDateOfBack) {
+                                const code = lastSeg.from?.split(' ')[0];
+                                if (code && !isTaiwan(code)) targetAirports = [code];
+                            }
+                        }
+
+                        if (targetAirports.length > 0) {
+                            let minDistance = Infinity;
+                            let nearestAirport = null;
+                            targetAirports.forEach(code => {
+                                const coords = getCachedAirportCoords(code);
+                                if (coords) {
+                                    const dist = getDistanceFromLatLonInKm(h.lat, h.lng, coords.lat, coords.lng);
+                                    if (dist !== null && dist < minDistance) { minDistance = dist; nearestAirport = code; }
+                                }
+                            });
+                            if (minDistance !== Infinity && minDistance > 120) {
+                                locWarns.push(`⚠️ 地點落差警告：「${h.name}」距離最近的機場 (${nearestAirport}) 達 ${Math.round(minDistance)} 公里`);
+                            }
+                        }
+                    });
                     return locWarns;
                 };
 

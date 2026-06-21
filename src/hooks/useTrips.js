@@ -127,10 +127,11 @@ export const buildTripsFromTickets = (tickets) => {
 
                 if (isTaiwan(seg.to)) {
                     // 特殊情況：此段直接抵達台灣（可能是純回程孤兒票）
-                    // 把它當作「只有 inbound」的 trip 立即關閉
+                    // 把它當作「只有 inbound」的 trip 立即關閉，此時缺少去程
                     currentTrip.inbound  = seg;
                     currentTrip.outbound = null;
-                    currentTrip.isComplete = true;
+                    currentTrip.isComplete = false;
+                    currentTrip.incompleteReason = 'ORPHAN_INBOUND';
                     trips.push(currentTrip);
                     currentTrip = null;
                 }
@@ -139,10 +140,12 @@ export const buildTripsFromTickets = (tickets) => {
                     // 抵達台灣 → 正常關閉 trip
                     currentTrip.inbound = seg;
                     currentTrip.isComplete = true;
+                    currentTrip.incompleteReason = null;
                     trips.push(currentTrip);
                     currentTrip = null;
                 } else if (isTaiwan(seg.from)) {
                     // 又從台灣出發 → 原 trip 未完結就被迫中斷，開啟新 trip
+                    currentTrip.incompleteReason = 'MULTIPLE_DEPARTURES';
                     trips.push(currentTrip);
                     currentTrip = {
                         id: seg.id,
@@ -160,6 +163,7 @@ export const buildTripsFromTickets = (tickets) => {
 
         // 掃描結束仍有未關閉的 trip（單程或資料不完整）
         if (currentTrip) {
+            currentTrip.incompleteReason = 'MISSING_INBOUND';
             trips.push(currentTrip);
         }
 
