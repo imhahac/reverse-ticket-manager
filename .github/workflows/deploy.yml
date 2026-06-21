@@ -64,7 +64,7 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
   # 3. 部署 Cloudflare Worker (Deploy Worker)
   deploy-worker:
@@ -82,7 +82,7 @@ jobs:
           sed -i "s/__KV_ID__/${{ vars.SHARED_TRIPS_KV_ID }}/g" cloudflare-worker/wrangler.toml
 
       - name: Deploy to Cloudflare Workers
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: 'cloudflare-worker'

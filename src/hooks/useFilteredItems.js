@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { logger } from '../utils/logger';
+import { parseLocalDate } from '../utils/dateHelpers';
 
 const safeMatch = (val, search) => {
     try {
@@ -51,7 +52,7 @@ export function useFilteredItems(items, searchTerm, filterStatus, type, tripLabe
                     if (type === 'itinerary') return matchesSearch && !item.isPast;
                     
                     if (dateStr) {
-                        const d = new Date(dateStr);
+                        const d = parseLocalDate(dateStr);
                         return matchesSearch && !isNaN(d) && d.getTime() >= new Date().setHours(0,0,0,0);
                     }
                     return false;

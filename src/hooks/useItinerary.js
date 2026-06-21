@@ -18,6 +18,22 @@
 import { useMemo } from 'react';
 import { AIRPORT_COORDINATES, getDistanceFromLatLonInKm } from '../utils/geoUtils';
 import { isTaiwan } from '../utils/airportUtils';
+import { parseLocalDate } from '../utils/dateHelpers';
+
+const getCachedAirportCoords = (code) => {
+    if (!code) return null;
+    const cleanCode = code.trim().toUpperCase();
+    if (AIRPORT_COORDINATES[cleanCode]) return AIRPORT_COORDINATES[cleanCode];
+    const cached = localStorage.getItem(`ap_coords_${cleanCode}`);
+    if (cached) {
+        try {
+            return JSON.parse(cached);
+        } catch (e) {
+            localStorage.removeItem(`ap_coords_${cleanCode}`);
+        }
+    }
+    return null;
+};
 
 export function useItinerary(decoratedTrips, hotels, activities = []) {
     return useMemo(() => {
@@ -77,7 +93,7 @@ export function useItinerary(decoratedTrips, hotels, activities = []) {
                                 let minDistance = Infinity;
                                 let nearestAirport = null;
                                 uniqueCodes.forEach(code => {
-                                    const coords = AIRPORT_COORDINATES[code];
+                                    const coords = getCachedAirportCoords(code);
                                     if (coords) {
                                         const dist = getDistanceFromLatLonInKm(h.lat, h.lng, coords.lat, coords.lng);
                                         if (dist !== null && dist < minDistance) { minDistance = dist; nearestAirport = code; }
@@ -123,41 +139,49 @@ export function useItinerary(decoratedTrips, hotels, activities = []) {
         orphanHotels.forEach(h => {
             const startDate = h.checkIn;
             const endDate = h.checkOut;
+            const endLocal = parseLocalDate(endDate);
+            endLocal.setHours(23, 59, 59, 999);
+            const isPast = endLocal.getTime() < new Date().getTime();
+
             virtualTrips.push({
                 id: `virtual-hotel-${h.id}`,
                 isVirtual: true,
                 segments: [],
-                tripStartAt: new Date(startDate + 'T00:00:00'),
-                tripEndAt: new Date(endDate + 'T23:59:59'),
-                tripDays: Math.ceil((new Date(endDate) - new Date(startDate)) / 86400000),
+                tripStartAt: parseLocalDate(startDate),
+                tripEndAt: endLocal,
+                tripDays: Math.ceil((parseLocalDate(endDate) - parseLocalDate(startDate)) / 86400000) || 1,
                 matchedHotels: [h],
                 matchedActivities: [],
                 totalHotelCostTWD: h.priceTWD || 0,
                 totalCostTWD: 0,
                 hotelWarnings: [], // 虛擬行程暫不顯示警告，因為無對比基準
-                isPast: new Date(endDate) < new Date(),
+                isPast,
                 isComplete: true,
                 customLabel: `🏨 ${h.name}`
             });
         });
 
-        // 剩餘的孤兒活動，如果沒跟住宿重疊，也自成一格
+        // 剩餘 of 孤兒活動，如果沒跟住宿重疊，也自成一格
         orphanActivities.forEach(a => {
             const startDate = a.startDate;
             const endDate = a.endDate || a.startDate;
+            const endLocal = parseLocalDate(endDate);
+            endLocal.setHours(23, 59, 59, 999);
+            const isPast = endLocal.getTime() < new Date().getTime();
+
             virtualTrips.push({
                 id: `virtual-act-${a.id}`,
                 isVirtual: true,
                 segments: [],
-                tripStartAt: new Date(startDate + 'T00:00:00'),
-                tripEndAt: new Date(endDate + 'T23:59:59'),
-                tripDays: Math.ceil((new Date(endDate) - new Date(startDate)) / 86400000) || 1,
+                tripStartAt: parseLocalDate(startDate),
+                tripEndAt: endLocal,
+                tripDays: Math.ceil((parseLocalDate(endDate) - parseLocalDate(startDate)) / 86400000) || 1,
                 matchedHotels: [],
                 matchedActivities: [a],
                 totalHotelCostTWD: 0,
                 totalCostTWD: 0,
                 hotelWarnings: [],
-                isPast: new Date(endDate) < new Date(),
+                isPast,
                 isComplete: true,
                 customLabel: `🎫 ${a.title}`
             });

@@ -11,6 +11,7 @@ import TripCard from './TripCard';
 import { TripPropType } from '../types/propTypes';
 import ShareButton from './ShareButton';
 import { STORAGE_KEYS } from '../constants/storageKeys';
+import { getAirportTimeZone } from '../utils/googleSync/mapper';
 
 export default function TripTimeline({
     trips,
@@ -63,20 +64,43 @@ export default function TripTimeline({
     const futureTrips = useMemo(() => (trips || []).filter(t => !t.isPast), [trips]);
     const pastTrips   = useMemo(() => (trips || []).filter(t =>  t.isPast), [trips]);
 
+    const getTimezoneOffset = useCallback((timeZone, date = new Date()) => {
+        try {
+            const tz = date.toLocaleString("en-US", { timeZone, timeZoneName: "shortOffset" });
+            const parts = tz.split("GMT");
+            if (parts.length < 2) return 0;
+            const offsetStr = parts[1].trim();
+            if (!offsetStr) return 0;
+            const sign = offsetStr[0] === '-' ? -1 : 1;
+            const [h, m] = offsetStr.slice(1).split(':').map(Number);
+            return sign * (h * 60 + (m || 0)); // in minutes
+        } catch (e) {
+            return 0;
+        }
+    }, []);
+
     const getDepartDate = useCallback((seg) => {
         if (!seg?.date || !seg?.time) return null;
-        const d = new Date(`${seg.date}T${seg.time}:00`);
-        return isNaN(d.getTime()) ? null : d;
-    }, []);
+        const utcDate = new Date(`${seg.date}T${seg.time}:00Z`);
+        if (isNaN(utcDate.getTime())) return null;
+        
+        const tz = getAirportTimeZone(seg.from);
+        const offsetMin = getTimezoneOffset(tz, utcDate);
+        return new Date(utcDate.getTime() - offsetMin * 60 * 1000);
+    }, [getTimezoneOffset]);
 
     const getArrivalDate = useCallback((seg) => {
         if (seg?.arrivalDate && seg?.arrivalTime) {
-            const d = new Date(`${seg.arrivalDate}T${seg.arrivalTime}:00`);
-            if (!isNaN(d.getTime())) return d;
+            const utcDate = new Date(`${seg.arrivalDate}T${seg.arrivalTime}:00Z`);
+            if (!isNaN(utcDate.getTime())) {
+                const tz = getAirportTimeZone(seg.to);
+                const offsetMin = getTimezoneOffset(tz, utcDate);
+                return new Date(utcDate.getTime() - offsetMin * 60 * 1000);
+            }
         }
         const depart = getDepartDate(seg);
         return depart ? new Date(depart.getTime() + 2 * 60 * 60 * 1000) : null;
-    }, [getDepartDate]);
+    }, [getDepartDate, getTimezoneOffset]);
 
     const formatDuration = useCallback((ms) => {
         const totalMin = Math.round(ms / 60000);
