@@ -186,3 +186,41 @@ export async function geocodeAddress(address) {
     
     return null;
 }
+
+/**
+ * 取得機場座標。優先從硬編碼列表讀取，其次從 localStorage 快取讀取，若無則透過 geocodeAddress 查詢並寫入快取。
+ * @param {string} code - 例如 "NRT" 或 "KUL"
+ * @param {string} apiKey - Google Maps API Key
+ * @returns {Promise<{lat: number, lng: number}|null>}
+ */
+export async function getAirportCoordinates(code, apiKey) {
+    if (!code) return null;
+    const cleanCode = code.trim().toUpperCase();
+    if (AIRPORT_COORDINATES[cleanCode]) {
+        return AIRPORT_COORDINATES[cleanCode];
+    }
+
+    const cacheKey = `ap_coords_${cleanCode}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+        try {
+            return JSON.parse(cached);
+        } catch (e) {
+            localStorage.removeItem(cacheKey);
+        }
+    }
+
+    if (apiKey) {
+        try {
+            const geo = await geocodeAddress(`${cleanCode} Airport`);
+            if (geo) {
+                const coords = { lat: geo.lat, lng: geo.lng };
+                localStorage.setItem(cacheKey, JSON.stringify(coords));
+                return coords;
+            }
+        } catch (e) {
+            logger.error(`[geoUtils] Failed to dynamically geocode airport ${cleanCode}:`, e);
+        }
+    }
+    return null;
+}

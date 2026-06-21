@@ -50,3 +50,21 @@ export async function fetchShareSnapshot(id) {
 
     return res.json();
 }
+
+/**
+ * 建立 Magic Sync 暫存資料快照。
+ * @param {Object} data - { tickets, tripLabels, hotels, activities, tripBudgets, tripOverrides }
+ * @returns {Promise<string>} 同步 UUID
+ */
+export async function createMagicSyncSnapshot(data) {
+    return createShareSnapshot(data);
+}
+
+/**
+ * 取得 Magic Sync 暫存資料快照。
+ * @param {string} id - 同步 UUID
+ * @returns {Promise<Object>} 同步資料
+ */
+export async function fetchMagicSyncSnapshot(id) {
+    return fetchShareSnapshot(id);
+}

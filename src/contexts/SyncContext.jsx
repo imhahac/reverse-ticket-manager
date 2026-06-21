@@ -1,7 +1,7 @@
 import React, { createContext, useContext } from 'react';
 import { useGoogleAuth } from '../hooks/useGoogleAuth';
 import { useGoogleSync } from '../hooks/useGoogleSync';
-import { useActivityDataContext, useHotelDataContext, useTicketDataContext } from './DataContext';
+import { useActivityDataContext, useHotelDataContext, useTicketDataContext, useOverrideDataContext } from './DataContext';
 
 export const SyncContext = createContext();
 
@@ -12,6 +12,7 @@ export function SyncProvider({ children }) {
     const { tickets, tripLabels, setTickets, setTripLabels, tripBudgets, setTripBudgets, segments } = useTicketDataContext();
     const { hotels, rawHotels, setHotels, updateHotelCalendarIds } = useHotelDataContext();
     const { activities, setActivities, updateActivityCalendarId } = useActivityDataContext();
+    const { tripOverrides, setOverrides: setTripOverrides } = useOverrideDataContext();
 
     const { isSyncing, handleSyncToDrive, handleLoadFromDrive, handleSyncToCalendar } = useGoogleSync({
         accessToken, accessTokenState, trySilentRefresh, isTokenExpired, logout,
@@ -24,6 +25,8 @@ export function SyncProvider({ children }) {
         setActivities,
         updateHotelCalendarIds,
         updateActivityCalendarId,
+        tripOverrides,
+        setTripOverrides,
     });
 
     const value = {

@@ -5,6 +5,7 @@ import { lookupFlight, getOffsetDate } from '../services/flightService';
 import { autoFixArrival } from '../utils/formUtils';
 import { validateTicketForm, buildTicketPayload } from '../utils/ticketFormUtils';
 import { useSystemDataContext, useTicketDataContext } from '../contexts/DataContext';
+import { getAirportCoordinates } from '../utils/geoUtils';
 
 // 匯入子組件
 import FlightSegmentInput from './ticket/FlightSegmentInput';
@@ -68,6 +69,12 @@ export default function TicketForm() {
         const applyData = (flightData, sourceLabel) => {
             const targetArrivalDate = getOffsetDate(flightDate, flightData.dayOffset);
             const isReverse = formData.type === 'reverse';
+
+            const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+            if (apiKey) {
+                if (flightData.originIata) getAirportCoordinates(flightData.originIata.toUpperCase(), apiKey);
+                if (flightData.destIata) getAirportCoordinates(flightData.destIata.toUpperCase(), apiKey);
+            }
 
             setFormData(prev => ({
                 ...prev,
@@ -139,6 +146,14 @@ export default function TicketForm() {
             seg1Fix,
             seg2Fix,
         });
+
+        const departCode = (formData.departRegion || '').split(' ')[0].toUpperCase();
+        const returnCode = (formData.returnRegion || '').split(' ')[0].toUpperCase();
+        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+        if (apiKey) {
+            if (departCode) getAirportCoordinates(departCode, apiKey);
+            if (returnCode) getAirportCoordinates(returnCode, apiKey);
+        }
 
         onAddTicket(newTicket);
         setFormData(defaultFormData);

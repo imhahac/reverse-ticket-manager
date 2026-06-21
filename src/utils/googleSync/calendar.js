@@ -1,7 +1,25 @@
 import { addHours, format } from 'date-fns';
 import { getFlightAwareUrl } from '../flightUtils';
-import { addHoursToLocalStr, getIanaTimeZone } from './mapper';
+import { addHoursToLocalStr, getIanaTimeZone, getAirportTimeZone } from './mapper';
 import { logger } from '../logger';
+
+function getActivityTimeZone(activity, segments) {
+    if (!segments || segments.length === 0) return 'Asia/Taipei';
+    const actDateStr = activity.startDate;
+    
+    // 找出所有在活動日期之前或當天的航段，取最後一個的抵達機場作為參考時區
+    const pastOrCurrentSegs = segments
+        .filter(s => s.date <= actDateStr)
+        .sort((a, b) => a.date.localeCompare(b.date));
+        
+    if (pastOrCurrentSegs.length > 0) {
+        const referenceSeg = pastOrCurrentSegs[pastOrCurrentSegs.length - 1];
+        return getAirportTimeZone(referenceSeg.to);
+    }
+    
+    // 如果活動在所有航班之前，使用第一個航班的出發機場時區
+    return getAirportTimeZone(segments[0].from);
+}
 
 /**
  * 同步到 Google Calendar
@@ -31,7 +49,7 @@ export const syncToCalendar = async (segments, hotels = [], activities = [], acc
         state.updatedHotelCalendarIds = hotelRes.updatedHotelCalendarIds;
 
         // 4. 同步活動
-        const actRes = await syncActivities(calendarId, accessToken, activities);
+        const actRes = await syncActivities(calendarId, accessToken, activities, segments);
         if (actRes.expired) return { success: false, expired: true };
         state.count += actRes.count;
         state.updatedActivityCalendarIds = actRes.updatedActivityCalendarIds;
@@ -75,11 +93,12 @@ async function cleanupOrphanEvents(calendarId, accessToken, segments, hotels, ac
 async function syncFlights(calendarId, accessToken, segments) {
     let count = 0, errorLog = '', updatedCalendarIds = {};
     for (const seg of segments) {
-        const tz = getIanaTimeZone(seg);
+        const startTz = getAirportTimeZone(seg.from);
+        const endTz = getAirportTimeZone(seg.to);
         const airline = seg.ticket?.airline || '';
         const summary = `[航班] ${seg.flightNo ? `${airline} (${seg.flightNo})` : airline} ${seg.from}✈️${seg.to}`;
-        const start = seg.time ? { dateTime: `${seg.date}T${seg.time}:00`, timeZone: tz } : { date: seg.date };
-        const end = seg.time ? { dateTime: (seg.arrivalDate && seg.arrivalTime) ? `${seg.arrivalDate}T${seg.arrivalTime}:00` : addHoursToLocalStr(`${seg.date}T${seg.time}:00`, 2), timeZone: tz } : { date: format(addHours(new Date(seg.date + 'T00:00:00'), 24), 'yyyy-MM-dd') };
+        const start = seg.time ? { dateTime: `${seg.date}T${seg.time}:00`, timeZone: startTz } : { date: seg.date };
+        const end = seg.time ? { dateTime: (seg.arrivalDate && seg.arrivalTime) ? `${seg.arrivalDate}T${seg.arrivalTime}:00` : addHoursToLocalStr(`${seg.date}T${seg.time}:00`, 2), timeZone: endTz } : { date: format(addHours(new Date(seg.date + 'T00:00:00'), 24), 'yyyy-MM-dd') };
 
         let eventId = seg.ticket.calendarIds?.[seg.id];
         const faUrl = getFlightAwareUrl(seg.flightNo);
@@ -117,12 +136,13 @@ async function syncHotels(calendarId, accessToken, hotels) {
     return { count, updatedHotelCalendarIds };
 }
 
-async function syncActivities(calendarId, accessToken, activities) {
+async function syncActivities(calendarId, accessToken, activities, segments) {
     let count = 0, updatedActivityCalendarIds = {};
     for (const activity of activities) {
         if (!activity.startDate) continue;
-        const start = activity.time ? { dateTime: `${activity.startDate}T${activity.time}:00` } : { date: activity.startDate };
-        const end = activity.time ? { dateTime: addHoursToLocalStr(`${activity.startDate}T${activity.time}:00`, 2) } : { date: format(addHours(new Date((activity.endDate || activity.startDate) + 'T00:00:00'), 24), 'yyyy-MM-dd') };
+        const tz = getActivityTimeZone(activity, segments);
+        const start = activity.time ? { dateTime: `${activity.startDate}T${activity.time}:00`, timeZone: tz } : { date: activity.startDate };
+        const end = activity.time ? { dateTime: addHoursToLocalStr(`${activity.startDate}T${activity.time}:00`, 2), timeZone: tz } : { date: format(addHours(new Date((activity.endDate || activity.startDate) + 'T00:00:00'), 24), 'yyyy-MM-dd') };
         const body = { summary: `[活動] ${activity.title}`, start, end, extendedProperties: { private: { reverseTicketApp: 'true', reverseTicketActivityId: activity.id } } };
         const eventId = activity.calendarId;
         const method = eventId ? 'PUT' : 'POST';

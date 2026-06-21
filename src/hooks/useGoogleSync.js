@@ -46,6 +46,8 @@ export function useGoogleSync({
     setActivities,
     updateHotelCalendarIds,
     updateActivityCalendarId,
+    tripOverrides,
+    setTripOverrides,
 }) {
     const [isSyncing, setIsSyncing] = useState(false);
     const refreshTokenOnce = useMemo(
@@ -99,7 +101,7 @@ export function useGoogleSync({
     // ── 備份到 Drive ──────────────────────────────────────────────────────
     const handleSyncToDrive = async () => {
         const guard = await withAuthGuard(
-            (token) => syncToDrive(tickets, tripLabels, rawHotels, token, activities, tripBudgets),
+            (token) => syncToDrive(tickets, tripLabels, rawHotels, token, activities, tripBudgets, tripOverrides),
             '正在備份至 Google Drive…'
         );
         if (!guard) return;
@@ -139,6 +141,9 @@ export function useGoogleSync({
                         }
                         if (setActivities) {
                             setActivities(Array.isArray(result.activities) ? result.activities : []);
+                        }
+                        if (setTripOverrides) {
+                            setTripOverrides(result.tripOverrides || {});
                         }
                         toast.success('雲端資料載入成功！');
                     },

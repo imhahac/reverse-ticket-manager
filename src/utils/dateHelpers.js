@@ -11,9 +11,10 @@
  */
 export const formatDateWithDay = (dateStr) => {
     if (!dateStr) return '';
-    // new Date("YYYY-MM-DD") 在此被視為 UTC 午夜，getDay() 可能因時區差 1 天
-    // 但由於我們只顯示使用者輸入的日期文字，不做計算，可接受此行為
-    const date = new Date(dateStr);
+    const parts = dateStr.split('-').map(Number);
+    if (parts.length !== 3 || parts.some(isNaN)) return dateStr;
+    const [y, m, d] = parts;
+    const date = new Date(y, m - 1, d);
     if (isNaN(date.getTime())) return dateStr;
     const days = ['(日)', '(一)', '(二)', '(三)', '(四)', '(五)', '(六)'];
     return `${dateStr} ${days[date.getDay()]}`;
@@ -28,14 +29,18 @@ export const formatDateWithDay = (dateStr) => {
  */
 export const calculateTripDays = (outboundDate, inboundDate) => {
     if (!outboundDate || !inboundDate) return null;
-    const start = new Date(outboundDate);
-    const end = new Date(inboundDate);
+    const start = parseLocalDate(outboundDate);
+    const end = parseLocalDate(inboundDate);
     if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
-    const diffTime = end - start;
+    
+    // Set to local midnights to avoid DST differences
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    
+    const diffTime = end.getTime() - start.getTime();
     if (diffTime < 0) return null;
-    // +1 因為含出發當天
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    return diffDays;
+    
+    return Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
 };
 
 /**

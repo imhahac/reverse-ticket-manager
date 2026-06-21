@@ -23,7 +23,7 @@ async function findDriveFile(accessToken) {
 /**
  * 上傳/覆寫資料到 Google Drive 的 reverse-tickets.json
  */
-export const syncToDrive = async (tickets, tripLabels, hotels = [], accessToken, activities = [], tripBudgets = {}) => {
+export const syncToDrive = async (tickets, tripLabels, hotels = [], accessToken, activities = [], tripBudgets = {}, tripOverrides = {}) => {
     try {
         const findRes = await findDriveFile(accessToken);
         if (findRes.expired) return { success: false, expired: true };
@@ -31,7 +31,7 @@ export const syncToDrive = async (tickets, tripLabels, hotels = [], accessToken,
         const files = findRes.files;
         const existingFile = files.length > 0 ? files[0] : null;
 
-        const fileContent = { tickets, tripLabels, hotels, activities, tripBudgets };
+        const fileContent = { tickets, tripLabels, hotels, activities, tripBudgets, tripOverrides };
 
         let uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=media';
         let method = 'POST';
@@ -111,6 +111,7 @@ export const loadFromDrive = async (accessToken) => {
         let tripBudgets = {};
         let hotels = [];
         let activities = [];
+        let tripOverrides = {};
         
         if (Array.isArray(data)) {
             tickets = data;
@@ -120,11 +121,12 @@ export const loadFromDrive = async (accessToken) => {
             tripBudgets = (data.tripBudgets && typeof data.tripBudgets === 'object') ? data.tripBudgets : {};
             hotels = Array.isArray(data.hotels) ? data.hotels : [];
             activities = Array.isArray(data.activities) ? data.activities : [];
+            tripOverrides = (data.tripOverrides && typeof data.tripOverrides === 'object') ? data.tripOverrides : {};
         } else {
             throw new Error('雲端檔案內容格式毀損或不相容');
         }
 
-        return { success: true, tickets, tripLabels, hotels, activities, tripBudgets, foundFilesLog: allFoundFiles };
+        return { success: true, tickets, tripLabels, hotels, activities, tripBudgets, tripOverrides, foundFilesLog: allFoundFiles };
     } catch (e) {
         logger.error('Drive API Error:', e);
         return { success: false, error: e.message };

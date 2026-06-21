@@ -1,6 +1,6 @@
 import React from 'react';
 // import PropTypes from 'prop-types'; // no longer needed
-import { Plane, Calendar, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn } from 'lucide-react';
+import { Plane, Calendar, Download, Upload, Cloud, CloudUpload, CloudDownload, LogOut, LogIn, Link } from 'lucide-react';
 import { useSystemDataContext } from '../contexts/DataContext';
 import { useSyncContext } from '../contexts/SyncContext';
 import { useUIContext } from '../contexts/UIContext';
@@ -15,7 +15,7 @@ export default function AppHeader() {
         logout,
         login,
     } = useSyncContext();
-    const { handleExport, handleImport } = useSystemDataContext();
+    const { handleExport, handleImport, handleCreateMagicLink } = useSystemDataContext();
     const { fileInputRef } = useUIContext();
     return (
         <header className="mb-8 pt-4 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -52,6 +52,9 @@ export default function AppHeader() {
                     </div>
                 )}
                 <div className="flex gap-2 justify-end mt-1">
+                    <button onClick={handleCreateMagicLink} className="flex items-center px-3 py-1.5 bg-white border border-gray-200 text-gray-500 font-bold text-xs rounded hover:bg-gray-50 transition">
+                        <Link className="w-3 h-3 mr-1 text-indigo-600" /> Magic Sync 連結
+                    </button>
                     <button onClick={handleExport} className="flex items-center px-3 py-1.5 bg-white border border-gray-200 text-gray-500 font-bold text-xs rounded hover:bg-gray-50 transition">
                         <Download className="w-3 h-3 mr-1" /> 本地匯出 JSON
                     </button>

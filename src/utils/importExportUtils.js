@@ -3,8 +3,8 @@
  * 獨立處理應用程式資料的 JSON 匯出入邏輯
  */
 
-export const exportData = (tickets, tripLabels, rawHotels, activities, tripBudgets) => {
-    const blob = new Blob([JSON.stringify({ tickets, tripLabels, hotels: rawHotels, activities, tripBudgets }, null, 2)], { type: 'application/json' });
+export const exportData = (tickets, tripLabels, rawHotels, activities, tripBudgets, tripOverrides) => {
+    const blob = new Blob([JSON.stringify({ tickets, tripLabels, hotels: rawHotels, activities, tripBudgets, tripOverrides }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     Object.assign(document.createElement('a'), {
         href: url,
@@ -24,6 +24,7 @@ export const importData = (file, onSuccess, onError) => {
             const newBudgets = data.tripBudgets || {};
             const newHotels  = data.hotels || [];
             const newActivities = data.activities || [];
+            const newOverrides = data.tripOverrides || {};
             
             // 更嚴謹的驗證：確保 tickets 必須是陣列，且內部每個元素都有 id
             if (!Array.isArray(newTickets)) throw new Error('Tickets 資料必須是陣列 (Array) 格式');
@@ -39,7 +40,8 @@ export const importData = (file, onSuccess, onError) => {
                 newLabels,
                 newBudgets,
                 newHotels,
-                newActivities
+                newActivities,
+                newOverrides
             });
         } catch (err) {
             onError(err);

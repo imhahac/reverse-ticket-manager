@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { AIRPORT_COORDINATES, loadGoogleMapsApi } from '../utils/geoUtils';
+import { AIRPORT_COORDINATES, loadGoogleMapsApi, getAirportCoordinates } from '../utils/geoUtils';
 import { logger } from '../utils/logger';
 import { MAP } from '../constants/config';
 import { HotelForMapPropType, TripForMapPropType } from '../types/propTypes';
@@ -15,6 +15,42 @@ export default function TripMap({ itinerary, hotels, onClearSelectedTrip, select
     const [selectedDay, setSelectedDay] = useState(null); // null means All Days
     const [travelMode, setTravelMode] = useState('TRANSIT'); // TRANSIT or DRIVING
     const [travelTimeInfo, setTravelTimeInfo] = useState(null);
+    const [customCoords, setCustomCoords] = useState({});
+
+    // 動態解析 itinerary 中未知的機場座標
+    useEffect(() => {
+        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+        if (!apiKey) return;
+
+        const scanAndResolveAirports = async () => {
+            const neededCodes = new Set();
+            itinerary.forEach(trip => {
+                trip.segments?.forEach(seg => {
+                    if (seg.from) neededCodes.add(seg.from.split(' ')[0].toUpperCase());
+                    if (seg.to) neededCodes.add(seg.to.split(' ')[0].toUpperCase());
+                });
+            });
+
+            const newCoords = { ...customCoords };
+            let hasNew = false;
+
+            for (const code of neededCodes) {
+                if (!AIRPORT_COORDINATES[code] && !customCoords[code]) {
+                    const coords = await getAirportCoordinates(code, apiKey);
+                    if (coords) {
+                        newCoords[code] = coords;
+                        hasNew = true;
+                    }
+                }
+            }
+
+            if (hasNew) {
+                setCustomCoords(newCoords);
+            }
+        };
+
+        scanAndResolveAirports();
+    }, [itinerary]);
 
     // 當切換行程時，重置 selectedDay
     useEffect(() => {
@@ -132,8 +168,8 @@ export default function TripMap({ itinerary, hotels, onClearSelectedTrip, select
                 const fromCode = (seg.from || '').split(' ')[0];
                 const toCode = (seg.to || '').split(' ')[0];
                 
-                const fromCoords = AIRPORT_COORDINATES[fromCode];
-                const toCoords = AIRPORT_COORDINATES[toCode];
+                const fromCoords = AIRPORT_COORDINATES[fromCode] || customCoords[fromCode];
+                const toCoords = AIRPORT_COORDINATES[toCode] || customCoords[toCode];
 
                 // 標記機場
                 [ { code: fromCode, coords: fromCoords }, { code: toCode, coords: toCoords } ].forEach(pt => {
@@ -285,7 +321,7 @@ export default function TripMap({ itinerary, hotels, onClearSelectedTrip, select
                 });
             }
         }
-    }, [mapInstance, itinerary, hotels, selectedDay, travelMode, selectedTripId]);
+    }, [mapInstance, itinerary, hotels, selectedDay, travelMode, selectedTripId, customCoords]);
 
     const targetTrip = selectedTripId && itinerary.length > 0 ? itinerary[0] : null;
 
