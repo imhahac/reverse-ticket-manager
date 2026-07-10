@@ -65,8 +65,8 @@ export function useDecoratedTrips(displayTrips, tickets, hotels, activities) {
                         return sum + (price * weight);
                     }, 0);
 
-                    const outCode = (first.to || '').split(' ')[0];
-                    const inCode  = (last.from || '').split(' ')[0];
+                    const outCode = (first.to || '').match(/^[A-Za-z]{3}/)?.[0] || '';
+                    const inCode  = (last.from || '').match(/^[A-Za-z]{3}/)?.[0] || '';
                     const isOpenJaw = segs.length >= 2 && Boolean(outCode && inCode && outCode !== inCode);
                     const tripDays = (tripStartAt && tripEndAt) ? calculateTripDays(first.date, last.date) : null;
                     const costPerDay = (tripDays && tripDays > 0) ? Math.round(_cost / tripDays) : null;

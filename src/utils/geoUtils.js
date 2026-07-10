@@ -51,7 +51,7 @@ export const AIRPORT_COORDINATES = {
  * - 若飯店距離機場超過 200km（例如飛往東京卻住在大阪），則極大機率是預訂錯誤或跨區行程，需提醒使用者。
  */
 export function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-    if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+    if (lat1 == null || lat1 === '' || lon1 == null || lon1 === '' || lat2 == null || lat2 === '' || lon2 == null || lon2 === '') return null;
     const R = MAP.EARTH_RADIUS_KM;
     const dLat = (lat2 - lat1) * (Math.PI / 180);
     const dLon = (lon2 - lon1) * (Math.PI / 180);
