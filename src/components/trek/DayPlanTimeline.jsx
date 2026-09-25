@@ -25,7 +25,13 @@ import {
     Loader2, 
     Check, 
     FileText,
-    BookOpen
+    BookOpen,
+    Plane,
+    Hotel,
+    Ticket,
+    Tag,
+    Building2,
+    Edit2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTrek } from '../../contexts/TrekContext';
@@ -37,7 +43,7 @@ import { getDayWeather } from '../../services/weather/weatherService';
 import { logger } from '../../utils/logger';
 
 export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated }) {
-    const { activeTrip, dayPlans, refreshTrips } = useTrek();
+    const { activeTrip, reservations = [], dayPlans, refreshTrips } = useTrek();
     const [selectedDayIndex, setSelectedDayIndex] = useState(0);
     const [dayPlacesMap, setDayPlacesMap] = useState({}); // { [dayIndex]: places[] }
     const [weatherMap, setWeatherMap] = useState({}); // { [dateStr]: weatherObj }
@@ -47,6 +53,34 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated }
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isOptimizing, setIsOptimizing] = useState(false);
     const [routeStats, setRouteStats] = useState(null);
+
+    // 景點修改狀態
+    const [editingPlace, setEditingPlace] = useState(null);
+    const [editPlaceName, setEditPlaceName] = useState('');
+    const [editPlaceAddress, setEditPlaceAddress] = useState('');
+
+    const handleOpenEditPlace = (place) => {
+        setEditingPlace(place);
+        setEditPlaceName(place.name || '');
+        setEditPlaceAddress(place.address || '');
+    };
+
+    const handleSaveEditPlace = async (e) => {
+        e.preventDefault();
+        if (!editingPlace || !editPlaceName.trim()) return;
+        const updated = {
+            ...editingPlace,
+            name: editPlaceName.trim(),
+            address: editPlaceAddress.trim()
+        };
+        await placeItemRepo.save(updated);
+        setDayPlacesMap(prev => ({
+            ...prev,
+            [selectedDayIndex]: (prev[selectedDayIndex] || []).map(p => p.id === updated.id ? updated : p)
+        }));
+        setEditingPlace(null);
+        toast.success(`已更新景點：${updated.name}`);
+    };
 
     // 1. 根據旅程日期生成天數列表 (Day 1...Day N)
     const tripDays = [];
@@ -115,6 +149,28 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated }
     const activeDayPlaces = dayPlacesMap[selectedDayIndex] || [];
     const activeDayInfo = tripDays[selectedDayIndex] || { dayIndex: 1, date: activeTrip?.startDate };
     const currentWeather = weatherMap[activeDayInfo.date];
+
+    // ── 整合當日預訂 (機票、飯店、活動) ──────────────────────────
+    const dayReservations = React.useMemo(() => {
+        if (!activeDayInfo?.date || !reservations || reservations.length === 0) return [];
+        const dateStr = activeDayInfo.date;
+        return reservations.filter(r => {
+            if (r.type === 'flight') {
+                const depDate = r.flightDetails?.departureTime?.slice(0, 10) || r.startDate?.slice(0, 10);
+                const arrDate = r.flightDetails?.arrivalTime?.slice(0, 10) || r.endDate?.slice(0, 10);
+                return depDate === dateStr || arrDate === dateStr;
+            }
+            if (r.type === 'hotel' || r.type === 'accommodation') {
+                const checkIn = r.accommodationDetails?.checkInDate?.slice(0, 10) || r.startDate?.slice(0, 10);
+                const checkOut = r.accommodationDetails?.checkOutDate?.slice(0, 10) || r.endDate?.slice(0, 10);
+                if (checkIn === dateStr || checkOut === dateStr) return true;
+                if (checkIn && checkOut && dateStr > checkIn && dateStr < checkOut) return true;
+                return false;
+            }
+            const eventDate = r.activityDetails?.date?.slice(0, 10) || r.startDate?.slice(0, 10);
+            return eventDate === dateStr;
+        });
+    }, [activeDayInfo?.date, reservations]);
 
     // ── 景點操作 ──────────────────────────────────────────────────────────
 
@@ -300,6 +356,93 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated }
                 )}
             </div>
 
+            {/* 2.5 當日交通、住宿與活動整合時序卡片 */}
+            {dayReservations.length > 0 ? (
+                <div className="bg-slate-900 text-white rounded-xl p-3.5 shadow-sm space-y-2.5">
+                    <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                            <Plane className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>當日交通與住宿排程 ({dayReservations.length})</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium">已自動整合至時間表</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {dayReservations.map(res => {
+                            const isFlight = res.type === 'flight';
+                            const isHotel = res.type === 'hotel' || res.type === 'accommodation';
+                            const checkIn = res.accommodationDetails?.checkInDate?.slice(0, 10);
+                            const checkOut = res.accommodationDetails?.checkOutDate?.slice(0, 10);
+                            const isCheckInDay = checkIn === activeDayInfo.date;
+                            const isCheckOutDay = checkOut === activeDayInfo.date;
+
+                            return (
+                                <div 
+                                    key={res.id} 
+                                    className="bg-slate-800/90 border border-slate-700/80 rounded-lg p-2.5 flex items-start gap-2.5 hover:bg-slate-800 transition"
+                                >
+                                    <div className="p-1.5 rounded-md bg-indigo-500/20 text-indigo-300 shrink-0 mt-0.5">
+                                        {isFlight ? <Plane className="w-4 h-4" /> : isHotel ? <Hotel className="w-4 h-4" /> : <Ticket className="w-4 h-4" />}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between gap-1">
+                                            <span className="text-xs font-bold text-white truncate">
+                                                {isFlight 
+                                                    ? `${res.flightDetails?.airline || ''} ${res.flightDetails?.flightNumber || res.title}`
+                                                    : isHotel 
+                                                        ? (res.accommodationDetails?.hotelName || res.title)
+                                                        : res.title
+                                                }
+                                            </span>
+                                            {isHotel && (
+                                                <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold shrink-0 ${
+                                                    isCheckInDay ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                                                    isCheckOutDay ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                                                    'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                                                }`}>
+                                                    {isCheckInDay ? '辦理入住' : isCheckOutDay ? '辦理退房' : '住宿中'}
+                                                </span>
+                                            )}
+                                            {isFlight && res.confirmationCode && (
+                                                <span className="text-[10px] font-mono bg-indigo-500/30 text-indigo-200 px-1 rounded shrink-0">
+                                                    {res.confirmationCode}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {isFlight && (
+                                            <div className="text-[11px] text-slate-300 mt-1 flex items-center gap-1.5">
+                                                <span className="font-semibold text-indigo-300">
+                                                    {res.flightDetails?.from || '出發站'} ➔ {res.flightDetails?.to || '抵達站'}
+                                                </span>
+                                                {(res.flightDetails?.departureTime || res.flightDetails?.arrivalTime) && (
+                                                    <span className="text-slate-400 text-[10px]">
+                                                        {res.flightDetails?.departureTime ? res.flightDetails.departureTime.slice(11, 16) : ''}
+                                                        {res.flightDetails?.arrivalTime ? ` ~ ${res.flightDetails.arrivalTime.slice(11, 16)}` : ''}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {isHotel && (
+                                            <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+                                                {res.accommodationDetails?.address || res.notes || '已確認預約'}
+                                            </div>
+                                        )}
+
+                                        {!isFlight && !isHotel && (
+                                            <div className="text-[11px] text-slate-400 mt-0.5">
+                                                {res.activityDetails?.location || res.notes || '票券憑證'}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            ) : null}
+
             {/* 3. 工具列：智慧最佳化、路線計算、開啟外部 Google Maps */}
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -422,6 +565,13 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated }
                                     <ArrowDown className="w-3.5 h-3.5" />
                                 </button>
                                 <button
+                                    onClick={() => handleOpenEditPlace(place)}
+                                    title="修改景點資訊"
+                                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 rounded-lg transition"
+                                >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
                                     onClick={() => handleDeletePlace(place.id)}
                                     className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 border border-gray-200 rounded-lg"
                                 >
@@ -483,6 +633,62 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated }
                                 </div>
                             ))}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 6. 修改景點 Modal */}
+            {editingPlace && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl text-slate-800 animate-in fade-in zoom-in-95 duration-150">
+                        <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+                            <h3 className="font-bold text-base flex items-center gap-2">
+                                <Edit2 className="w-4 h-4 text-indigo-600" />
+                                <span>修改景點資訊</span>
+                            </h3>
+                            <button
+                                onClick={() => setEditingPlace(null)}
+                                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+                            >
+                                &times;
+                            </button>
+                        </div>
+                        <form onSubmit={handleSaveEditPlace} className="space-y-3.5">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">景點名稱</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={editPlaceName}
+                                    onChange={(e) => setEditPlaceName(e.target.value)}
+                                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">地址 / 備註資訊</label>
+                                <textarea
+                                    rows="2"
+                                    value={editPlaceAddress}
+                                    onChange={(e) => setEditPlaceAddress(e.target.value)}
+                                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setEditingPlace(null)}
+                                    className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition"
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-sm transition"
+                                >
+                                    儲存修改
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

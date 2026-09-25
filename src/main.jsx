@@ -92,7 +92,7 @@ const ConfigErrorScreen = ({ errors }) => (
     </div>
 );
 
-const clientId = CONFIG.googleClientId;
+const clientId = CONFIG.googleClientId || 'offline-guest.apps.googleusercontent.com';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
@@ -107,4 +107,4 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             </GoogleOAuthProvider>
         )}
     </React.StrictMode>,
-)
+);

@@ -14,20 +14,126 @@ import { Layers, Compass, Loader2 } from 'lucide-react';
 import { fetchViewportPOIs } from '../../services/places/placeSearchService';
 import { logger } from '../../utils/logger';
 
-const OPEN_FREE_MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+export const MAP_STYLES = [
+    {
+        id: 'streets',
+        label: '🏙️ 商業街圖',
+        style: {
+            version: 8,
+            sources: {
+                'esri-streets': {
+                    type: 'raster',
+                    tiles: [
+                        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
+                    ],
+                    tileSize: 256,
+                    attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom'
+                }
+            },
+            layers: [
+                {
+                    id: 'esri-streets-layer',
+                    type: 'raster',
+                    source: 'esri-streets',
+                    minzoom: 0,
+                    maxzoom: 19
+                }
+            ]
+        }
+    },
+    {
+        id: 'osm',
+        label: '🗺️ 開放圖資 (OSM)',
+        style: {
+            version: 8,
+            sources: {
+                'osm-raster': {
+                    type: 'raster',
+                    tiles: [
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+                    ],
+                    tileSize: 256,
+                    attribution: '&copy; OpenStreetMap contributors'
+                }
+            },
+            layers: [
+                {
+                    id: 'osm-raster-layer',
+                    type: 'raster',
+                    source: 'osm-raster',
+                    minzoom: 0,
+                    maxzoom: 19
+                }
+            ]
+        }
+    },
+    {
+        id: 'topo',
+        label: '⛰️ 商務地形',
+        style: {
+            version: 8,
+            sources: {
+                'esri-topo': {
+                    type: 'raster',
+                    tiles: [
+                        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'
+                    ],
+                    tileSize: 256,
+                    attribution: 'Tiles &copy; Esri &mdash; USGS, Esri, TANA, DeLorme'
+                }
+            },
+            layers: [
+                {
+                    id: 'esri-topo-layer',
+                    type: 'raster',
+                    source: 'esri-topo',
+                    minzoom: 0,
+                    maxzoom: 19
+                }
+            ]
+        }
+    },
+    {
+        id: 'satellite',
+        label: '🛰️ 衛星影像',
+        style: {
+            version: 8,
+            sources: {
+                'esri-imagery': {
+                    type: 'raster',
+                    tiles: [
+                        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                    ],
+                    tileSize: 256,
+                    attribution: 'Source: Esri, Maxar, Earthstar Geographics'
+                }
+            },
+            layers: [
+                {
+                    id: 'esri-imagery-layer',
+                    type: 'raster',
+                    source: 'esri-imagery',
+                    minzoom: 0,
+                    maxzoom: 19
+                }
+            ]
+        }
+    }
+];
 
 export default function MapLibreView({ 
     places = [], 
     activePlaceId = null,
     onPlaceClick = null,
     routeGeometry = null,
-    defaultCenter = [139.7671, 35.6812], // [lng, lat] 東京車站
+    defaultCenter = [121.5654, 25.0330], // [lng, lat] 預設台北 (101)
     defaultZoom = 12
 }) {
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
     const markersRef = useRef([]);
     const [isMapLoaded, setIsMapLoaded] = useState(false);
+    const [currentStyleId, setCurrentStyleId] = useState('streets');
     const [poiCategory, setPoiCategory] = useState(null); // 'sights' | 'food' | null
     const [pois, setPois] = useState([]);
     const [isFetchingPoi, setIsFetchingPoi] = useState(false);
@@ -41,9 +147,11 @@ export default function MapLibreView({
             center = [places[0].lng, places[0].lat];
         }
 
+        const selectedStyleObj = MAP_STYLES.find(s => s.id === currentStyleId) || MAP_STYLES[0];
+
         const map = new maplibregl.Map({
             container: mapContainerRef.current,
-            style: OPEN_FREE_MAP_STYLE,
+            style: selectedStyleObj.style,
             center: center,
             zoom: defaultZoom,
             pitch: 0,
@@ -56,10 +164,22 @@ export default function MapLibreView({
         map.on('load', () => {
             setIsMapLoaded(true);
             mapRef.current = map;
+            map.resize();
+            setTimeout(() => { if (mapRef.current) mapRef.current.resize(); }, 150);
+            setTimeout(() => { if (mapRef.current) mapRef.current.resize(); }, 500);
         });
+
+        // 綁定 ResizeObserver，當切換雙欄/全螢幕或容器大小變動時自動觸發 resize
+        const resizeObserver = new ResizeObserver(() => {
+            if (mapRef.current) {
+                mapRef.current.resize();
+            }
+        });
+        resizeObserver.observe(mapContainerRef.current);
 
         // 嚴格銷毀 WebGL Context，防止記憶體洩漏與 Context Loss
         return () => {
+            resizeObserver.disconnect();
             markersRef.current.forEach(m => m.remove());
             markersRef.current = [];
             map.remove();
@@ -67,6 +187,22 @@ export default function MapLibreView({
             setIsMapLoaded(false);
         };
     }, []);
+
+    // 當使用者手動切換圖資樣式
+    const handleSwitchStyle = (styleId) => {
+        const map = mapRef.current;
+        if (styleId === currentStyleId || !map) return;
+        const target = MAP_STYLES.find(s => s.id === styleId);
+        if (target) {
+            setCurrentStyleId(styleId);
+            map.setStyle(target.style);
+            map.once('style.load', () => {
+                map.resize();
+                // 觸發自定義重新繪製路線與景點
+                setIsMapLoaded(true);
+            });
+        }
+    };
 
     // 2. 繪製或更新景點 Marker
     useEffect(() => {
@@ -222,7 +358,31 @@ export default function MapLibreView({
                     <span>🍜 美食咖啡</span>
                     {poiCategory === 'food' && isFetchingPoi && <Loader2 className="w-3 h-3 animate-spin" />}
                 </button>
+
+                {/* 圖資樣式切換器 */}
+                <div className="flex items-center bg-white/95 rounded-lg border border-gray-200 shadow-md p-0.5 backdrop-blur-md">
+                    {MAP_STYLES.map(s => (
+                        <button
+                            key={s.id}
+                            onClick={() => handleSwitchStyle(s.id)}
+                            className={`px-2 py-1 rounded-md text-[11px] font-bold transition ${
+                                currentStyleId === s.id
+                                    ? 'bg-slate-900 text-white shadow-xs'
+                                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                        >
+                            {s.label}
+                        </button>
+                    ))}
+                </div>
             </div>
+
+            {/* 尚未選定景點之提示 */}
+            {places.length === 0 && (
+                <div className="absolute top-14 left-3 z-10 bg-slate-900/80 text-slate-200 text-[11px] font-medium px-3 py-1.5 rounded-lg shadow-md backdrop-blur-sm pointer-events-none flex items-center gap-1.5">
+                    <span>💡 目前顯示預設視野，可於左側日程新增景點，或探索周邊點位</span>
+                </div>
+            )}
 
             {/* POI 結果小計提示 */}
             {pois.length > 0 && (

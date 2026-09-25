@@ -1,17 +1,12 @@
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
 import { AppProvider } from './contexts/AppContext';
 import { useFilterContext } from './contexts/FilterContext';
-import { UIProvider, useUIContext } from './contexts/UIContext';
+import { useUIContext } from './contexts/UIContext';
 import { downloadDiagnosticDump } from './utils/diagnosticDump';
 
-// ── UI Components ──────────────────────────────────────────────────────────
-import Instructions from './components/Instructions';
-import Dashboard from './components/Dashboard';
 import TicketForm from './components/TicketForm';
 import HotelForm from './features/hotels/components/HotelForm';
 import ActivityForm from './components/ActivityForm';
-import AppHeader from './components/AppHeader';
 import BottomNav from './components/BottomNav';
 import SearchFilterBar from './components/SearchFilterBar';
 import TabContent from './components/TabContent';
@@ -29,8 +24,8 @@ const WORKSPACES = [
         label: '🗺️ 行程工作台',
         defaultTab: 'planner',
         tabs: [
-            { key: 'planner',    label: '⚡ 智能雙欄 (地圖/日程)' },
-            { key: 'timeline',   label: '📆 時間軸' },
+            { key: 'planner',    label: '⚡ 智能雙欄 (每日排程)' },
+            { key: 'timeline',   label: '📆 旅程時間軸 (全景連動)' },
             { key: 'calendar',   label: '📅 月曆視圖' },
             { key: 'map',        label: '🌐 航線地圖' },
         ]
@@ -87,15 +82,14 @@ const FORM_COMPONENT_BY_TAB = {
 
 const CONTENT_COMPONENT_BY_TAB = {
     planner: SplitPlannerView,
+    timeline: SplitPlannerView,
     costs: CostManager,
     packing: PackingAndTodoManager,
     analytics: CostDashboard,
 };
 
 function AppContent() {
-    const { 
-        activeTab, setActiveTab, configWarnings, setConfigWarnings 
-    } = useUIContext();
+    const { activeTab, setActiveTab } = useUIContext();
     const { renderError } = useFilterContext();
 
     if (renderError) {
@@ -119,37 +113,15 @@ function AppContent() {
     }
 
     const currentWorkspace = WORKSPACES.find(ws => ws.tabs.some(t => t.key === activeTab)) || WORKSPACES[0];
-    const isModernTab = ['planner', 'costs', 'packing'].includes(activeTab);
+    const isModernTab = ['planner', 'timeline', 'costs', 'packing'].includes(activeTab);
     const ActiveForm = FORM_COMPONENT_BY_TAB[activeTab] || null;
     const ActiveContent = CONTENT_COMPONENT_BY_TAB[activeTab] || TabContent;
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
             <TrekHeader />
-            {configWarnings.length > 0 && (
-                <div className="bg-amber-50 border-b border-amber-200 p-3 shadow-sm">
-                    <div className="container mx-auto px-4 flex items-center gap-3">
-                        <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
-                        <div className="flex-1 text-xs font-bold text-amber-800">
-                            系統配置未完成：<span className="font-normal ml-1">{configWarnings.join(' ')}</span>
-                        </div>
-                        <button onClick={() => setConfigWarnings([])} className="text-amber-400 hover:text-amber-600">&times;</button>
-                    </div>
-                </div>
-            )}
-
-            <div className={`mx-auto p-4 md:p-6 transition-all ${isModernTab ? 'max-w-7xl' : 'max-w-5xl'}`}>
-                {!isModernTab && (
-                    <>
-                        <AppHeader />
-                        <Instructions />
-                        <Dashboard />
-                        <SearchFilterBar />
-                        {ActiveForm ? <ActiveForm /> : null}
-                    </>
-                )}
-
-                <div className="mt-4 bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+            <div className="mx-auto p-4 md:p-6 max-w-7xl transition-all">
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
                     {/* Primary Workspace Navigation (商業高密度分組頁籤) */}
                     <div className="hidden md:flex items-center border-b border-slate-700 bg-slate-900 text-white px-2 pt-2 gap-1">
                         {WORKSPACES.map(ws => {
@@ -200,6 +172,12 @@ function AppContent() {
                     )}
 
                     <div className="p-4 md:p-6 bg-white min-h-[400px]">
+                        {!isModernTab && (
+                            <div className="mb-6 space-y-4">
+                                <SearchFilterBar />
+                                {ActiveForm ? <ActiveForm /> : null}
+                            </div>
+                        )}
                         <ActiveContent />
                     </div>
                 </div>

@@ -21,33 +21,35 @@ const isPlaceholder = (value) => {
 };
 
 export const validateEnv = () => {
+    const warnings = [];
     const errors = [];
     
-    const required = [
-        { key: 'VITE_GOOGLE_CLIENT_ID', error: ERRORS.MISSING_CLIENT_ID },
-        { key: 'VITE_GOOGLE_MAPS_API_KEY', error: '遺失 VITE_GOOGLE_MAPS_API_KEY：此為渲染地圖與地址定位所需的必備金鑰。' },
-    ];
+    // 檢查 Google Client ID (僅影響 Google 雲端同步)
+    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!googleClientId || isPlaceholder(googleClientId)) {
+        warnings.push('未設定 VITE_GOOGLE_CLIENT_ID：Google 雲端備份與日曆同步將處於離線訪客模式。');
+    }
 
-    required.forEach(item => {
-        const value = import.meta.env[item.key];
-        if (!value || isPlaceholder(value)) {
-            errors.push(item.error);
-        }
-    });
+    // 檢查 Google Maps Key (已升級為免 Token 向量地圖 MapLibre，Google Maps 僅作可選備份)
+    const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!googleMapsKey || isPlaceholder(googleMapsKey)) {
+        warnings.push('未設定 VITE_GOOGLE_MAPS_API_KEY：系統將優先使用免 Token 的高效能向量地圖。');
+    }
+
+    // 嚴格生產模式檢查 (選填)
+    if (import.meta.env.VITE_STRICT_ENV === 'true') {
+        if (!googleClientId || isPlaceholder(googleClientId)) errors.push(ERRORS.MISSING_CLIENT_ID);
+        if (!googleMapsKey || isPlaceholder(googleMapsKey)) errors.push('遺失 VITE_GOOGLE_MAPS_API_KEY。');
+    }
 
     if (errors.length > 0) {
-        logger.error('Environment Validation Failed:', errors.join('\n'));
+        logger.error('Environment Validation Failed (Strict Mode):', errors.join('\n'));
         return { valid: false, errors };
     }
 
-    // 次要變數警告 (不阻斷)
-    if (!import.meta.env.VITE_FLIGHT_PROXY_URL) {
-        logger.warn('建議設定 VITE_FLIGHT_PROXY_URL 以隱藏航班 API 金鑰。');
-    }
-    
-    if (!import.meta.env.VITE_MAPBOX_API_KEY) {
-        logger.info('Mapbox 金鑰未設定，系統將僅使用 Google Maps。');
+    if (warnings.length > 0) {
+        logger.warn('環境變數提示 (離線模式啟動):', warnings.join('\n'));
     }
 
-    return { valid: true, errors: [] };
+    return { valid: true, errors: [], warnings };
 };
