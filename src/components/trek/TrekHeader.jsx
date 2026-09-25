@@ -66,19 +66,19 @@ export default function TrekHeader() {
             <div className="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
                 {/* 1. Brand Logo & Title */}
                 <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-emerald-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                        <Compass className="w-5 h-5 text-white animate-spin-slow" />
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-emerald-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                        <Compass className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                        <div className="flex items-center gap-1.5">
-                            <span className="font-black text-lg tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-white via-indigo-100 to-indigo-300">
-                                TREK
+                        <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-base sm:text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-indigo-200">
+                                Light Trip Plan
                             </span>
-                            <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 tracking-widest">
-                                Lite
+                            <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 tracking-widest">
+                                Pro
                             </span>
                         </div>
-                        <p className="text-[11px] text-slate-400 font-medium hidden sm:block">外站票與智能行程規劃</p>
+                        <p className="text-[10px] text-slate-400 font-medium hidden sm:block">智能離線旅遊規劃系統</p>
                     </div>
                 </div>
 

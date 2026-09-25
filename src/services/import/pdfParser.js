@@ -65,7 +65,7 @@ export function extractReservationFromText(text, fallbackFileName = '') {
 
     // 2. 偵測機票 (Flight / Airline / E-ticket)
     const flightMatch = text.match(/\b([A-Z0-9]{2})\s*([0-9]{3,4})\b/);
-    const pnrMatch = text.match(/(?:Booking Reference|Confirmation Code|Record Locator|PNR|訂位代碼)[:\s]*([A-Z0-9]{6})/i);
+    const pnrMatch = text.match(/(?:Booking Reference|Confirmation Code|Record Locator|PNR|訂位代碼|訂位代號)[\(\):\s]*([A-Z0-9]{6})/i);
     const dateMatch = text.match(/\b(202[4-9][\/\-](?:0[1-9]|1[0-2])[\/\-](?:0[1-9]|[12][0-9]|3[01]))\b/);
 
     // 尋找 3 碼 IATA 代碼 (例如 TPE, NRT, KIX)

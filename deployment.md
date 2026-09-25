@@ -1,150 +1,162 @@
-# 🛠️ 部署與 API 金鑰設定指南
+# 🛠️ Light Trip Plan 生產環境部署與 API 安全設定指南
 
-本專案強烈建議透過 **GitHub Actions** 自動編譯並部署至 **GitHub Pages**。  
-由於本系統是純前端架構 (Vite SPA)，所有的環境變數必須在「編譯期」注入，因此請依照下方步驟設定您的 GitHub Secrets 與 Variables。
-
----
-
-## 🔑 第一步：申請基本與必備金鑰
-
-在部署前，您需要先去註冊以下服務的憑證：
-
-1. **Google OAuth Client ID (必備)**  
-   - 前往 [Google Cloud Console](https://console.cloud.google.com/)，建立並啟用 `Google Drive API` 與 `Google Calendar API`。
-   - 建立 OAuth 2.0 Web Client ID 憑證 (`VITE_GOOGLE_CLIENT_ID`)。確保您將 **Authorized JavaScript origins** 和 **Authorized redirect URIs** 設為您的 GitHub Pages 網址。
-
-2. **Google Maps API Key (必備)**  
-   - 啟用 [Geocoding API](https://developers.google.com/maps/documentation/geocoding/overview) 與 [Maps JavaScript API](https://developers.google.com/maps/documentation/javascript/overview)。
-   - 此金鑰用於渲染系統核心地圖與自動轉座標功能 (`VITE_GOOGLE_MAPS_API_KEY`)。
-   - ⚠️ **安全性必要步驟**：由於此金鑰會暴露在前端，請務必執行下方 [Google Maps 憑證安全性強化](#🛡️-第四步-google-maps-api-key-安全性強化) 的設定。
-
-3. **Mapbox API Key (選配)**  
-   - 註冊 [Mapbox](https://www.mapbox.com/) 取得 Public Token。僅作為 Geocoding 的備援方案，若已有 Google Maps 則非必填 (`VITE_MAPBOX_API_KEY`)。
-
-4. **LINE Bot 推播金鑰 (推薦且安全)**  
-    - 前往 [LINE Developers](https://developers.line.biz/)，建立一個 Messaging API Channel。
-    - 取得 `LINE_CHANNEL_ACCESS_TOKEN` 與 `LINE_USER_ID`。
-    - **Google 授權升級**：本版本已全面升級至 **OAuth2 Refresh Token** 傳送模式，您不再需要手動共用檔案給服務帳號。
+**Light Trip Plan** 採用現代化 **Jamstack + Serverless** 雲原生架構：
+* **前端 (Client SPA / PWA)**：100% 靜態 React 應用程式，預設支援透過 **GitHub Actions** 自動化建置並發布至 **GitHub Pages** 或任何靜態託管平台。
+* **安全代理 (Cloudflare Worker)**：作為微型邊緣安全閘道 (Edge Gateway)，負責轉發第三方航班查詢 API、隱藏真實 API 金鑰、強制 512KB Payload 限制、強制 HTTPS 與防 SSRF/Open Redirect。
+* **雲端同步 (Google Cloud OAuth 2.0)**：純前端授權直連 Google Drive API，提供使用者個人加密備份與 500MB 大檔斷點續傳。
 
 ---
 
-## 🔐 第二步：LINE Bot OAuth2 零摩擦認證設定
+## 🏗️ 系統拓撲與資料流向
 
-為了讓 GitHub Actions 能夠安全且自動地讀取資料，我們需要設定 OAuth2 授權：
-
-1. **獲取 Client Secret**：
-   - 前往 [Google Cloud Console](https://console.cloud.google.com/apis/credentials)。
-   - 在您的 OAuth 2.0 Web Client ID 旁，點擊下載 JSON 或直接複製 **Client Secret** (`GOOGLE_CLIENT_SECRET`)。
-
-2. **生成 Refresh Token (一次性)**：
-   本步驟是為了讓 GitHub Actions 獲得持久授權。您可以選擇以下任一方式：
-
-   #### 方法 A：使用 Google OAuth Playground (推薦，雲端免安裝)
-   1. 前往 GCP 控制台的 [憑證頁面](https://console.cloud.google.com/apis/credentials)，編輯您的 OAuth Client ID。
-   2. 在 **已授權的重新導向 URI** 中新增：`https://developers.google.com/oauthplayground`。
-   3. 打開 [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/)。
-   4. 點擊右側 **Settings (齒輪)** -> 勾選 **Use your own OAuth credentials** -> 填入您的 Client ID 與 Secret。
-   5. 在左側輸入 Scope：`https://www.googleapis.com/auth/drive.readonly` -> 點擊 **Authorize APIs**。
-   6. 授權後點擊 **Exchange authorization code for tokens**，複製產生的 `refresh_token`。
-
-   #### 方法 B：使用本地腳本 (進階)
-   1. 在您的本地終端機執行：`node scripts/get-refresh-token.js`。
-   2. 依照提示完成授權並獲得 `GOOGLE_REFRESH_TOKEN`。
-
-3. **GitHub Secrets 最終清單**：
-   請確保您的 Repo Secrets 包含以下內容：
-   - `GOOGLE_CLIENT_ID` (由第一步取得)
-   - `GOOGLE_CLIENT_SECRET` (由上一步取得)
-   - `GOOGLE_REFRESH_TOKEN` (由上一步取得)
-   - `LINE_CHANNEL_ACCESS_TOKEN`
-   - `LINE_USER_ID`
+```
+┌────────────────────────────────────────────────────────┐
+│                   使用者瀏覽器 / PWA                    │
+│   (IndexedDB 11 個 Stores 本地儲存 + MapLibre 向量引擎) │
+└──────┬────────────────────┬────────────────────┬───────┘
+       │                    │                    │
+       │ (1) OAuth 直連     │ (2) 靜態託管       │ (3) 帶鑑權轉發
+       ▼                    ▼                    ▼
+┌──────────────┐    ┌───────────────┐    ┌────────────────────────┐
+│ Google Cloud │    │ GitHub Pages  │    │ Cloudflare Worker 代理 │
+│  Drive API   │    │  (Vite Build) │    │  (Payload 512KB 限制)  │
+└──────────────┘    └───────────────┘    └───────────┬────────────┘
+                                                     │ 隱藏金鑰查詢
+                                                     ▼
+                                         ┌────────────────────────┐
+                                         │ AviationStack / AirLabs│
+                                         └────────────────────────┘
+```
 
 ---
 
-## 🛡️ 第四步：Google Maps API Key 安全性強化 (重要)
+## 🔑 第一步：申請與設定 Google OAuth 憑證 (個人備份與大檔直傳)
 
-因為本專案是純前端架構，Google Maps API Key 會在載入 JS SDK 時發送給客戶端。為了防止金鑰被盜用並耗盡您的免費額度，**您必須在 Google Cloud Console 設定來源限制**。
+本系統使用 Google OAuth 2.0 Web Client ID 讓使用者登入自己的 Google 帳號，直接在瀏覽器與個人 Google Drive 之間傳輸備份與上傳大檔：
 
-### 1. 設定應用程式限制 (Application Restrictions)
-1. 進入 [Google Cloud Console 憑證頁面](https://console.cloud.google.com/google/maps-apis/credentials)。
-2. 點擊進入您為本專案建立的 **API Key**。
-3. 在 **Application restrictions** 區塊中，選擇 **Websites (HTTP referrers)**。
-4. 在下方 **Website restrictions** 中點擊 **ADD**，加入您的 GitHub Pages 網域：
-   - 格式範例：`https://yourname.github.io/*` (請將 yourname 換成您的帳號)。
-   - 如果您有自定義網域，也請一併加入。
-
-### 2. 設定 API 限制 (API Restrictions)
-1. 在同一頁面的 **API restrictions** 區塊中，選擇 **Restrict key**。
-2. 在下拉選單中**僅勾選**以下兩項：
-   - `Geocoding API`
-   - `Maps JavaScript API`
-3. 點擊 **SAVE**。
-
-> [!TIP]
-> 這樣設定後，即便他人拿到您的 API Key，也無法在非您的網域下使用，也無法調用除了地圖與經緯度以外的其他昂貴 API。
+1. 前往 [Google Cloud Console](https://console.cloud.google.com/)。
+2. 建立新專案（例如 `light-trip-plan`）。
+3. 前往 **API 和服務** > **程式庫**，搜尋並啟用：
+   * `Google Drive API`
+4. 前往 **OAuth 同意畫面 (OAuth consent screen)**：
+   * User Type 選擇 **外部 (External)**。
+   * 填寫應用程式名稱 (`Light Trip Plan`) 與開發者電子郵件。
+   * 在 **範圍 (Scopes)** 中新增：
+     * `https://www.googleapis.com/auth/drive.file`（僅存取本系統建立之檔案，最安全）
+5. 前往 **憑證 (Credentials)** > **建立憑證** > **OAuth 用戶端 ID**：
+   * 應用程式類型：**網頁應用程式 (Web application)**。
+   * **已獲授權的 JavaScript 來源 (Authorized JavaScript origins)**：
+     * 本地開發：`http://localhost:5173`
+     * 正式生產：`https://<your-username>.github.io`
+   * **已獲授權的重新導向 URI (Authorized redirect URIs)**：
+     * 同上述網址。
+6. 複製產生的 **用戶端 ID (Client ID)**，此即為環境變數 `VITE_GOOGLE_CLIENT_ID`。
 
 ---
 
-## 🛡️ 第二步：航班 API 安全性部署 (Cloudflare Workers Proxy)
+## 🛡️ 第二步：部署 Cloudflare Worker 安全邊緣代理 (推薦)
 
-**嚴重警告**：本專案為無後端架構，若直接將航班查詢 API (AviationStack/AirLabs) 金鑰放進純前端專案中，網頁上線後任何人都可透過瀏覽器 (F12) 擷取您的金鑰並盜刷額度。
+**資安原則**：若直接將第三方付費 API 金鑰（如 AviationStack、AirLabs）放入前端，訪客開啟 F12 即能竊取並盜刷。我們在 `cloudflare-worker/` 提供了預先加固的邊緣代理程式。
 
-為解決此安全風險，我們已在專案的 `cloudflare-worker/` 提供預寫好的 Proxy 腳本 (`worker.js`)。請跟隨以下步驟，**免費**架設您的專屬 Serverless Proxy。
-
-### 1. 準備您的環境
-請開啟終端機並確保已安裝 [Node.js](https://nodejs.org/)。
+### 1. 本地安裝 Wrangler CLI
 ```bash
-# 進入專案內的 worker 目錄
+npm install -g wrangler
+wrangler login
+```
+
+### 2. 加密儲存金鑰至 Cloudflare KV / Secrets
+進入專案目錄下的 `cloudflare-worker/`：
+```bash
 cd cloudflare-worker
 
-# 全域安裝 Cloudflare 的命令列工具 Wrangler
-npm install -g wrangler
-```
-
-### 2. 加密儲存您的金鑰
-請利用 Wrangler 登入，並將您申請的航班 API 金鑰安全地推上雲端：
-```bash
+# 儲存航班 API 金鑰 (非必填，依您需求)
 wrangler secret put AVIATIONSTACK_API_KEY
-# 終端機會提示您，請貼上剛申請的 AviationStack API 金鑰
-
 wrangler secret put AIRLABS_API_KEY
-# 終端機會提示您，請貼上剛申請的 AirLabs API 金鑰
+
+# [強烈建議] 設定自訂 Bearer 鑑權 Token，防止他人調用您的 Worker
+wrangler secret put SHARE_SECRET_TOKEN
 ```
 
-### 3. 發布您的 Proxy
+### 3. 一鍵發布
 ```bash
 wrangler deploy
-# 部署完成後，您會獲得一段專屬的安全網址
-# 例如：https://flight-proxy.yourname.workers.dev
 ```
+部署成功後，終端機將輸出 Worker 專屬網址，例如：
+`https://light-trip-proxy.<your-subdomain>.workers.dev`
+請記下此網址，此即為 `VITE_FLIGHT_PROXY_URL`。
 
-請記下這段網址，我們將在下一階段把它填入您的 GitHub Actions 設定中。
-
----
-
-## 🚀 第三步：設定 GitHub 變數與部署
-
-完成 API 申請與 Proxy 架設後，請回到您的 GitHub 專案：
-
-路徑： `Settings` > `Secrets and variables` > `Actions`
-
-### 1. Variables (非敏感變數)
-將不涉及隱私或有嚴格網域綁定的變數，加入 **Repository variables**：
-- **`VITE_GOOGLE_CLIENT_ID`**：你的 Google OAuth 登入 ID (由於已在 GCP 限定網域，相對安全)。
-- **`VITE_MAPBOX_API_KEY`**：Mapbox Token。
-- **`VITE_FLIGHT_PROXY_URL`**：剛剛從 Cloudflare 取得的 Proxy 網址 (例如 `https://flight-proxy.yourname.workers.dev`)。
-
-### 2. Secrets (高敏感變數)
-將絕對不能外流的變數，加入 **Repository secrets**：
-- **`VITE_GOOGLE_MAPS_API_KEY`**：雖然 GCP 也可以設定網域白名單限制呼叫，但放入 secrets 可降低誤用的風險。
-- **(提醒)** 請**不要**將 `VITE_AVIATIONSTACK_API_KEY` 放入這裡，因為它們已經被放入前端不會接觸到的 Cloudflare Worker 中了！
-
-### 3. 自動化部署 (CI/CD)
-本專案已設定好 Actions 工作流程。您只需要：
-1. 確保上述 1、2 步驟已設定完成。
-2. 將任何變更（包含一開始的 Fork 或是新的 Commit） **Push 或 Merge 至 `main` 分支**。
-3. 系統將自動執行編譯，並將編譯後的 `dist/` 部署到您的 GitHub Pages 上。
+### 邊緣代理內建安全特性：
+* **512KB Payload 門檻**：超過 512KB 直接回傳 HTTP 413，杜絕大檔惡意攻擊 Worker 記憶體。
+* **UUID 格式校驗**：針對分享與旅程 ID 進行嚴格正則驗證 (`/^[0-9a-f]{8}-[0-9a-f]{4}-...$/i`)。
+* **強制 HTTPS 與參數消毒**：所有對外請求強制採用 HTTPS，並對 Query 參數進行 `encodeURIComponent`，杜絕 SSRF 與 Open Redirect 漏洞。
 
 ---
 
-🎉 **恭喜！您已獲得一個 100% 前端防護、高安全性的私人反向機票管理系統。**
+## 🚀 第三步：設定 GitHub Repository 變數與自動化部署 (CI/CD)
+
+本專案配置了嚴格的自動化部署工作流程 (`.github/workflows/deploy.yml`)，遵循「**不修復不上線**」原則：在發布前強制執行 `npm run lint` 與 `npm test`。
+
+請至 GitHub 專案頁面：`Settings` > `Secrets and variables` > `Actions`：
+
+### 1. Variables (公開變數)
+| 變數名稱 | 必填 | 說明 | 範例值 |
+| :--- | :---: | :--- | :--- |
+| `VITE_GOOGLE_CLIENT_ID` | ✅ 必備 | Google OAuth Client ID | `123456-xxx.apps.googleusercontent.com` |
+| `VITE_FLIGHT_PROXY_URL` | 🟢 推薦 | 部署完成之 Cloudflare Worker 網址 | `https://light-trip-proxy.xxx.workers.dev` |
+| `VITE_MAPBOX_API_KEY` | ⚪ 選配 | Mapbox 備援 Token（系統預設使用免金鑰的 OpenFreeMap） | `pk.eyJ1Ijo...` |
+| `VITE_GOOGLE_MAPS_API_KEY` | ⚪ 選配 | Google Maps 備援 Token（若需使用 Google 原生路網） | `AIzaSy...` |
+
+### 2. 觸發自動發布
+將程式碼 Push 或 Merge 至 `main` 分支，GitHub Actions 將依序執行：
+1. `npm ci`（嚴格安裝鎖定依賴）
+2. `npm run lint`（靜態檢查，0 錯誤 0 警告門禁）
+3. `npm test`（單元測試，31/31 測試通過門禁）
+4. `npm run build`（Vite 生產環境打包與 PWA Service Worker 生成）
+5. 部署至 `gh-pages` 分支。
+
+---
+
+## 🤖 第四步：LINE Bot 定時推播行程通知 (選配)
+
+本專案支援透過 GitHub Actions 定時觸發 `scripts/line-bot.js`，自動向使用者的 LINE 帳號推播當日與即將出發之航班、飯店及行程提醒。
+
+### 1. 取得 LINE Messaging API 憑證
+1. 前往 [LINE Developers Console](https://developers.line.biz/)。
+2. 建立 Messaging API Channel，獲取：
+   * `LINE_CHANNEL_ACCESS_TOKEN` (Long-lived Channel Access Token)
+   * `LINE_USER_ID` (您個人在 LINE 中的 User ID，非一般顯示 ID)
+
+### 2. 設定 GitHub Secrets
+在 GitHub 的 `Settings` > `Secrets and variables` > `Actions` > **Secrets** 中加入：
+* `LINE_CHANNEL_ACCESS_TOKEN`
+* `LINE_USER_ID`
+* `GOOGLE_CLIENT_ID`
+* `GOOGLE_CLIENT_SECRET`
+* `GOOGLE_REFRESH_TOKEN` (透過 OAuth Playground 取得之持久性 Refresh Token，用於無頭讀取 Google Drive 備份)
+
+---
+
+## 📱 第五步：PWA 離線安裝與快取策略
+
+**Light Trip Plan** 具備完備的 PWA (Progressive Web App) 能力：
+* **Service Worker**：基於 `workbox` 自動更新機制 (`autoUpdate`)。
+* **Google Fonts 快取**：快取字型資源長達 365 天，離線時介面文字不閃爍。
+* **離線圖資**：MapLibre 搭配 OpenFreeMap 與內建 7,917+ 全球機場離線庫，即使在飛行模式或無網路狀態下，仍可順暢瀏覽旅程與查詢航班代碼。
+
+---
+
+## 🔍 第六步：零成本除錯診斷指南 (Diagnostic Runbook)
+
+當使用者在行動端或離線環境回報異常時，請指導使用者匯出**除錯診斷包**：
+
+1. **取得診斷包**：
+   * 若介面發生嚴重 React 渲染錯誤，Error Boundary 畫面將提供「📥 下載系統除錯診斷包 (Diagnostic Dump)」按鈕。
+   * 平時亦可於頂部導航列之「匯入匯出 & 手冊」>「資料匯出」頁籤下載。
+2. **診斷包內含數據**：
+   * `environment`：瀏覽器 UserAgent、螢幕解析度、網路線上狀態 (`isOnline`) 與當前路由。
+   * `storage.storesRecordCount`：IndexedDB 11 個 Stores 的目前筆數統計與健康狀態。
+   * **個資保護**：報告不含任何個人機票確認碼、姓名或花費金額，安全無虞。
+3. **Google OAuth `invalid_grant` 排查**：
+   * 此錯誤代表 Refresh Token 已過期、使用者修改了 Google 帳號密碼，或測試應用程式授權超過 7 天。
+   * 解決方案：重新於 Google OAuth Playground 獲取新的 `refresh_token` 並更新至 GitHub Secret。
+

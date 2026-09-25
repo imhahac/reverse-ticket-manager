@@ -10,9 +10,9 @@ export default defineConfig({
             registerType: 'autoUpdate',
             injectRegister: 'auto',
             manifest: {
-                name: 'Reverse Ticket Manager',
-                short_name: 'Tickets',
-                description: 'Flight and Hotel Itinerary Management',
+                name: 'Light Trip Plan',
+                short_name: 'LightTrip',
+                description: 'Light Trip Plan - 智能離線旅遊規劃中心',
                 theme_color: '#4f46e5',
                 background_color: '#ffffff',
                 display: 'standalone',

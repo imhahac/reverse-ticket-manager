@@ -3,7 +3,7 @@
  * 費用報表與結算紀錄 CSV 匯出服務 (支援 UTF-8 BOM 避免 Excel 亂碼)
  */
 
-export function exportExpensesToCSV(tripTitle, expenses, settlementTransactions = []) {
+export function generateExpensesCsvContent(tripTitle, expenses, settlementTransactions = []) {
     const BOM = '\uFEFF'; // Excel UTF-8 BOM
 
     let csv = BOM;
@@ -37,6 +37,11 @@ export function exportExpensesToCSV(tripTitle, expenses, settlementTransactions 
         });
     }
 
+    return csv;
+}
+
+export function exportExpensesToCSV(tripTitle, expenses, settlementTransactions = []) {
+    const csv = generateExpensesCsvContent(tripTitle, expenses, settlementTransactions);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

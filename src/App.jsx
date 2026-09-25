@@ -22,17 +22,59 @@ import CostManager from './components/trek/CostManager';
 import PackingAndTodoManager from './components/trek/PackingAndTodoManager';
 import { TrekProvider } from './contexts/TrekContext';
 
-// ── Constants ──────────────────────────────────────────────────────────────
+// ── Workspaces Definition (商業分組導航) ──────────────────────────────────
+const WORKSPACES = [
+    {
+        id: 'planning',
+        label: '🗺️ 行程工作台',
+        defaultTab: 'planner',
+        tabs: [
+            { key: 'planner',    label: '⚡ 智能雙欄 (地圖/日程)' },
+            { key: 'timeline',   label: '📆 時間軸' },
+            { key: 'calendar',   label: '📅 月曆視圖' },
+            { key: 'map',        label: '🌐 航線地圖' },
+        ]
+    },
+    {
+        id: 'finance',
+        label: '💰 財務中心',
+        defaultTab: 'costs',
+        tabs: [
+            { key: 'costs',      label: '💳 多幣別拆帳與結算' },
+            { key: 'analytics',  label: '📊 成本與 CP 值分析' },
+        ]
+    },
+    {
+        id: 'prep',
+        label: '🎒 整備中心',
+        defaultTab: 'packing',
+        tabs: [
+            { key: 'packing',    label: '🧳 行李、待辦與大檔' },
+        ]
+    },
+    {
+        id: 'tickets',
+        label: '🎟️ 票券憑證',
+        defaultTab: 'list',
+        tabs: [
+            { key: 'list',       label: '✈️ 機票管理' },
+            { key: 'hotels',     label: '🏨 飯店管理' },
+            { key: 'activities', label: '🎫 票券與活動' },
+        ]
+    }
+];
+
+// Flat tabs kept for backward compatibility
 const TABS = [
-    { key: 'planner',    label: '🧭 規劃中心 (TREK)' },
+    { key: 'planner',    label: '🧭 規劃工作台' },
     { key: 'costs',      label: '💰 多幣別費用' },
     { key: 'packing',    label: '🎒 行李待辦檔案' },
-    { key: 'timeline',   label: '📆 行程 Timeline' },
+    { key: 'timeline',   label: '📆 行程時間軸' },
     { key: 'list',       label: '🎟️ 機票管理' },
     { key: 'hotels',     label: '🏨 飯店管理' },
-    { key: 'activities', label: '🎫 票卷與活動' },
+    { key: 'activities', label: '🎫 票券與活動' },
     { key: 'calendar',   label: '📅 月曆' },
-    { key: 'map',        label: '🗺️ 地圖' },
+    { key: 'map',        label: '🗺️ 航線地圖' },
     { key: 'analytics',  label: '📊 成本分析' },
 ];
 
@@ -76,6 +118,8 @@ function AppContent() {
         );
     }
 
+    const currentWorkspace = WORKSPACES.find(ws => ws.tabs.some(t => t.key === activeTab)) || WORKSPACES[0];
+    const isModernTab = ['planner', 'costs', 'packing'].includes(activeTab);
     const ActiveForm = FORM_COMPONENT_BY_TAB[activeTab] || null;
     const ActiveContent = CONTENT_COMPONENT_BY_TAB[activeTab] || TabContent;
 
@@ -94,8 +138,8 @@ function AppContent() {
                 </div>
             )}
 
-            <div className={`mx-auto p-4 md:p-6 transition-all ${activeTab === 'planner' ? 'max-w-7xl' : 'max-w-5xl'}`}>
-                {activeTab !== 'planner' && (
+            <div className={`mx-auto p-4 md:p-6 transition-all ${isModernTab ? 'max-w-7xl' : 'max-w-5xl'}`}>
+                {!isModernTab && (
                     <>
                         <AppHeader />
                         <Instructions />
@@ -105,28 +149,66 @@ function AppContent() {
                     </>
                 )}
 
-                <div className="mt-4 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="hidden md:flex border-b border-gray-200 p-1 bg-slate-50/50">
-                        {TABS.map(tab => (
-                            <button
-                                key={tab.key}
-                                onClick={() => setActiveTab(tab.key)}
-                                className={`flex-1 py-3 px-3 font-bold text-sm rounded-t-lg transition-colors ${activeTab === tab.key ? 'bg-white text-indigo-700 border-b-2 border-indigo-500 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
-                            >
-                                {tab.label}
-                            </button>
-                        ))}
+                <div className="mt-4 bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+                    {/* Primary Workspace Navigation (商業高密度分組頁籤) */}
+                    <div className="hidden md:flex items-center border-b border-slate-700 bg-slate-900 text-white px-2 pt-2 gap-1">
+                        {WORKSPACES.map(ws => {
+                            const isActiveWs = currentWorkspace.id === ws.id;
+                            return (
+                                <button
+                                    key={ws.id}
+                                    onClick={() => {
+                                        if (!isActiveWs) setActiveTab(ws.defaultTab);
+                                    }}
+                                    className={`px-5 py-3 text-xs font-bold rounded-t-xl transition-all border-b-2 flex items-center gap-2 ${
+                                        isActiveWs
+                                            ? 'bg-white text-slate-900 border-indigo-600 shadow-sm'
+                                            : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                                    }`}
+                                >
+                                    <span>{ws.label}</span>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-semibold ${
+                                        isActiveWs ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-800 text-slate-400'
+                                    }`}>
+                                        {ws.tabs.length}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
+
+                    {/* Secondary Sub-tab Navigation Bar (若當前工作區包含多個視圖) */}
+                    {currentWorkspace.tabs.length > 1 && (
+                        <div className="hidden md:flex items-center gap-1.5 px-4 py-2 border-b border-slate-200/90 bg-slate-50/80 overflow-x-auto">
+                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-2 hidden sm:inline">
+                                視圖切換：
+                            </span>
+                            {currentWorkspace.tabs.map(subTab => (
+                                <button
+                                    key={subTab.key}
+                                    onClick={() => setActiveTab(subTab.key)}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                                        activeTab === subTab.key
+                                            ? 'bg-slate-900 text-white shadow-xs'
+                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                                    }`}
+                                >
+                                    {subTab.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     <div className="p-4 md:p-6 bg-white min-h-[400px]">
                         <ActiveContent />
                     </div>
                 </div>
 
-                <footer className="mt-12 text-center text-sm text-gray-400 pb-4 md:pb-8 hidden md:block">
-                    &copy; {new Date().getFullYear()} TREK-Lite & Reverse Ticket Manager.
+                <footer className="mt-12 text-center text-xs text-slate-400 pb-4 md:pb-8 hidden md:block font-medium">
+                    &copy; {new Date().getFullYear()} Light Trip Plan. 智能離線旅遊規劃系統.
                 </footer>
             </div>
-            <BottomNav TABS={TABS} activeTab={activeTab} setActiveTab={setActiveTab} />
+            <BottomNav WORKSPACES={WORKSPACES} TABS={TABS} activeTab={activeTab} setActiveTab={setActiveTab} />
         </div>
     );
 }

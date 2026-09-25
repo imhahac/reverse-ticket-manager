@@ -1,7 +1,8 @@
 {
-    "name": "reverse-ticket-manager",
+    "name": "light-trip-plan",
+    "description": "Light Trip Plan - 智能離線旅遊規劃系統",
     "private": true,
-    "version": "0.0.0",
+    "version": "1.0.0",
     "type": "module",
     "scripts": {
         "dev": "vite",
