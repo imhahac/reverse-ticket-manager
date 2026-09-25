@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 import { AppProvider } from './contexts/AppContext';
 import { useFilterContext } from './contexts/FilterContext';
 import { UIProvider, useUIContext } from './contexts/UIContext';
+import { downloadDiagnosticDump } from './utils/diagnosticDump';
 
 // ── UI Components ──────────────────────────────────────────────────────────
 import Instructions from './components/Instructions';
@@ -15,9 +16,17 @@ import BottomNav from './components/BottomNav';
 import SearchFilterBar from './components/SearchFilterBar';
 import TabContent from './components/TabContent';
 import CostDashboard from './components/CostDashboard';
+import TrekHeader from './components/trek/TrekHeader';
+import SplitPlannerView from './components/trek/SplitPlannerView';
+import CostManager from './components/trek/CostManager';
+import PackingAndTodoManager from './components/trek/PackingAndTodoManager';
+import { TrekProvider } from './contexts/TrekContext';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const TABS = [
+    { key: 'planner',    label: '🧭 規劃中心 (TREK)' },
+    { key: 'costs',      label: '💰 多幣別費用' },
+    { key: 'packing',    label: '🎒 行李待辦檔案' },
     { key: 'timeline',   label: '📆 行程 Timeline' },
     { key: 'list',       label: '🎟️ 機票管理' },
     { key: 'hotels',     label: '🏨 飯店管理' },
@@ -35,6 +44,9 @@ const FORM_COMPONENT_BY_TAB = {
 };
 
 const CONTENT_COMPONENT_BY_TAB = {
+    planner: SplitPlannerView,
+    costs: CostManager,
+    packing: PackingAndTodoManager,
     analytics: CostDashboard,
 };
 
@@ -57,6 +69,7 @@ function AppContent() {
                     <div className="flex flex-col gap-3">
                         <button onClick={() => window.location.reload()} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition">重新整理網頁</button>
                         <button onClick={() => { if (confirm('確定要清除所有本地資料嗎？')) { localStorage.clear(); window.location.reload(); } }} className="w-full py-3 bg-white border border-red-200 text-red-600 font-bold rounded-lg hover:bg-red-50 transition">⚠️ 強制清除資料並重設</button>
+                        <button onClick={downloadDiagnosticDump} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition">📥 下載系統除錯診斷包 (Diagnostic Dump)</button>
                     </div>
                 </div>
             </div>
@@ -68,6 +81,7 @@ function AppContent() {
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
+            <TrekHeader />
             {configWarnings.length > 0 && (
                 <div className="bg-amber-50 border-b border-amber-200 p-3 shadow-sm">
                     <div className="container mx-auto px-4 flex items-center gap-3">
@@ -80,15 +94,18 @@ function AppContent() {
                 </div>
             )}
 
-            <div className="max-w-5xl mx-auto p-4 md:p-8">
-                <AppHeader />
-                <Instructions />
-                <Dashboard />
-                <SearchFilterBar />
+            <div className={`mx-auto p-4 md:p-6 transition-all ${activeTab === 'planner' ? 'max-w-7xl' : 'max-w-5xl'}`}>
+                {activeTab !== 'planner' && (
+                    <>
+                        <AppHeader />
+                        <Instructions />
+                        <Dashboard />
+                        <SearchFilterBar />
+                        {ActiveForm ? <ActiveForm /> : null}
+                    </>
+                )}
 
-                {ActiveForm ? <ActiveForm /> : null}
-
-                <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="mt-4 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="hidden md:flex border-b border-gray-200 p-1 bg-slate-50/50">
                         {TABS.map(tab => (
                             <button
@@ -106,7 +123,7 @@ function AppContent() {
                 </div>
 
                 <footer className="mt-12 text-center text-sm text-gray-400 pb-4 md:pb-8 hidden md:block">
-                    &copy; {new Date().getFullYear()} Travel Itinerary Planner. Data stored locally.
+                    &copy; {new Date().getFullYear()} TREK-Lite & Reverse Ticket Manager.
                 </footer>
             </div>
             <BottomNav TABS={TABS} activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -117,7 +134,9 @@ function AppContent() {
 export default function App() {
     return (
         <AppProvider>
-            <AppContent />
+            <TrekProvider>
+                <AppContent />
+            </TrekProvider>
         </AppProvider>
     );
 }

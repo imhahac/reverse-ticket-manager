@@ -62,6 +62,14 @@ export default defineConfig({
     },
     build: {
         target: 'es2015',
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    'maplibre': ['maplibre-gl'],
+                    'vendor': ['react', 'react-dom']
+                }
+            }
+        }
     },
     test: {
         environment: 'jsdom',

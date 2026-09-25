@@ -166,10 +166,47 @@ const run = async () => {
 
         const fileRes = await drive.files.get({ fileId: files[0].id, alt: 'media' });
         const data = fileRes.data;
-        const tickets = Array.isArray(data) ? data : (data.tickets || []);
-        const hotels = data.hotels || [];
-        const activities = data.activities || [];
+        const tickets = Array.isArray(data) ? [...data] : [...(data.tickets || [])];
+        const hotels = [...(data.hotels || [])];
+        const activities = [...(data.activities || [])];
         const tripLabels = data.tripLabels || {};
+
+        // 支援新版 TREK-Lite 結構：自動將 16 種 reservations 適配轉換為排程通知
+        if (Array.isArray(data.reservations)) {
+            console.log(`📦 Detected new reservations schema (${data.reservations.length} items), adapting...`);
+            data.reservations.forEach(res => {
+                if (res.type === 'flight') {
+                    tickets.push({
+                        id: res.id,
+                        type: 'normal',
+                        outboundDate: res.departureTime ? res.departureTime.slice(0, 10) : res.date,
+                        outboundTime: res.departureTime ? res.departureTime.slice(11, 16) : '',
+                        outboundArrivalDate: res.arrivalTime ? res.arrivalTime.slice(0, 10) : (res.departureTime ? res.departureTime.slice(0, 10) : res.date),
+                        outboundArrivalTime: res.arrivalTime ? res.arrivalTime.slice(11, 16) : '',
+                        outboundFlightNo: `${res.airline || ''} ${res.flightNumber || ''}`.trim() || res.title,
+                        departRegion: res.departureAirport || '',
+                        returnRegion: res.arrivalAirport || '',
+                        confirmationCode: res.confirmationCode
+                    });
+                } else if (res.type === 'hotel' || res.type === 'accommodation') {
+                    hotels.push({
+                        id: res.id,
+                        name: res.title || res.hotelName || '住宿飯店',
+                        checkIn: res.checkInDate || res.date,
+                        checkOut: res.checkOutDate || res.endDate || res.checkInDate || res.date,
+                        confirmationCode: res.confirmationCode
+                    });
+                } else {
+                    activities.push({
+                        id: res.id,
+                        name: res.title || '預訂行程活動',
+                        startDate: res.date || res.startDate,
+                        endDate: res.endDate || res.date,
+                        confirmationCode: res.confirmationCode
+                    });
+                }
+            });
+        }
 
         const allItineraries = getItinerary(tickets, hotels, activities);
         
@@ -210,6 +247,13 @@ const run = async () => {
         console.log("✨ Text notifications sent successfully.");
     } catch (e) {
         console.error("❌ Error:", e.message);
+        if (e.message && e.message.includes('invalid_grant')) {
+            console.error("\n💡 【Google OAuth2 invalid_grant 故障排除指南】");
+            console.error("1. 原因：您的 GOOGLE_REFRESH_TOKEN 已失效、過期或被撤銷。");
+            console.error("2. 檢查：請確認 GCP Console 的 OAuth 同意畫面是否為「測試 (Testing)」模式（測試模式 Token 僅 7 天效期）。");
+            console.error("3. 處置：請將 GCP OAuth 同意畫面發布為「正式運作 (In Production)」。");
+            console.error("4. 更新：請在本地執行 'node scripts/get-refresh-token.js' 重新取得 Refresh Token，並更新 GitHub Secrets。\n");
+        }
         process.exit(1);
     }
 };
