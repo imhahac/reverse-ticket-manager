@@ -113,7 +113,7 @@ export default function TrekHeader() {
 
     return (
         <header className="bg-slate-900 border-b border-slate-800 text-white sticky top-0 z-30 shadow-md">
-            <div className="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+            <div className="max-w-[1600px] mx-auto px-4 md:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3">
                 {/* 1. Brand Logo & Title & System Status */}
                 <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-emerald-400 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">

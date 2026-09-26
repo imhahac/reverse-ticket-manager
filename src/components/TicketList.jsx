@@ -106,16 +106,16 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
             </div>
 
             {/* Desktop View: Table */}
-            <div className="hidden md:block bg-white rounded-xl shadow border border-gray-100">
+            <div className="hidden md:block bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
+                    <table className="w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">票種/標籤</th>
-                                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">航段一 (去程)</th>
-                                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">航段二 (回程)</th>
-                                <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">花費</th>
-                                <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">管理</th>
+                                <th className="px-5 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-[140px]">票種/標籤</th>
+                                <th className="px-5 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">航段一 (去程)</th>
+                                <th className="px-5 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">航段二 (回程)</th>
+                                <th className="px-5 py-3.5 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-[140px]">花費</th>
+                                <th className="px-5 py-3.5 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-[100px] shrink-0">管理</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
@@ -131,7 +131,7 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
 
                                 return (
                                     <tr key={ticket.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-6 py-4 whitespace-nowrap">
+                                        <td className="px-5 py-4 align-top w-[140px]">
                                             <div className="flex flex-col items-start gap-1">
                                                 <span className={`px-2 py-1 inline-flex text-xs leading-4 font-bold rounded shadow-sm ${ticket.type === 'normal' ? 'bg-indigo-100 text-indigo-700' :
                                                     ticket.type === 'reverse' ? 'bg-purple-100 text-purple-700' :
@@ -139,49 +139,49 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
                                                     }`}>
                                                     {ticket.type === 'normal' ? '正向票' : ticket.type === 'reverse' ? '反向票' : '單程票'}
                                                 </span>
-                                                <span className="text-sm font-medium text-gray-900">{ticket.airline}</span>
+                                                <span className="text-sm font-medium text-gray-900 break-words">{ticket.airline}</span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-gray-900 font-medium">{Segment1}</div>
-                                            <div className="text-sm text-gray-500 mt-1 flex items-center">
-                                                <Calendar className="w-3 h-3 mr-1" /> {formatDateWithDay(ticket.outboundDate)}
-                                                {ticket.outboundTime && <><Clock className="w-3 h-3 ml-2 mr-1 text-slate-400" /> {ticket.outboundTime}</>}
+                                        <td className="px-5 py-4 align-top min-w-0">
+                                            <div className="text-sm text-gray-900 font-semibold break-words leading-snug">{Segment1}</div>
+                                            <div className="text-xs text-gray-500 mt-1.5 flex flex-wrap items-center gap-1.5">
+                                                <span className="inline-flex items-center"><Calendar className="w-3.5 h-3.5 mr-1 text-slate-400" /> {formatDateWithDay(ticket.outboundDate)}</span>
+                                                {ticket.outboundTime && <span className="inline-flex items-center text-slate-500"><Clock className="w-3.5 h-3.5 mr-1 text-slate-400" /> {ticket.outboundTime}</span>}
                                                 <FlightLink flightNo={ticket.outboundFlightNo} />
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-gray-900 font-medium">{Segment2}</div>
+                                        <td className="px-5 py-4 align-top min-w-0">
+                                            <div className="text-sm text-gray-900 font-semibold break-words leading-snug">{Segment2}</div>
                                             {ticket.type !== 'oneway' && (
-                                                <div className="text-sm text-gray-500 mt-1 flex items-center">
-                                                    <Calendar className="w-3 h-3 mr-1" /> {formatDateWithDay(ticket.inboundDate)}
-                                                    {ticket.inboundTime && <><Clock className="w-3 h-3 ml-2 mr-1 text-slate-400" /> {ticket.inboundTime}</>}
+                                                <div className="text-xs text-gray-500 mt-1.5 flex flex-wrap items-center gap-1.5">
+                                                    <span className="inline-flex items-center"><Calendar className="w-3.5 h-3.5 mr-1 text-slate-400" /> {formatDateWithDay(ticket.inboundDate)}</span>
+                                                    {ticket.inboundTime && <span className="inline-flex items-center text-slate-500"><Clock className="w-3.5 h-3.5 mr-1 text-slate-400" /> {ticket.inboundTime}</span>}
                                                     <FlightLink flightNo={ticket.inboundFlightNo} />
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-700">
+                                        <td className="px-5 py-4 align-top text-right text-sm font-bold text-gray-800 w-[140px]">
                                             {ticket.currency === 'TWD' ? (
                                                 `NT$ ${ticket.priceTWD?.toLocaleString() || ticket.price.toLocaleString()}`
                                             ) : (
-                                                <div className="flex flex-col">
+                                                <div className="flex flex-col items-end">
                                                     <span>NT$ {ticket.priceTWD?.toLocaleString() || Math.round(ticket.price).toLocaleString()}</span>
                                                     <span className="text-xs text-gray-400 font-normal">{ticket.currency} {ticket.price.toLocaleString()} (@{ticket.exchangeRate})</span>
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <div className="flex gap-2 justify-end">
-                                                <button onClick={() => onEdit(ticket)} className="text-amber-500 hover:text-amber-700 p-2 rounded hover:bg-amber-50 transition" title="修改機票">
+                                        <td className="px-5 py-4 align-top text-right text-sm font-medium w-[100px] shrink-0">
+                                            <div className="flex gap-1.5 justify-end items-center">
+                                                <button onClick={() => onEdit(ticket)} className="text-amber-600 hover:text-amber-700 p-1.5 rounded-lg hover:bg-amber-50 transition" title="修改機票">
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
-                                                <button onClick={() => onDelete(ticket.id)} className="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 transition" title="刪除機票">
+                                                <button onClick={() => onDelete(ticket.id)} className="text-rose-600 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 transition" title="刪除機票">
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
                                         </td>
                                     </tr>
-                                )
+                                );
                             })}
                         </tbody>
                     </table>
