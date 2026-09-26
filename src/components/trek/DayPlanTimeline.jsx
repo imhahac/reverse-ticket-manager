@@ -42,8 +42,9 @@ import { searchPlaces, enrichPlaceWithWikipedia } from '../../services/places/pl
 import { getDayWeather } from '../../services/weather/weatherService';
 import { logger } from '../../utils/logger';
 
-export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated }) {
+export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, unifiedReservations = null }) {
     const { activeTrip, reservations = [], dayPlans, refreshTrips } = useTrek();
+    const activeReservations = unifiedReservations || reservations;
     const [selectedDayIndex, setSelectedDayIndex] = useState(0);
     const [dayPlacesMap, setDayPlacesMap] = useState({}); // { [dayIndex]: places[] }
     const [weatherMap, setWeatherMap] = useState({}); // { [dateStr]: weatherObj }
@@ -152,9 +153,9 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated }
 
     // ── 整合當日預訂 (機票、飯店、活動) ──────────────────────────
     const dayReservations = React.useMemo(() => {
-        if (!activeDayInfo?.date || !reservations || reservations.length === 0) return [];
+        if (!activeDayInfo?.date || !activeReservations || activeReservations.length === 0) return [];
         const dateStr = activeDayInfo.date;
-        return reservations.filter(r => {
+        return activeReservations.filter(r => {
             if (r.type === 'flight') {
                 const depDate = r.flightDetails?.departureTime?.slice(0, 10) || r.startDate?.slice(0, 10);
                 const arrDate = r.flightDetails?.arrivalTime?.slice(0, 10) || r.endDate?.slice(0, 10);
@@ -170,7 +171,7 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated }
             const eventDate = r.activityDetails?.date?.slice(0, 10) || r.startDate?.slice(0, 10);
             return eventDate === dateStr;
         });
-    }, [activeDayInfo?.date, reservations]);
+    }, [activeDayInfo?.date, activeReservations]);
 
     // ── 景點操作 ──────────────────────────────────────────────────────────
 

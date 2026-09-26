@@ -62,7 +62,7 @@ const TripCard = ({
 
     return (
         <div
-            className={`relative flex flex-col md:flex-row items-stretch bg-white border ${borderColor} rounded-xl shadow-sm hover:shadow-md transition-shadow mt-4`}
+            className={`relative flex flex-col xl:flex-row items-stretch bg-white border ${borderColor} rounded-xl shadow-sm hover:shadow-md transition-shadow mt-4 w-full min-w-0 overflow-hidden`}
         >
             <div className={`absolute -top-3 -right-2 px-3 py-1 text-xs font-bold text-white rounded-full shadow-sm flex items-center z-20 ${badgeBg}`}>
                 {BadgeIcon} {badgeLabel}
@@ -87,15 +87,15 @@ const TripCard = ({
             />
 
             {/* 右側列表 */}
-            <div className="flex-1 p-5 lg:p-6 flex flex-col justify-center gap-3 bg-white rounded-r-xl">
+            <div className="flex-1 min-w-0 p-4 sm:p-5 lg:p-6 flex flex-col justify-center gap-3 bg-white rounded-b-xl xl:rounded-r-xl xl:rounded-bl-none">
                 {!trip.isComplete && trip.incompleteReason && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-1 text-xs font-bold text-amber-700">
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-1 text-xs font-bold text-amber-700 break-words">
                         {trip.incompleteReason === 'MULTIPLE_DEPARTURES' && '⚠️ 行程異常：在抵達台灣前，又發現另一個從台灣出發的航班。請檢查是否有機票輸入錯誤、時間重疊或不連貫。'}
                         {trip.incompleteReason === 'MISSING_INBOUND' && '⚠️ 行程未完結：僅有去程航班，尚未配對到回程航班。'}
                         {trip.incompleteReason === 'ORPHAN_INBOUND' && '⚠️ 行程未完結：僅有回程航班，缺少從台灣出發的去程航班。'}
                     </div>
                 )}
-                {hotelWarns.map((w, i) => <div key={i} className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-1 text-xs font-bold text-amber-700">{w}</div>)}
+                {hotelWarns.map((w, i) => <div key={i} className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-1 text-xs font-bold text-amber-700 break-words">{w}</div>)}
 
                 {displayOptions.activities && multiDayVouchers.length > 0 && (
                     <div className="p-3 bg-orange-50/80 border border-orange-200 rounded-xl space-y-2 shadow-sm mb-2">

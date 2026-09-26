@@ -13,7 +13,7 @@ export default function HotelStayCard({ hotel }) {
     const { name, address, checkIn, checkOut, totalNights, currency, priceTotal, priceTWD, costPerNight, confirmationNo } = hotel;
 
     return (
-        <div className="flex items-start gap-3 pl-3 pr-4 py-3 bg-teal-50/80 rounded-xl border border-teal-200 shadow-sm">
+        <div className="flex items-start gap-3 pl-3 pr-4 py-3 bg-teal-50/80 rounded-xl border border-teal-200 shadow-sm w-full min-w-0 overflow-hidden">
             {/* 圖示 */}
             <div className="w-9 h-9 rounded-full bg-teal-100 border border-teal-300 flex items-center justify-center shrink-0 mt-0.5">
                 <Building2 className="w-4 h-4 text-teal-600" />
@@ -22,7 +22,7 @@ export default function HotelStayCard({ hotel }) {
             {/* 內容 */}
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-teal-800">{name}</span>
+                    <span className="text-sm font-bold text-teal-800 break-words">{name}</span>
                     {totalNights && (
                         <span className="text-[11px] font-bold bg-teal-200/60 text-teal-700 px-2 py-0.5 rounded-full">
                             {totalNights} 晚

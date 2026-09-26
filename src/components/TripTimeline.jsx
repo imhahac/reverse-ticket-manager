@@ -159,7 +159,7 @@ export default function TripTimeline({
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 w-full min-w-0">
             <div className="flex justify-end items-center gap-2">
                 <ShareButton />
                 {hasOverrides && (

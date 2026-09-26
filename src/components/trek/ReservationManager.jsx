@@ -32,7 +32,7 @@ import { reservationRepo } from '../../services/db';
 import { RESERVATION_TYPES, RESERVATION_TYPE_CONFIG, RESERVATION_STATUS } from '../../constants/reservationTypes';
 import { importBookingFile } from '../../services/import';
 
-export default function ReservationManager() {
+export default function ReservationManager({ unifiedReservations = null }) {
     const { activeTrip, reservations, refreshTrips } = useTrek();
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [isUploading, setIsUploading] = useState(false);
@@ -64,8 +64,11 @@ export default function ReservationManager() {
 
     if (!activeTrip) return null;
 
+    // 優先使用整合全域票券憑證之預訂清單
+    const activeReservationsList = unifiedReservations || reservations;
+
     // 篩選預訂項目
-    const filteredReservations = reservations.filter(r => {
+    const filteredReservations = activeReservationsList.filter(r => {
         if (selectedCategory === 'all') return true;
         return r.type === selectedCategory;
     });
@@ -135,9 +138,13 @@ export default function ReservationManager() {
     };
 
     // ── 刪除預訂 ──────────────────────────────────────────────────────────
-    const handleDeleteReservation = async (id, title) => {
-        if (confirm(`確定要刪除預訂項目「${title || '此項目'}」嗎？`)) {
-            await reservationRepo.delete(id);
+    const handleDeleteReservation = async (res) => {
+        if (res.source) {
+            toast.info(`此項目由「${res.sourceLabel}」自動關聯，請於上方『票券憑證』工作台進行管理或修改。`);
+            return;
+        }
+        if (confirm(`確定要刪除預訂項目「${res.title || '此項目'}」嗎？`)) {
+            await reservationRepo.delete(res.id);
             await refreshTrips(activeTrip.id);
             toast.info('預訂已刪除');
         }
@@ -225,10 +232,10 @@ export default function ReservationManager() {
                                 : 'bg-white text-slate-600 hover:bg-slate-100 border border-gray-200'
                         }`}
                     >
-                        全部 ({reservations.length})
+                        全部 ({activeReservationsList.length})
                     </button>
                     {Object.entries(RESERVATION_TYPE_CONFIG).map(([typeKey, cfg]) => {
-                        const count = reservations.filter(r => r.type === typeKey).length;
+                        const count = activeReservationsList.filter(r => r.type === typeKey).length;
                         return (
                             <button
                                 key={typeKey}
@@ -262,7 +269,7 @@ export default function ReservationManager() {
                     <div className="bg-white rounded-xl p-10 text-center text-slate-400 border border-gray-200">
                         <Tag className="w-10 h-10 mx-auto mb-2 text-slate-300" />
                         <p className="text-sm font-semibold">此分類尚無預訂項目</p>
-                        <p className="text-xs text-slate-400 mt-1">請上傳票券檔案或手動新增預訂</p>
+                        <p className="text-xs text-slate-400 mt-1">請上傳票券檔案或於頂部『票券憑證』新增機票、住宿與活動</p>
                     </div>
                 ) : (
                     filteredReservations.map(res => {
@@ -283,6 +290,11 @@ export default function ReservationManager() {
                                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${cfg.badgeColor}`}>
                                                 {cfg.label}
                                             </span>
+                                            {res.sourceLabel && (
+                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                                    🔗 {res.sourceLabel}
+                                                </span>
+                                            )}
                                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusObj.color}`}>
                                                 {statusObj.label}
                                             </span>
@@ -317,6 +329,12 @@ export default function ReservationManager() {
                                                     入住: {res.accommodationDetails.checkInDate} ~ {res.accommodationDetails.checkOutDate}
                                                 </span>
                                             )}
+
+                                            {res.notes && (
+                                                <span className="text-slate-400 truncate max-w-[240px]">
+                                                    {res.notes}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -330,9 +348,9 @@ export default function ReservationManager() {
                                         </div>
                                     </div>
                                     <button
-                                        onClick={() => handleDeleteReservation(res.id, res.title)}
+                                        onClick={() => handleDeleteReservation(res)}
                                         className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                                        title="刪除預訂"
+                                        title={res.source ? '查看全域關聯提示' : '刪除預訂'}
                                     >
                                         <Trash2 className="w-4 h-4" />
                                     </button>

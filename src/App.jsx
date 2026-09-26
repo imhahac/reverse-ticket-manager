@@ -120,7 +120,7 @@ function AppContent() {
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
             <TrekHeader />
-            <div className="mx-auto p-4 md:p-6 max-w-7xl transition-all">
+            <div className={`mx-auto p-4 md:p-6 transition-all ${isModernTab ? 'max-w-[1600px]' : 'max-w-7xl'}`}>
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
                     {/* Primary Workspace Navigation (商業高密度分組頁籤) */}
                     <div className="hidden md:flex items-center border-b border-slate-700 bg-slate-900 text-white px-2 pt-2 gap-1">

@@ -27,8 +27,10 @@ import { useUIContext } from '../../contexts/UIContext';
 import {
     useTicketDataContext,
     useHotelDataContext,
+    useActivityDataContext,
     useOverrideDataContext,
 } from '../../contexts/DataContext';
+import { getUnifiedReservations } from '../../services/reservations/unifiedReservationService';
 import { placeItemRepo } from '../../services/db';
 
 export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
@@ -89,8 +91,15 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
 
     // 傳統外站票與行程配對資料 (供全景時間軸連動)
     const { filteredItinerary, filteredHotels } = useFilterContext();
-    const { tripLabels, setTripLabels } = useTicketDataContext();
+    const { tickets, tripLabels, setTripLabels } = useTicketDataContext();
+    const { rawHotels } = useHotelDataContext();
+    const { activities } = useActivityDataContext();
     const { tripOverrides, removeSegment, restoreSegment, moveSegmentToTrip, clearAllOverrides } = useOverrideDataContext();
+
+    // 整合全域機票、飯店、活動與當前旅程預訂
+    const unifiedReservations = useMemo(() => {
+        return getUnifiedReservations(activeTrip, reservations, tickets, rawHotels, activities);
+    }, [activeTrip, reservations, tickets, rawHotels, activities]);
 
     // 當切換到全景時間軸時，抓取該旅程所有景點呈現於右側地圖
     const loadAllTripPlaces = useCallback(async () => {
@@ -161,7 +170,7 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 {/* ── Left Column: Master Timeline / Planner (佔 7 欄或 12 欄) ── */}
                 {showPlanner && (
-                    <div className={`space-y-4 ${showMap ? 'lg:col-span-7 xl:col-span-6' : 'lg:col-span-12'} ${mobileActiveView !== 'planner' ? 'hidden lg:block' : 'block'}`}>
+                    <div className={`space-y-4 min-w-0 w-full ${showMap ? 'lg:col-span-7 xl:col-span-6' : 'lg:col-span-12'} ${mobileActiveView !== 'planner' ? 'hidden lg:block' : 'block'}`}>
                         {/* Trip Summary Card */}
                         <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-slate-950 rounded-2xl p-5 text-white shadow-md relative overflow-hidden">
                             <div className="relative z-10">
@@ -195,7 +204,7 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
                                     </span>
                                     <span className="flex items-center gap-1">
                                         <Ticket className="w-3.5 h-3.5 text-emerald-300" />
-                                        {reservations.length} 個預訂項目
+                                        {unifiedReservations.length} 個預訂項目
                                     </span>
                                 </div>
                             </div>
@@ -237,7 +246,7 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
                                     }`}
                                 >
                                     <Ticket className="w-3.5 h-3.5" />
-                                    <span>🎟️ 預訂總覽 ({reservations.length})</span>
+                                    <span>🎟️ 預訂總覽 ({unifiedReservations.length})</span>
                                 </button>
                             </div>
                         </div>
@@ -247,6 +256,7 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
                             <DayPlanTimeline 
                                 onSelectDayPlaces={setSelectedPlaces} 
                                 onRouteCalculated={setRouteGeometry} 
+                                unifiedReservations={unifiedReservations}
                             />
                         )}
 
@@ -277,14 +287,14 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
                         )}
 
                         {subTab === 'reservations' && (
-                            <ReservationManager />
+                            <ReservationManager unifiedReservations={unifiedReservations} />
                         )}
                     </div>
                 )}
 
                 {/* ── Right Column: Interactive Map Viewport (佔 5 欄或 12 欄) ── */}
                 {showMap && (
-                    <div className={`sticky top-20 ${showPlanner ? 'lg:col-span-5 xl:col-span-6' : 'lg:col-span-12'} ${mobileActiveView !== 'map' ? 'hidden lg:block' : 'block'}`}>
+                    <div className={`sticky top-20 min-w-0 w-full ${showPlanner ? 'lg:col-span-5 xl:col-span-6' : 'lg:col-span-12'} ${mobileActiveView !== 'map' ? 'hidden lg:block' : 'block'}`}>
                         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[calc(100vh-6rem)]">
                             <div className="p-3 border-b border-gray-100 flex items-center justify-between bg-slate-50/70 text-xs font-bold text-slate-700">
                                 <span className="flex items-center gap-1.5">

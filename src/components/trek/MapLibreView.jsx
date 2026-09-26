@@ -215,43 +215,54 @@ export default function MapLibreView({
 
         if (!places || places.length === 0) return;
 
+        // 確保地圖視口與投影矩陣為最新
+        map.resize();
+
         const bounds = new maplibregl.LngLatBounds();
         let validPointsCount = 0;
 
         places.forEach((place, index) => {
-            if (!place.lat || !place.lng) return;
+            const lat = Number(place.lat);
+            const lng = Number(place.lng);
+            if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
 
             validPointsCount++;
-            bounds.extend([place.lng, place.lat]);
+            bounds.extend([lng, lat]);
 
-            // 客製化 Marker DOM
+            // 客製化 Marker DOM：確保有固定尺寸且無外部相對位移干擾
             const el = document.createElement('div');
-            el.className = 'group cursor-pointer relative';
+            el.className = 'group cursor-pointer select-none';
+            el.style.width = '32px';
+            el.style.height = '32px';
+            el.style.display = 'flex';
+            el.style.alignItems = 'center';
+            el.style.justifyContent = 'center';
 
             const isActive = place.id === activePlaceId;
             const isHotel = place.isAnchorStart || place.isAnchorEnd || place.category === 'hotel';
 
             el.innerHTML = `
-                <div class="flex items-center justify-center w-7 h-7 rounded-full shadow-lg font-black text-xs transition-transform transform group-hover:scale-125 ${
+                <div class="relative flex items-center justify-center w-7 h-7 rounded-full shadow-lg font-black text-xs transition-transform duration-150 transform group-hover:scale-125 border-2 border-white ${
                     isActive 
                         ? 'bg-rose-500 text-white ring-4 ring-rose-300' 
                         : isHotel 
                             ? 'bg-amber-500 text-white' 
                             : 'bg-indigo-600 text-white'
                 }">
-                    ${isHotel ? '🏨' : (index + 1)}
-                </div>
-                <div class="absolute left-1/2 -translate-x-1/2 bottom-8 hidden group-hover:block bg-slate-900/90 text-white text-[11px] font-bold px-2 py-1 rounded shadow-md whitespace-nowrap z-50 pointer-events-none">
-                    ${place.name}
+                    <span>${isHotel ? '🏨' : (index + 1)}</span>
+                    <div class="absolute left-1/2 -translate-x-1/2 bottom-8 hidden group-hover:block bg-slate-900/90 text-white text-[11px] font-bold px-2 py-1 rounded shadow-md whitespace-nowrap z-50 pointer-events-none">
+                        ${place.name}
+                    </div>
                 </div>
             `;
 
-            el.addEventListener('click', () => {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
                 if (onPlaceClick) onPlaceClick(place);
             });
 
-            const marker = new maplibregl.Marker({ element: el })
-                .setLngLat([place.lng, place.lat])
+            const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+                .setLngLat([lng, lat])
                 .addTo(map);
 
             markersRef.current.push(marker);
@@ -259,9 +270,12 @@ export default function MapLibreView({
 
         // 自動縮放與視野貼齊
         if (validPointsCount > 1) {
-            map.fitBounds(bounds, { padding: 50, maxZoom: 15, duration: 1000 });
+            map.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: 600 });
         } else if (validPointsCount === 1) {
-            map.flyTo({ center: [places[0].lng, places[0].lat], zoom: 14 });
+            const first = places.find(p => p.lat && p.lng);
+            if (first) {
+                map.flyTo({ center: [Number(first.lng), Number(first.lat)], zoom: 14, duration: 600 });
+            }
         }
     }, [places, activePlaceId, isMapLoaded, onPlaceClick]);
 
