@@ -182,11 +182,29 @@ export default function CostManager() {
 
     // 4. 核心：將機票、飯店、活動無縫聚合進支出與拆帳項目
     const unifiedExpenses = useMemo(() => {
-        const list = customExpenses.map(exp => ({
-            ...exp,
-            date: exp.date || (exp.createdAt ? new Date(exp.createdAt).toISOString().slice(0, 10) : ''),
-            dateRange: exp.dateRange || exp.date || (exp.createdAt ? new Date(exp.createdAt).toISOString().slice(0, 10) : '')
-        }));
+        const list = customExpenses.map(exp => {
+            let title = exp.title || '';
+            let dateRange = exp.dateRange || exp.date || (exp.createdAt ? new Date(exp.createdAt).toISOString().slice(0, 10) : '');
+
+            // 若為住宿且標題殘留舊的 (1晚) 但實際日期多於 1 晚，動態校正為實際晚數
+            if (exp.category === 'lodging' && dateRange.includes('~')) {
+                const [start, end] = dateRange.split('~').map(s => s.trim());
+                if (start && end) {
+                    const diff = new Date(end) - new Date(start);
+                    const calcNights = Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
+                    if (calcNights > 1 && title.includes('(1晚)')) {
+                        title = title.replace('(1晚)', `(${calcNights}晚)`);
+                    }
+                }
+            }
+
+            return {
+                ...exp,
+                title,
+                date: exp.date || (exp.createdAt ? new Date(exp.createdAt).toISOString().slice(0, 10) : ''),
+                dateRange
+            };
+        });
         const existingIds = new Set(list.map(e => e.id));
 
         // 整合機票
@@ -229,10 +247,19 @@ export default function CostManager() {
             const checkIn = hotel.checkIn ? hotel.checkIn.slice(0, 10) : '';
             const checkOut = hotel.checkOut ? hotel.checkOut.slice(0, 10) : '';
             const dateRange = checkIn && checkOut ? `${checkIn} ~ ${checkOut}` : checkIn;
+
+            // 精確計算實際晚數 (若原始 safeHotels 無 totalNights 屬性，以 checkOut - checkIn 計算，避免誤 fallback 為 1 晚)
+            let nights = Number(hotel.totalNights) || 0;
+            if (nights <= 0 && checkIn && checkOut) {
+                const diff = new Date(checkOut) - new Date(checkIn);
+                nights = Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
+            }
+            nights = nights || 1;
+
             list.push({
                 id,
                 tripId: hotel.tripId || activeTrip?.id,
-                title: `🏨 住宿: ${hotel.name || '飯店'} (${hotel.totalNights || 1}晚)`,
+                title: `🏨 住宿: ${hotel.name || '飯店'} (${nights}晚)`,
                 category: 'lodging',
                 amount: hotel.priceTotal || amtTWD,
                 currency: hotel.currency || 'TWD',
@@ -563,6 +590,7 @@ export default function CostManager() {
             amount: amt,
             currency: formCurrency,
             date: formDate,
+            dateRange: editingExpense?.dateRange || formDate,
             rateToTripBase: frozen.rateToTripBase,
             baseCurrency,
             baseAmount: frozen.baseAmount,
