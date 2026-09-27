@@ -10,9 +10,6 @@ import {
     Calendar, 
     Plus, 
     ChevronDown, 
-    Columns, 
-    Maximize2, 
-    LayoutList, 
     Cloud, 
     Check, 
     RefreshCw,
@@ -40,9 +37,7 @@ export default function TrekHeader() {
         selectTrip, 
         createTrip, 
         updateTrip,
-        deleteTrip, 
-        viewMode, 
-        setViewMode 
+        deleteTrip
     } = useTrek();
 
     const { activeTab, setActiveTab, configWarnings } = useUIContext();
@@ -218,36 +213,6 @@ export default function TrekHeader() {
 
                 {/* 3. Right Toolbar: Context-Aware Layout Toggles & Google Auth Hub */}
                 <div className="flex items-center gap-2">
-                    {/* View mode toggle: 僅在行程規劃工作台 (activeTab === 'planner') 顯示 */}
-                    {activeTab === 'planner' && (
-                        <div className="hidden lg:flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-slate-400">
-                            <button
-                                onClick={() => setViewMode('split')}
-                                title="雙欄佈局 (左時間軸 + 右地圖)"
-                                className={`p-1.5 rounded-md text-xs font-semibold flex items-center gap-1 transition ${viewMode === 'split' ? 'bg-indigo-600 text-white shadow-sm' : 'hover:text-white'}`}
-                            >
-                                <Columns className="w-3.5 h-3.5" />
-                                <span>雙欄</span>
-                            </button>
-                            <button
-                                onClick={() => setViewMode('planner-only')}
-                                title="純時間軸專案檢視"
-                                className={`p-1.5 rounded-md text-xs font-semibold flex items-center gap-1 transition ${viewMode === 'planner-only' ? 'bg-indigo-600 text-white shadow-sm' : 'hover:text-white'}`}
-                            >
-                                <LayoutList className="w-3.5 h-3.5" />
-                                <span>日程</span>
-                            </button>
-                            <button
-                                onClick={() => setViewMode('map-only')}
-                                title="全螢幕地圖"
-                                className={`p-1.5 rounded-md text-xs font-semibold flex items-center gap-1 transition ${viewMode === 'map-only' ? 'bg-indigo-600 text-white shadow-sm' : 'hover:text-white'}`}
-                            >
-                                <Maximize2 className="w-3.5 h-3.5" />
-                                <span>地圖</span>
-                            </button>
-                        </div>
-                    )}
-
                     {/* 匯入匯出與手冊按鈕 */}
                     {activeTrip && (
                         <button

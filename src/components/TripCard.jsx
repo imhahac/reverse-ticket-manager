@@ -64,7 +64,7 @@ const TripCard = ({
         <div
             className={`relative flex flex-col xl:flex-row items-stretch bg-white border ${borderColor} rounded-xl shadow-sm hover:shadow-md transition-shadow mt-4 w-full min-w-0 overflow-hidden`}
         >
-            <div className={`absolute -top-3 -right-2 px-3 py-1 text-xs font-bold text-white rounded-full shadow-sm flex items-center z-20 ${badgeBg}`}>
+            <div className={`absolute top-3 right-3 px-3 py-1 text-xs font-bold text-white rounded-full shadow-sm flex items-center z-20 ${badgeBg}`}>
                 {BadgeIcon} {badgeLabel}
                 {tripDays && <span className="ml-2 pl-2 border-l border-white/30">共 {tripDays} 天</span>}
             </div>

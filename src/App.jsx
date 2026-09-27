@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Globe } from 'lucide-react';
+import { MapPin, Globe, Columns, LayoutList, Maximize2 } from 'lucide-react';
 import { AppProvider } from './contexts/AppContext';
 import { useFilterContext } from './contexts/FilterContext';
 import { useUIContext } from './contexts/UIContext';
@@ -93,7 +93,7 @@ const CONTENT_COMPONENT_BY_TAB = {
 
 function AppContent() {
     const { activeTab, setActiveTab, ticketScope = 'trip', setTicketScope } = useUIContext();
-    const { activeTrip } = useTrek();
+    const { activeTrip, viewMode = 'split', setViewMode } = useTrek();
     const { renderError } = useFilterContext();
 
     if (renderError) {
@@ -204,6 +204,48 @@ function AppContent() {
                                     >
                                         <Globe className="w-3.5 h-3.5 text-emerald-500" />
                                         <span>全域總匯</span>
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* 行程工作台專用佈局切換器 (雙欄 / 日程 / 地圖) - 僅在行程工作平台且支援雙欄之視圖顯示 */}
+                            {currentWorkspace.id === 'planning' && ['planner', 'timeline', 'reservations'].includes(activeTab) && setViewMode && (
+                                <div className="flex items-center p-1 bg-slate-200/70 rounded-xl border border-slate-300/50 shrink-0">
+                                    <button
+                                        onClick={() => setViewMode('split')}
+                                        title="雙欄佈局 (左排程 + 右地圖)"
+                                        className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                                            viewMode === 'split'
+                                                ? 'bg-white text-indigo-700 shadow-sm'
+                                                : 'text-slate-600 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        <Columns className="w-3.5 h-3.5 text-indigo-500" />
+                                        <span>雙欄</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setViewMode('planner-only')}
+                                        title="純排程檢視 (隱藏地圖)"
+                                        className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                                            viewMode === 'planner-only'
+                                                ? 'bg-white text-indigo-700 shadow-sm'
+                                                : 'text-slate-600 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        <LayoutList className="w-3.5 h-3.5 text-indigo-500" />
+                                        <span>日程</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setViewMode('map-only')}
+                                        title="全螢幕地圖 (隱藏排程)"
+                                        className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                                            viewMode === 'map-only'
+                                                ? 'bg-white text-indigo-700 shadow-sm'
+                                                : 'text-slate-600 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        <Maximize2 className="w-3.5 h-3.5 text-indigo-500" />
+                                        <span>地圖</span>
                                     </button>
                                 </div>
                             )}
