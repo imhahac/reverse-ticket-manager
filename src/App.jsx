@@ -85,7 +85,7 @@ const CONTENT_COMPONENT_BY_TAB = {
     timeline: SplitPlannerView,
     costs: CostManager,
     packing: PackingAndTodoManager,
-    analytics: CostDashboard,
+    analytics: CostManager,
 };
 
 function AppContent() {

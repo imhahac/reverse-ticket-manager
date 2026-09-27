@@ -15,6 +15,7 @@ import {
     Check, 
     Trash2, 
     Calendar, 
+    Clock,
     FileText, 
     Loader2, 
     Plane, 
@@ -317,14 +318,27 @@ export default function ReservationManager({ unifiedReservations = null }) {
                                             )}
 
                                             {res.flightDetails?.departureTime && (
-                                                <span className="flex items-center gap-1 text-slate-400">
-                                                    <Calendar className="w-3 h-3" />
+                                                <span className="flex items-center gap-1 text-slate-600 font-medium bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                                                    <Clock className="w-3 h-3 text-indigo-500" />
                                                     出發: {res.flightDetails.departureTime}
                                                 </span>
                                             )}
 
+                                            {res.flightDetails?.arrivalTime && (
+                                                <span className="flex items-center gap-1 text-slate-600 font-medium bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                                                    <Clock className="w-3 h-3 text-emerald-500" />
+                                                    抵達: {res.flightDetails.arrivalTime}
+                                                </span>
+                                            )}
+
+                                            {res.flightDetails?.airline && (
+                                                <span className="text-slate-600 font-medium bg-indigo-50/70 text-indigo-800 px-2 py-0.5 rounded border border-indigo-100/60">
+                                                    ✈️ {res.flightDetails.airline}
+                                                </span>
+                                            )}
+
                                             {res.accommodationDetails?.checkInDate && (
-                                                <span className="flex items-center gap-1 text-slate-400">
+                                                <span className="flex items-center gap-1 text-slate-500">
                                                     <Calendar className="w-3 h-3" />
                                                     入住: {res.accommodationDetails.checkInDate} ~ {res.accommodationDetails.checkOutDate}
                                                 </span>

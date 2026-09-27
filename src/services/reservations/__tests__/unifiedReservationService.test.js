@@ -67,14 +67,43 @@ describe('unifiedReservationService', () => {
         expect(act.title).toBe('東京馬拉松 Expo 報到');
     });
 
-    it('should ignore items outside trip date range', () => {
-        const outTickets = [
+    it('should correctly integrate standard tickets (outbound + inbound) into reservations', () => {
+        const standardTickets = [
             {
-                id: 't-out',
-                segments: [{ id: 's-out', flightNo: 'CI100', date: '2025-01-01' }]
+                id: 'ticket-real-1',
+                airline: 'China Airlines',
+                type: 'normal',
+                departRegion: 'TSA (台北松山)',
+                returnRegion: 'HND (東京羽田)',
+                outboundDate: '2026-10-16',
+                outboundTime: '18:05',
+                outboundFlightNo: 'CI222',
+                inboundDate: '2026-10-22',
+                inboundTime: '20:00',
+                inboundFlightNo: 'CI109',
+                priceTWD: 16439,
+                isPaid: true
             }
         ];
-        const unified = getUnifiedReservations(mockTrip, [], outTickets, [], []);
-        expect(unified.length).toBe(0);
+
+        const unified = getUnifiedReservations(mockTrip, [], standardTickets, [], []);
+        expect(unified.length).toBe(2);
+
+        const outbound = unified.find(u => u.flightDetails?.flightNumber === 'CI222');
+        expect(outbound).toBeDefined();
+        expect(outbound.title).toContain('CI222');
+        expect(outbound.title).toContain('去程');
+        expect(outbound.flightDetails.from).toBe('TSA (台北松山)');
+        expect(outbound.flightDetails.to).toBe('HND (東京羽田)');
+        expect(outbound.sourceLabel).toBe('機票管理同步');
+        expect(outbound.status).toBe('confirmed');
+
+        const inbound = unified.find(u => u.flightDetails?.flightNumber === 'CI109');
+        expect(inbound).toBeDefined();
+        expect(inbound.title).toContain('CI109');
+        expect(inbound.title).toContain('回程');
+        expect(inbound.flightDetails.from).toBe('HND (東京羽田)');
+        expect(inbound.flightDetails.to).toBe('TSA (台北松山)');
     });
 });
+
