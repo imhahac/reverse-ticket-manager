@@ -8,7 +8,7 @@
  * - 支援景點搜尋 (OSM Nominatim) 與維基百科圖文富化
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
     Calendar, 
     Plus, 
@@ -52,53 +52,121 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, 
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [addPlaceTargetDayIndex, setAddPlaceTargetDayIndex] = useState(0);
     const [isOptimizing, setIsOptimizing] = useState(false);
     const [routeStats, setRouteStats] = useState(null);
 
-    // 景點修改狀態
+    // 1. 根據旅程日期生成天數列表 (Day 1...Day N)
+    const tripDays = useMemo(() => {
+        const days = [];
+        if (activeTrip && activeTrip.startDate && activeTrip.endDate) {
+            const start = new Date(activeTrip.startDate);
+            const end = new Date(activeTrip.endDate);
+            let curr = new Date(start);
+            let idx = 1;
+            while (curr <= end) {
+                days.push({
+                    dayIndex: idx,
+                    date: curr.toISOString().slice(0, 10)
+                });
+                curr.setDate(curr.getDate() + 1);
+                idx++;
+            }
+        }
+        if (days.length === 0) {
+            const baseDate = activeTrip?.startDate || new Date().toISOString().slice(0, 10);
+            days.push({ dayIndex: 1, date: baseDate });
+        }
+        return days;
+    }, [activeTrip?.startDate, activeTrip?.endDate]);
+
+    // 景點修改狀態 (支援改名、備註與更換所屬日程/日期)
     const [editingPlace, setEditingPlace] = useState(null);
     const [editPlaceName, setEditPlaceName] = useState('');
     const [editPlaceAddress, setEditPlaceAddress] = useState('');
+    const [editPlaceDayIndex, setEditPlaceDayIndex] = useState(0);
 
     const handleOpenEditPlace = (place) => {
         setEditingPlace(place);
         setEditPlaceName(place.name || '');
         setEditPlaceAddress(place.address || '');
+        setEditPlaceDayIndex(place.dayIndex ?? selectedDayIndex);
     };
 
     const handleSaveEditPlace = async (e) => {
         e.preventDefault();
         if (!editingPlace || !editPlaceName.trim()) return;
+
+        const originDayIndex = editingPlace.dayIndex ?? selectedDayIndex;
+        const targetDayIndex = Number(editPlaceDayIndex);
+        const isDayChanged = targetDayIndex !== originDayIndex;
+
+        const targetPlaces = dayPlacesMap[targetDayIndex] || [];
         const updated = {
             ...editingPlace,
             name: editPlaceName.trim(),
-            address: editPlaceAddress.trim()
+            address: editPlaceAddress.trim(),
+            dayIndex: targetDayIndex,
+            orderIndex: isDayChanged ? targetPlaces.length : (editingPlace.orderIndex || 0)
         };
+
         await placeItemRepo.save(updated);
-        setDayPlacesMap(prev => ({
-            ...prev,
-            [selectedDayIndex]: (prev[selectedDayIndex] || []).map(p => p.id === updated.id ? updated : p)
-        }));
+
+        setDayPlacesMap(prev => {
+            if (isDayChanged) {
+                const updatedOrigin = (prev[originDayIndex] || []).filter(p => p.id !== updated.id);
+                const updatedTarget = [...(prev[targetDayIndex] || []), updated];
+                return {
+                    ...prev,
+                    [originDayIndex]: updatedOrigin,
+                    [targetDayIndex]: updatedTarget
+                };
+            } else {
+                return {
+                    ...prev,
+                    [originDayIndex]: (prev[originDayIndex] || []).map(p => p.id === updated.id ? updated : p)
+                };
+            }
+        });
+
         setEditingPlace(null);
-        toast.success(`已更新景點：${updated.name}`);
+        if (isDayChanged) {
+            const targetDayInfo = tripDays[targetDayIndex];
+            const dayLabel = targetDayInfo ? `Day ${targetDayInfo.dayIndex} (${targetDayInfo.date})` : `Day ${targetDayIndex + 1}`;
+            toast.success(`已將「${updated.name}」移至 ${dayLabel}`);
+        } else {
+            toast.success(`已更新景點：${updated.name}`);
+        }
     };
 
-    // 1. 根據旅程日期生成天數列表 (Day 1...Day N)
-    const tripDays = [];
-    if (activeTrip && activeTrip.startDate && activeTrip.endDate) {
-        const start = new Date(activeTrip.startDate);
-        const end = new Date(activeTrip.endDate);
-        let curr = new Date(start);
-        let idx = 1;
-        while (curr <= end) {
-            tripDays.push({
-                dayIndex: idx,
-                date: curr.toISOString().slice(0, 10)
-            });
-            curr.setDate(curr.getDate() + 1);
-            idx++;
-        }
-    }
+    // 快速換日（直接由卡片選取）
+    const handleQuickMoveDay = async (place, targetDayIndex) => {
+        const originDayIndex = place.dayIndex ?? selectedDayIndex;
+        if (targetDayIndex === originDayIndex) return;
+
+        const targetPlaces = dayPlacesMap[targetDayIndex] || [];
+        const updated = {
+            ...place,
+            dayIndex: targetDayIndex,
+            orderIndex: targetPlaces.length
+        };
+
+        await placeItemRepo.save(updated);
+
+        setDayPlacesMap(prev => {
+            const updatedOrigin = (prev[originDayIndex] || []).filter(p => p.id !== place.id);
+            const updatedTarget = [...(prev[targetDayIndex] || []), updated];
+            return {
+                ...prev,
+                [originDayIndex]: updatedOrigin,
+                [targetDayIndex]: updatedTarget
+            };
+        });
+
+        const targetDayInfo = tripDays[targetDayIndex];
+        const dayLabel = targetDayInfo ? `Day ${targetDayInfo.dayIndex} (${targetDayInfo.date.slice(5)})` : `Day ${targetDayIndex + 1}`;
+        toast.success(`已將「${place.name}」移至 ${dayLabel}`);
+    };
 
     // 2. 載入景點資料
     useEffect(() => {
@@ -277,16 +345,18 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, 
     const handleAddPlace = async (result) => {
         // 富化維基百科介紹
         const enrichment = await enrichPlaceWithWikipedia(result.name);
+        const targetDay = Number(addPlaceTargetDayIndex);
+        const targetPlaces = dayPlacesMap[targetDay] || [];
 
         const newPlace = {
             id: `place_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
             tripId: activeTrip.id,
-            dayIndex: selectedDayIndex,
+            dayIndex: targetDay,
             name: result.name,
             lat: result.lat,
             lng: result.lng,
             address: result.address,
-            orderIndex: activeDayPlaces.length,
+            orderIndex: targetPlaces.length,
             isLocked: false,
             enrichment: enrichment || null,
             createdAt: Date.now()
@@ -295,10 +365,12 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, 
         await placeItemRepo.save(newPlace);
         setDayPlacesMap(prev => ({
             ...prev,
-            [selectedDayIndex]: [...(prev[selectedDayIndex] || []), newPlace]
+            [targetDay]: [...(prev[targetDay] || []), newPlace]
         }));
 
-        toast.success(`已加入景點：${newPlace.name}`);
+        const targetDayInfo = tripDays[targetDay];
+        const dayLabel = targetDayInfo ? `Day ${targetDayInfo.dayIndex} (${targetDayInfo.date})` : `Day ${targetDay + 1}`;
+        toast.success(`已將「${newPlace.name}」排入 ${dayLabel}`);
         setIsAddModalOpen(false);
         setSearchQuery('');
         setSearchResults([]);
@@ -481,7 +553,10 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, 
                     )}
 
                     <button
-                        onClick={() => setIsAddModalOpen(true)}
+                        onClick={() => {
+                            setAddPlaceTargetDayIndex(selectedDayIndex);
+                            setIsAddModalOpen(true);
+                        }}
                         className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-sm transition flex items-center gap-1"
                     >
                         <Plus className="w-3.5 h-3.5" />
@@ -541,7 +616,25 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, 
                             </div>
 
                             {/* 景點右側操作按鈕 */}
-                            <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                {/* 快速更換所屬日程 */}
+                                {tripDays.length > 1 && (
+                                    <div className="relative flex items-center">
+                                        <select
+                                            value={place.dayIndex ?? selectedDayIndex}
+                                            onChange={(e) => handleQuickMoveDay(place, Number(e.target.value))}
+                                            className="text-[11px] bg-slate-50 hover:bg-indigo-50/70 hover:text-indigo-600 text-slate-600 font-bold border border-gray-200 rounded-lg px-2 py-1.5 cursor-pointer transition focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                            title="更換日程（快速移動至其他天）"
+                                        >
+                                            {tripDays.map((d, dIdx) => (
+                                                <option key={d.date} value={dIdx}>
+                                                    移至 Day {d.dayIndex} ({d.date.slice(5)})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
                                 <button
                                     onClick={() => handleToggleLock(place)}
                                     title={place.isLocked ? '解鎖排序' : '鎖定此位置 (最佳化時不調動)'}
@@ -567,7 +660,7 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, 
                                 </button>
                                 <button
                                     onClick={() => handleOpenEditPlace(place)}
-                                    title="修改景點資訊"
+                                    title="修改景點資訊與更換日程"
                                     className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 rounded-lg transition"
                                 >
                                     <Edit2 className="w-3.5 h-3.5" />
@@ -588,12 +681,30 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, 
             {isAddModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl text-slate-800 animate-in fade-in zoom-in-95 duration-150">
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center justify-between mb-3">
                             <h3 className="font-bold text-base flex items-center gap-2">
-                                <MapPin className="w-5 h-5 text-indigo-600" /> 加入景點至 Day {activeDayInfo.dayIndex}
+                                <MapPin className="w-5 h-5 text-indigo-600" /> 加入景點
                             </h3>
                             <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-600">&times;</button>
                         </div>
+
+                        {tripDays.length > 0 && (
+                            <div className="flex items-center gap-2 mb-3 bg-indigo-50/60 p-2.5 rounded-xl border border-indigo-100 text-xs">
+                                <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
+                                <span className="font-bold text-slate-700 shrink-0">加入至日程：</span>
+                                <select
+                                    value={addPlaceTargetDayIndex}
+                                    onChange={(e) => setAddPlaceTargetDayIndex(Number(e.target.value))}
+                                    className="flex-1 bg-white border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-500"
+                                >
+                                    {tripDays.map((d, dIdx) => (
+                                        <option key={d.date} value={dIdx}>
+                                            Day {d.dayIndex} ({d.date})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
 
                         <form onSubmit={handleSearch} className="flex gap-2 mb-4">
                             <input
@@ -638,7 +749,7 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, 
                 </div>
             )}
 
-            {/* 6. 修改景點 Modal */}
+            {/* 6. 修改景點 Modal (支援改名、備註與更換所屬日程) */}
             {editingPlace && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl text-slate-800 animate-in fade-in zoom-in-95 duration-150">
@@ -655,6 +766,23 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, 
                             </button>
                         </div>
                         <form onSubmit={handleSaveEditPlace} className="space-y-3.5">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                                    <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                                    <span>所屬日程 (更換日期)</span>
+                                </label>
+                                <select
+                                    value={editPlaceDayIndex}
+                                    onChange={(e) => setEditPlaceDayIndex(Number(e.target.value))}
+                                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:border-indigo-500 bg-white"
+                                >
+                                    {tripDays.map((d, dIdx) => (
+                                        <option key={d.date} value={dIdx}>
+                                            Day {d.dayIndex} ({d.date})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">景點名稱</label>
                                 <input
