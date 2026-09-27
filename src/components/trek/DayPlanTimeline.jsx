@@ -200,27 +200,11 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, 
         }
     }, [selectedDayIndex, dayPlacesMap, onSelectDayPlaces]);
 
-    // 4. 抓取當前選取日期的天氣預報
-    useEffect(() => {
-        const dayInfo = tripDays[selectedDayIndex];
-        if (!dayInfo) return;
-        const currentPlaces = dayPlacesMap[selectedDayIndex] || [];
-        const lat = currentPlaces[0]?.lat || 35.6812;
-        const lng = currentPlaces[0]?.lng || 139.7671;
-
-        if (!weatherMap[dayInfo.date]) {
-            getDayWeather(lat, lng, dayInfo.date).then(w => {
-                if (w) setWeatherMap(prev => ({ ...prev, [dayInfo.date]: w }));
-            });
-        }
-    }, [selectedDayIndex, tripDays, dayPlacesMap]);
-
     const activeDayPlaces = dayPlacesMap[selectedDayIndex] || [];
     const activeDayInfo = tripDays[selectedDayIndex] || { dayIndex: 1, date: activeTrip?.startDate };
-    const currentWeather = weatherMap[activeDayInfo.date];
 
     // ── 整合當日預訂 (機票、飯店、活動) ──────────────────────────
-    const dayReservations = React.useMemo(() => {
+    const dayReservations = useMemo(() => {
         if (!activeDayInfo?.date || !activeReservations || activeReservations.length === 0) return [];
         const dateStr = activeDayInfo.date;
         return activeReservations.filter(r => {
@@ -240,6 +224,60 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, 
             return eventDate === dateStr;
         });
     }, [activeDayInfo?.date, activeReservations]);
+
+    // ── 計算當日天氣代表地區與坐標 ──────────────────────────
+    const currentDayLocation = useMemo(() => {
+        // 1. 優先使用當日排定的第一個景點
+        if (activeDayPlaces.length > 0) {
+            const first = activeDayPlaces[0];
+            let district = '';
+            if (first.address) {
+                const parts = first.address.split(',').map(s => s.trim());
+                const match = parts.find(p => /[區市都縣府DistrictWardCity]/.test(p));
+                if (match) district = match;
+            }
+            return {
+                lat: first.lat,
+                lng: first.lng,
+                label: district ? `${district} · ${first.name}` : first.name
+            };
+        }
+
+        // 2. 次之使用當日住宿飯店
+        const hotelRes = dayReservations.find(r => r.type === 'hotel' || r.type === 'accommodation');
+        if (hotelRes) {
+            const rawTitle = hotelRes.accommodationDetails?.name || hotelRes.title?.replace('🏨 住宿:', '').trim() || '住宿周邊';
+            const shortName = rawTitle.split(' ')[0] || rawTitle;
+            return {
+                lat: 35.6812,
+                lng: 139.7671,
+                label: shortName
+            };
+        }
+
+        // 3. 預設行程目的地或基準中心
+        const dest = activeTrip?.destination || (activeTrip?.title?.includes('Tokyo') || activeTrip?.title?.includes('東京') ? '東京' : '');
+        return {
+            lat: 35.6812,
+            lng: 139.7671,
+            label: dest ? `${dest} (市中心)` : '東京 (市中心)'
+        };
+    }, [activeDayPlaces, dayReservations, activeTrip]);
+
+    // 4. 抓取當前選取日期的天氣預報 (依 currentDayLocation 動態查詢微氣候)
+    useEffect(() => {
+        const dayInfo = tripDays[selectedDayIndex];
+        if (!dayInfo) return;
+        const { lat, lng } = currentDayLocation;
+
+        if (!weatherMap[dayInfo.date]) {
+            getDayWeather(lat, lng, dayInfo.date).then(w => {
+                if (w) setWeatherMap(prev => ({ ...prev, [dayInfo.date]: w }));
+            });
+        }
+    }, [selectedDayIndex, tripDays, currentDayLocation, weatherMap]);
+
+    const currentWeather = weatherMap[activeDayInfo.date];
 
     // ── 景點操作 ──────────────────────────────────────────────────────────
 
@@ -413,13 +451,21 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, 
                     </p>
                 </div>
 
-                {/* 天氣預報 Badge */}
+                {/* 天氣預報 Badge (附帶地點與地區標籤) */}
                 {currentWeather ? (
-                    <div className="flex items-center gap-2 bg-sky-50 border border-sky-100 px-3 py-1.5 rounded-xl text-sky-800">
-                        <span className="text-xl">{currentWeather.icon}</span>
+                    <div className="flex items-center gap-2.5 bg-sky-50/90 border border-sky-100 px-3 py-1.5 rounded-xl text-sky-800 shadow-2xs">
+                        <span className="text-xl shrink-0">{currentWeather.icon}</span>
                         <div>
-                            <div className="text-xs font-bold leading-tight">{currentWeather.desc}</div>
-                            <div className="text-[10px] text-sky-600">
+                            <div className="flex items-center gap-1.5 leading-tight flex-wrap">
+                                <span className="text-xs font-bold">{currentWeather.desc}</span>
+                                {currentDayLocation.label && (
+                                    <span className="text-[10px] font-semibold bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-sky-200/50">
+                                        <MapPin className="w-2.5 h-2.5 shrink-0 text-sky-600" />
+                                        <span className="truncate max-w-[130px]">{currentDayLocation.label}</span>
+                                    </span>
+                                )}
+                            </div>
+                            <div className="text-[10px] text-sky-600 mt-0.5 font-medium">
                                 {currentWeather.tempMin}°C ~ {currentWeather.tempMax}°C · 降雨 {currentWeather.rainProb}%
                             </div>
                         </div>
