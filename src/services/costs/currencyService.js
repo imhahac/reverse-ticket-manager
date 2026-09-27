@@ -1,6 +1,6 @@
 /**
  * currencyService.js
- * Frankfurter API 即時匯率查詢與凍結機制 (免 Key)
+ * exchangerate-api 即時匯率查詢與凍結機制 (與機票/飯店/活動管理統一 API 數據源，免 Key)
  * 支援任意幣別換算為 Trip 基準結算幣別 (預設 TWD)
  */
 
@@ -41,7 +41,7 @@ const rateCache = {}; // 快取: `${from}_${to}` -> { rate, timestamp }
 const CACHE_DURATION_MS = 1000 * 60 * 30; // 30 分鐘快取
 
 /**
- * 取得最新匯率 (優先走 Frankfurter API，失敗則回退離線基準匯率)
+ * 取得最新匯率 (統一採用 exchangerate-api，失敗則回退離線基準匯率)
  * @param {string} fromCurrency - 例如 'JPY'
  * @param {string} toCurrency - 例如 'TWD'
  * @returns {Promise<number>} 1 單位 fromCurrency 等於多少 toCurrency
@@ -59,24 +59,26 @@ export async function getExchangeRate(fromCurrency = 'TWD', toCurrency = 'TWD') 
     }
 
     try {
-        const url = `https://api.frankfurter.app/latest?from=${from}&to=${to}`;
+        const url = `https://api.exchangerate-api.com/v4/latest/${from}`;
         const res = await fetch(url);
         if (res.ok) {
             const data = await res.json();
             const rate = data.rates?.[to];
-            if (typeof rate === 'number') {
+            if (typeof rate === 'number' && rate > 0) {
                 rateCache[cacheKey] = { rate, timestamp: Date.now() };
                 return rate;
             }
         }
     } catch (err) {
-        logger.warn(`Frankfurter rate fetch failed for ${from} -> ${to}, using fallback:`, err);
+        logger.warn(`Exchange rate fetch failed for ${from} -> ${to}, using fallback:`, err);
     }
 
     // 離線備援計算: rate = (FALLBACK[from] / FALLBACK[to])
     const fromVal = FALLBACK_RATES_TO_TWD[from] || 1;
     const toVal = FALLBACK_RATES_TO_TWD[to] || 1;
     const fallbackRate = Math.round((fromVal / toVal) * 10000) / 10000;
+    // 寫入快取防範頻繁失敗導致的網路風暴
+    rateCache[cacheKey] = { rate: fallbackRate, timestamp: Date.now() };
     return fallbackRate;
 }
 

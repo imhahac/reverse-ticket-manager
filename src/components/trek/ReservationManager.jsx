@@ -29,12 +29,14 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTrek } from '../../contexts/TrekContext';
+import { useUIContext } from '../../contexts/UIContext';
 import { reservationRepo } from '../../services/db';
 import { RESERVATION_TYPES, RESERVATION_TYPE_CONFIG, RESERVATION_STATUS } from '../../constants/reservationTypes';
 import { importBookingFile } from '../../services/import';
 
 export default function ReservationManager({ unifiedReservations = null }) {
     const { activeTrip, reservations, refreshTrips } = useTrek();
+    const { setActiveTab } = useUIContext();
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [isUploading, setIsUploading] = useState(false);
     const [copiedId, setCopiedId] = useState(null);
@@ -354,13 +356,23 @@ export default function ReservationManager({ unifiedReservations = null }) {
                                 </div>
 
                                 {/* 右側金額與操作 */}
-                                <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4 border-t sm:border-t-0 pt-2 sm:pt-0">
+                                <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-3 border-t sm:border-t-0 pt-2 sm:pt-0">
                                     <div className="text-left sm:text-right">
                                         <div className="font-bold text-base text-slate-900">
                                             ${res.cost?.toLocaleString() || 0}
                                             <span className="text-xs font-normal text-slate-400 ml-1">{res.currency || 'TWD'}</span>
                                         </div>
                                     </div>
+                                    {Number(res.cost) > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveTab('costs')}
+                                            className="px-2.5 py-1 text-xs font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-lg transition flex items-center gap-1 shadow-sm shrink-0"
+                                            title="前往財務中心設定旅伴分帳"
+                                        >
+                                            <span>👥 分帳</span>
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => handleDeleteReservation(res)}
                                         className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"

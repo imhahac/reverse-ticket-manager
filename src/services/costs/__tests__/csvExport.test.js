@@ -41,4 +41,29 @@ describe('csvExportService - UTF-8 BOM CSV Generation', () => {
         expect(csv).toContain('=== 智慧清帳還款建議 ===');
         expect(csv).toContain('Bob,Alice,3150');
     });
+
+    it('should sanitize CSV formula injection attempts (CWE-1236)', () => {
+        const maliciousExpenses = [
+            {
+                id: 'exp_hack',
+                title: '=cmd|\' /C calc\'!A0',
+                category: '+12345',
+                amount: 100,
+                currency: 'USD',
+                baseAmount: 3200,
+                paidBy: '@admin',
+                splitType: 'equal',
+                settled: true,
+                createdAt: 1743465600000
+            }
+        ];
+
+        const csv = generateExpensesCsvContent('安全測試旅程', maliciousExpenses, [], 'USD');
+
+        // Formatted cells starting with [=+\-@\t\r] must be prefixed with a single quote
+        expect(csv).toContain("'=cmd|' /C calc'!A0");
+        expect(csv).toContain("'+12345");
+        expect(csv).toContain("'@admin");
+        expect(csv).toContain('換算基準金額(USD)');
+    });
 });

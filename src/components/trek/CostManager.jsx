@@ -28,7 +28,11 @@ import {
     Hotel,
     Ticket,
     MapPin,
-    Globe
+    Globe,
+    Scale,
+    Minus,
+    Check,
+    Info
 } from 'lucide-react';
 import { 
     PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
@@ -42,7 +46,7 @@ import { useTicketDataContext } from '../../contexts/DataContext';
 import { expenseRepo } from '../../services/db';
 import { isDateOverlap } from '../../services/reservations/unifiedReservationService';
 import { SUPPORTED_CURRENCIES, getExchangeRate, freezeExchangeRate } from '../../services/costs/currencyService';
-import { splitEqual, calculateNetBalances } from '../../services/costs/splitCalculator';
+import { splitEqual, splitByWeights, calculateNetBalances } from '../../services/costs/splitCalculator';
 import { calculateSettleUpTransactions } from '../../services/costs/settleUpService';
 import { exportExpensesToCSV } from '../../services/costs/csvExportService';
 
@@ -75,7 +79,7 @@ const CustomTooltip = ({ active, payload }) => {
 };
 
 export default function CostManager() {
-    const { activeTrip, trips = [] } = useTrek();
+    const { activeTrip, trips = [], reservations = [] } = useTrek();
     const { activeTab } = useUIContext();
     const {
         safeTickets = [],
@@ -105,15 +109,22 @@ export default function CostManager() {
     const [customExpenses, setCustomExpenses] = useState([]);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
+    const [editingExpense, setEditingExpense] = useState(null);
 
     // 新增支出表單狀態
     const [formTitle, setFormTitle] = useState('');
     const [formCategory, setFormCategory] = useState('food');
     const [formAmount, setFormAmount] = useState('');
     const [formCurrency, setFormCurrency] = useState('JPY');
+    const [formDate, setFormDate] = useState(() => new Date().toISOString().slice(0, 10));
     const [liveRate, setLiveRate] = useState(1);
     const [formPaidBy, setFormPaidBy] = useState('我');
-    const [participantsText, setParticipantsText] = useState('我, 旅伴A, 旅伴B');
+    const [splitMode, setSplitMode] = useState('equal'); // 'equal' | 'ratio' | 'exact' | 'personal'
+    const [allMembers, setAllMembers] = useState(['我', '旅伴A', '旅伴B']);
+    const [selectedMembers, setSelectedMembers] = useState(['我', '旅伴A', '旅伴B']);
+    const [memberWeights, setMemberWeights] = useState({ '我': 1, '旅伴A': 1, '旅伴B': 1 });
+    const [memberExactAmounts, setMemberExactAmounts] = useState({});
+    const [newMemberName, setNewMemberName] = useState('');
 
     // 1. 載入手動記帳支出 (依 Scope 切換當前行程或全域)
     const loadCustomExpenses = useCallback(async () => {
@@ -136,7 +147,7 @@ export default function CostManager() {
         loadCustomExpenses();
     }, [loadCustomExpenses]);
 
-    // 2. 當幣別變動時，即時獲取 Frankfurter 預估匯率
+    // 2. 當幣別變動時，即時獲取預估匯率 (統一採用 exchangerate-api)
     useEffect(() => {
         const base = activeTrip?.baseCurrency || 'TWD';
         getExchangeRate(formCurrency, base).then(r => setLiveRate(r));
@@ -250,29 +261,44 @@ export default function CostManager() {
             });
         });
 
+        // 整合其他通用預訂 (例如直接於預訂中心新增或匯入之憑證)
+        (reservations || []).forEach(res => {
+            if (res.source) return; // 來源已為 ticket / hotel / activity 者不重複
+            if (scope === 'trip' && res.tripId && activeTrip?.id && res.tripId !== activeTrip.id) return;
+            const id = `res_${res.id}`;
+            if (existingIds.has(id)) return;
+            const cost = Number(res.cost) || 0;
+            if (cost <= 0) return;
+            list.push({
+                id,
+                tripId: res.tripId || activeTrip?.id,
+                title: `📑 預訂: ${res.title || '項目'}`,
+                category: res.type === 'flight' ? 'ticket' : res.type === 'accommodation' ? 'lodging' : 'other',
+                amount: cost,
+                currency: res.currency || 'TWD',
+                rateToTripBase: 1,
+                baseCurrency: 'TWD',
+                baseAmount: cost,
+                paidBy: '我',
+                participants: ['我'],
+                shares: { '我': cost },
+                settled: true,
+                sourceLabel: '預訂憑證',
+                isSystemLinked: true,
+                createdAt: res.createdAt || Date.now()
+            });
+        });
+
         list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         return list;
-    }, [customExpenses, scopedTickets, scopedHotels, scopedActivities, activeTrip?.id]);
+    }, [customExpenses, scopedTickets, scopedHotels, scopedActivities, reservations, activeTrip?.id, scope]);
 
-    // 5. 費用總計與預算計算
+    // 5. 費用總計與預算計算 (以唯一真實來源 unifiedExpenses 加總，徹底杜絕自訂分帳時之雙重加總錯帳)
     const baseCurrency = activeTrip?.baseCurrency || 'TWD';
-    const scopedTicketsTWD = useMemo(() => 
-        scopedTickets.reduce((sum, t) => sum + (t.priceTWD || t.price || 0), 0)
-    , [scopedTickets]);
 
-    const scopedHotelsTWD = useMemo(() => 
-        scopedHotels.reduce((sum, h) => sum + (h.priceTWD || h.priceTotal || 0), 0)
-    , [scopedHotels]);
-
-    const scopedActivitiesTWD = useMemo(() => 
-        scopedActivities.reduce((sum, a) => sum + (a.priceTWD || a.cost || 0), 0)
-    , [scopedActivities]);
-
-    const totalCustomSpentTWD = useMemo(() => 
-        customExpenses.reduce((sum, e) => sum + (e.baseAmount || 0), 0)
-    , [customExpenses]);
-
-    const totalSpentTWD = scopedTicketsTWD + scopedHotelsTWD + scopedActivitiesTWD + totalCustomSpentTWD;
+    const totalSpentTWD = useMemo(() => 
+        unifiedExpenses.reduce((sum, e) => sum + (e.baseAmount || 0), 0)
+    , [unifiedExpenses]);
 
     const totalPaidTWD = useMemo(() => 
         unifiedExpenses.filter(e => e.settled).reduce((sum, e) => sum + (e.baseAmount || 0), 0)
@@ -281,6 +307,24 @@ export default function CostManager() {
     const totalPendingTWD = useMemo(() => 
         unifiedExpenses.filter(e => !e.settled).reduce((sum, e) => sum + (e.baseAmount || 0), 0)
     , [unifiedExpenses]);
+
+    const breakdownCategoryTWD = useMemo(() => {
+        let flights = 0;
+        let lodging = 0;
+        let other = 0;
+        unifiedExpenses.forEach(exp => {
+            const cat = exp.category || 'other';
+            const amt = exp.baseAmount || 0;
+            if (cat === 'ticket' || cat === 'flight') {
+                flights += amt;
+            } else if (cat === 'lodging' || cat === 'hotel') {
+                lodging += amt;
+            } else {
+                other += amt;
+            }
+        });
+        return { flights, lodging, other };
+    }, [unifiedExpenses]);
 
     const totalBudget = useMemo(() => {
         if (scope === 'trip') return activeTrip?.budget || 0;
@@ -293,13 +337,32 @@ export default function CostManager() {
     const netBalances = useMemo(() => calculateNetBalances(unifiedExpenses), [unifiedExpenses]);
     const settleTransactions = useMemo(() => calculateSettleUpTransactions(netBalances), [netBalances]);
 
-    // 7. 圖表分析資料
-    const pieData = useMemo(() => [
-        { name: '✈️ 機票', value: scopedTicketsTWD, key: 'flights' },
-        { name: '🏨 住宿', value: scopedHotelsTWD, key: 'hotels' },
-        { name: '🎫 活動', value: scopedActivitiesTWD, key: 'activities' },
-        { name: '🛍️ 日常雜支', value: totalCustomSpentTWD, key: 'custom' },
-    ].filter(d => d.value > 0), [scopedTicketsTWD, scopedHotelsTWD, scopedActivitiesTWD, totalCustomSpentTWD]);
+    // 7. 圖表分析資料 (直接由已正規化之 unifiedExpenses 依分類統計，精確無重疊)
+    const pieData = useMemo(() => {
+        const catMap = {
+            ticket: { name: '✈️ 機票/活動', value: 0, key: 'flights' },
+            flight: { name: '✈️ 機票', value: 0, key: 'flights' },
+            lodging: { name: '🏨 住宿', value: 0, key: 'hotels' },
+            hotel: { name: '🏨 住宿', value: 0, key: 'hotels' },
+            food: { name: '🍱 餐飲美食', value: 0, key: 'food' },
+            transport: { name: '🚗 交通接駁', value: 0, key: 'transport' },
+            shopping: { name: '🛍️ 購物', value: 0, key: 'shopping' },
+            entertainment: { name: '🎟️ 娛樂門票', value: 0, key: 'entertainment' },
+            other: { name: '📑 其他支出', value: 0, key: 'other' }
+        };
+
+        const resultCategories = {};
+        unifiedExpenses.forEach(exp => {
+            const cat = exp.category || 'other';
+            const target = catMap[cat] || catMap.other;
+            if (!resultCategories[target.key]) {
+                resultCategories[target.key] = { name: target.name, value: 0, key: target.key };
+            }
+            resultCategories[target.key].value += (exp.baseAmount || 0);
+        });
+
+        return Object.values(resultCategories).filter(d => d.value > 0);
+    }, [unifiedExpenses]);
 
     const barData = useMemo(() => {
         return (filteredItinerary || [])
@@ -313,6 +376,76 @@ export default function CostManager() {
             .slice(0, 12);
     }, [filteredItinerary]);
 
+    // ── 旅伴管理與即時分攤試算 ──────────────────────────────────────────
+    useEffect(() => {
+        if (customExpenses.length > 0) {
+            setAllMembers(prev => {
+                const set = new Set(prev);
+                customExpenses.forEach(exp => {
+                    if (exp.paidBy) set.add(exp.paidBy);
+                    if (Array.isArray(exp.participants)) {
+                        exp.participants.forEach(p => set.add(p));
+                    }
+                });
+                return Array.from(set);
+            });
+        }
+    }, [customExpenses]);
+
+    const handleAddMember = (e) => {
+        e?.preventDefault?.();
+        const trimmed = newMemberName.trim();
+        if (!trimmed) return;
+        if (!allMembers.includes(trimmed)) {
+            setAllMembers(prev => [...prev, trimmed]);
+        }
+        if (!selectedMembers.includes(trimmed)) {
+            setSelectedMembers(prev => [...prev, trimmed]);
+            setMemberWeights(prev => ({ ...prev, [trimmed]: 1 }));
+        }
+        setNewMemberName('');
+    };
+
+    const handleToggleMember = (name) => {
+        setSelectedMembers(prev => {
+            if (prev.includes(name)) {
+                return prev.filter(m => m !== name);
+            } else {
+                return [...prev, name];
+            }
+        });
+    };
+
+    const liveEstimatedBase = Math.round((parseFloat(formAmount) || 0) * (formCurrency === baseCurrency ? 1 : liveRate));
+
+    const previewShares = useMemo(() => {
+        if (liveEstimatedBase <= 0) return {};
+        if (splitMode === 'personal') {
+            return { [formPaidBy.trim() || '我']: liveEstimatedBase };
+        }
+        if (splitMode === 'equal') {
+            return splitEqual(liveEstimatedBase, selectedMembers);
+        }
+        if (splitMode === 'ratio') {
+            const weights = {};
+            selectedMembers.forEach(m => { weights[m] = Number(memberWeights[m]) || 1; });
+            return splitByWeights(liveEstimatedBase, weights);
+        }
+        if (splitMode === 'exact') {
+            const res = {};
+            selectedMembers.forEach(m => { res[m] = parseFloat(memberExactAmounts[m]) || 0; });
+            return res;
+        }
+        return {};
+    }, [liveEstimatedBase, splitMode, formPaidBy, selectedMembers, memberWeights, memberExactAmounts]);
+
+    const exactAllocated = useMemo(() => {
+        if (splitMode !== 'exact') return 0;
+        return selectedMembers.reduce((sum, m) => sum + (parseFloat(memberExactAmounts[m]) || 0), 0);
+    }, [splitMode, selectedMembers, memberExactAmounts]);
+
+    const exactDiff = Math.round(liveEstimatedBase - exactAllocated);
+
     // ── 提交新增手動支出 ──────────────────────────────────────────────────
     const handleAddExpenseSubmit = async (e) => {
         e.preventDefault();
@@ -322,51 +455,130 @@ export default function CostManager() {
             return;
         }
 
-        const participants = participantsText
-            .split(/[,，\s]+/)
-            .map(s => s.trim())
-            .filter(Boolean);
+        let participants = [];
+        let calculatedShares = {};
 
-        if (participants.length === 0) {
-            toast.error('請至少指定一位分攤人員');
-            return;
+        if (splitMode === 'personal') {
+            const payer = formPaidBy.trim() || '我';
+            participants = [payer];
+        } else {
+            participants = selectedMembers.filter(Boolean);
+            if (participants.length === 0) {
+                toast.error('請至少選擇一位分攤人員');
+                return;
+            }
         }
 
         const frozen = await freezeExchangeRate(amt, formCurrency, baseCurrency);
-        const shares = splitEqual(frozen.baseAmount, participants);
 
-        const newExpense = {
-            id: `exp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-            tripId: activeTrip?.id,
+        if (splitMode === 'equal') {
+            calculatedShares = splitEqual(frozen.baseAmount, participants);
+        } else if (splitMode === 'ratio') {
+            const weights = {};
+            participants.forEach(p => { weights[p] = Number(memberWeights[p]) || 1; });
+            calculatedShares = splitByWeights(frozen.baseAmount, weights);
+        } else if (splitMode === 'exact') {
+            let exactSum = 0;
+            participants.forEach(p => {
+                const val = Math.round(Number(memberExactAmounts[p]) || 0);
+                calculatedShares[p] = val;
+                exactSum += val;
+            });
+            if (Math.abs(exactSum - Math.round(frozen.baseAmount)) > 1) {
+                toast.error(`自訂分攤金額總和 ($${exactSum}) 與支出總額 ($${Math.round(frozen.baseAmount)}) 不符，請確認！`);
+                return;
+            }
+        } else if (splitMode === 'personal') {
+            const payer = formPaidBy.trim() || '我';
+            calculatedShares = { [payer]: Math.round(frozen.baseAmount) };
+        }
+
+        const expenseId = editingExpense?.id || `exp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+        const updatedExpense = {
+            id: expenseId,
+            tripId: editingExpense?.tripId || activeTrip?.id,
             title: formTitle.trim() || '未命名支出',
             category: formCategory,
             amount: amt,
             currency: formCurrency,
+            date: formDate,
             rateToTripBase: frozen.rateToTripBase,
             baseCurrency,
             baseAmount: frozen.baseAmount,
             frozenAt: frozen.frozenAt,
             paidBy: formPaidBy.trim() || '我',
-            splitType: 'equal',
+            splitType: splitMode,
             participants,
-            shares,
-            settled: false,
-            createdAt: Date.now()
+            shares: calculatedShares,
+            weights: splitMode === 'ratio' ? memberWeights : undefined,
+            exactAmounts: splitMode === 'exact' ? memberExactAmounts : undefined,
+            settled: editingExpense?.settled ?? false,
+            sourceLabel: editingExpense?.sourceLabel || null,
+            isSystemLinked: Boolean(editingExpense?.isSystemLinked),
+            hasCustomSplit: true,
+            createdAt: editingExpense?.createdAt || Date.now()
         };
 
-        await expenseRepo.save(newExpense);
-        toast.success(`已記錄支出：${newExpense.title} (匯率已凍結: ${frozen.rateToTripBase})`);
+        await expenseRepo.save(updatedExpense);
+        toast.success(`已儲存「${updatedExpense.title}」之分帳與付款人設定！`);
 
+        setEditingExpense(null);
         setFormTitle('');
         setFormAmount('');
         setIsAddModalOpen(false);
         await loadCustomExpenses();
     };
 
+    // ── 打開建立新支出 Modal (保證清空殘留狀態) ──────────────────────────────
+    const handleOpenCreateModal = () => {
+        setEditingExpense(null);
+        setFormTitle('');
+        setFormCategory('food');
+        setFormAmount('');
+        setFormCurrency(baseCurrency || 'TWD');
+        setFormDate(new Date().toISOString().slice(0, 10));
+        setFormPaidBy('我');
+        setSplitMode('equal');
+        setSelectedMembers(['我', '旅伴A', '旅伴B']);
+        setMemberWeights({ '我': 1, '旅伴A': 1, '旅伴B': 1 });
+        setMemberExactAmounts({});
+        setIsAddModalOpen(true);
+    };
+
+    // ── 打開分帳編輯 Modal (支援手動支出與系統自動同步票券) ─────────────────
+    const handleOpenSplitModal = (exp) => {
+        setEditingExpense(exp);
+        setFormTitle(exp.title || '');
+        setFormCategory(exp.category || 'other');
+        setFormAmount(String(exp.amount || exp.baseAmount || ''));
+        setFormCurrency(exp.currency || baseCurrency || 'TWD');
+        setFormDate(exp.date || (exp.createdAt ? new Date(exp.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)));
+        setFormPaidBy(exp.paidBy || '我');
+        setSplitMode(exp.splitType || 'equal');
+        if (Array.isArray(exp.participants) && exp.participants.length > 0) {
+            setSelectedMembers(exp.participants);
+            setAllMembers(prev => Array.from(new Set([...prev, ...exp.participants])));
+        }
+        if (exp.exactAmounts) {
+            setMemberExactAmounts(exp.exactAmounts);
+        } else if (exp.shares) {
+            setMemberExactAmounts(exp.shares);
+        } else {
+            setMemberExactAmounts({});
+        }
+        if (exp.weights) {
+            setMemberWeights(exp.weights);
+        } else {
+            setMemberWeights({ '我': 1, '旅伴A': 1, '旅伴B': 1 });
+        }
+        setIsAddModalOpen(true);
+    };
+
     // ── 標記結清切換 ──────────────────────────────────────────────────────
     const handleToggleSettled = async (exp) => {
-        if (exp.isSystemLinked) {
-            toast.info('此項目由全域票券管理自動同步，請至『票券憑證』修改付款狀態');
+        if (exp.isSystemLinked && !exp.hasCustomSplit) {
+            toast.info('此項目由全域票券管理自動同步，請先點擊「分帳」自訂分帳與結算狀態');
             return;
         }
         const updated = { ...exp, settled: !exp.settled };
@@ -378,7 +590,15 @@ export default function CostManager() {
     // ── 刪除支出 ──────────────────────────────────────────────────────────
     const handleDeleteExpense = async (exp) => {
         if (exp.isSystemLinked) {
-            toast.info(`此項目由「${exp.sourceLabel}」自動同步，請至頂部『票券憑證』刪除`);
+            if (exp.hasCustomSplit) {
+                if (confirm(`確定要清除「${exp.title}」的自訂分帳設定，恢復為預設狀態嗎？`)) {
+                    await expenseRepo.delete(exp.id);
+                    await loadCustomExpenses();
+                    toast.info('已恢復為預設狀態');
+                }
+            } else {
+                toast.info(`此項目由「${exp.sourceLabel}」自動同步，可點擊「分帳」按鈕自訂分攤與付款人，或至頂部『票券憑證』刪除`);
+            }
             return;
         }
         if (confirm(`確定要刪除支出「${exp.title}」嗎？`)) {
@@ -480,7 +700,7 @@ export default function CostManager() {
                     </div>
 
                     <button
-                        onClick={() => exportExpensesToCSV(scope === 'trip' ? (activeTrip?.title || '旅程費用') : '全域財務總匯', unifiedExpenses, settleTransactions)}
+                        onClick={() => exportExpensesToCSV(scope === 'trip' ? (activeTrip?.title || '旅程費用') : '全域財務總匯', unifiedExpenses, settleTransactions, baseCurrency)}
                         title="匯出 UTF-8 BOM CSV 財務清冊"
                         className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-gray-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs"
                     >
@@ -488,7 +708,7 @@ export default function CostManager() {
                         <span className="hidden sm:inline">匯出 CSV</span>
                     </button>
                     <button
-                        onClick={() => setIsAddModalOpen(true)}
+                        onClick={handleOpenCreateModal}
                         className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-1.5"
                     >
                         <Plus className="w-3.5 h-3.5" />
@@ -518,20 +738,20 @@ export default function CostManager() {
 
                         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
                             <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">✈️ 機票支出</span>
-                            <div className="text-2xl font-black text-indigo-600 mt-1 font-mono">{NT(scopedTicketsTWD)}</div>
+                            <div className="text-2xl font-black text-indigo-600 mt-1 font-mono">{NT(breakdownCategoryTWD.flights)}</div>
                             <p className="text-[11px] text-slate-400 mt-1">共 {scopedTickets.length} 筆機票訂單</p>
                         </div>
 
                         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
                             <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">🏨 住宿支出</span>
-                            <div className="text-2xl font-black text-teal-600 mt-1 font-mono">{NT(scopedHotelsTWD)}</div>
+                            <div className="text-2xl font-black text-teal-600 mt-1 font-mono">{NT(breakdownCategoryTWD.lodging)}</div>
                             <p className="text-[11px] text-slate-400 mt-1">共 {scopedHotels.length} 筆飯店住宿</p>
                         </div>
 
                         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
                             <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">🎫 活動與雜支</span>
                             <div className="text-2xl font-black text-orange-600 mt-1 font-mono">
-                                {NT(scopedActivitiesTWD + totalCustomSpentTWD)}
+                                {NT(breakdownCategoryTWD.other)}
                             </div>
                             <p className="text-[11px] text-slate-400 mt-1">活動 {scopedActivities.length} 項 · 雜支 {customExpenses.length} 筆</p>
                         </div>
@@ -726,7 +946,7 @@ export default function CostManager() {
                                     查看還款建議 (Settle-up)
                                 </button>
                                 <button
-                                    onClick={() => exportExpensesToCSV(scope === 'trip' ? (activeTrip?.title || '費用清冊') : '全域財務總匯', unifiedExpenses, settleTransactions)}
+                                    onClick={() => exportExpensesToCSV(scope === 'trip' ? (activeTrip?.title || '費用清冊') : '全域財務總匯', unifiedExpenses, settleTransactions, baseCurrency)}
                                     title="匯出 CSV 報表"
                                     className="p-1.5 border border-gray-200 hover:bg-slate-50 text-slate-600 rounded-lg transition"
                                 >
@@ -753,7 +973,7 @@ export default function CostManager() {
                             </p>
                         </div>
                         <button
-                            onClick={() => setIsAddModalOpen(true)}
+                            onClick={handleOpenCreateModal}
                             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5"
                         >
                             <Plus className="w-4 h-4" />
@@ -795,6 +1015,11 @@ export default function CostManager() {
                                                             🔗 {exp.sourceLabel}
                                                         </span>
                                                     )}
+                                                    {exp.hasCustomSplit && (
+                                                        <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded border border-emerald-200/60 flex items-center gap-0.5">
+                                                            ✨ 自訂分帳
+                                                        </span>
+                                                    )}
                                                     {exp.settled ? (
                                                         <span className="text-[10px] bg-slate-200 text-slate-600 font-bold px-1.5 py-0.5 rounded">已結清</span>
                                                     ) : (
@@ -814,7 +1039,7 @@ export default function CostManager() {
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0">
+                                        <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-2.5 sm:gap-3 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0">
                                             <div className="text-left sm:text-right">
                                                 <div className="font-bold text-base text-slate-900 font-mono">
                                                     ${Math.round(exp.baseAmount).toLocaleString()}
@@ -827,6 +1052,20 @@ export default function CostManager() {
                                                 )}
                                             </div>
 
+                                            {/* 分帳設定按鈕 (支援所有手動與自動同步項目) */}
+                                            <button
+                                                onClick={() => handleOpenSplitModal(exp)}
+                                                title={exp.isSystemLinked ? '設定此票券之付款人與分攤對象' : '編輯分帳設定'}
+                                                className={`px-2.5 py-1.5 rounded-lg border transition flex items-center gap-1 text-xs font-bold ${
+                                                    exp.hasCustomSplit
+                                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                                                        : 'bg-white border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-300'
+                                                }`}
+                                            >
+                                                <Split className="w-3.5 h-3.5 text-indigo-600" />
+                                                <span>分帳</span>
+                                            </button>
+
                                             <button
                                                 onClick={() => handleToggleSettled(exp)}
                                                 title={exp.settled ? '標記為未結清' : '標記為已結清'}
@@ -837,7 +1076,7 @@ export default function CostManager() {
 
                                             <button
                                                 onClick={() => handleDeleteExpense(exp)}
-                                                title={exp.isSystemLinked ? '全域票券管理項目提示' : '刪除支出'}
+                                                title={exp.isSystemLinked ? (exp.hasCustomSplit ? '清除自訂分帳，恢復為預設狀態' : '全域票券管理項目提示') : '刪除支出'}
                                                 className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
                                             >
                                                 <Trash2 className="w-4 h-4" />
@@ -851,13 +1090,22 @@ export default function CostManager() {
                 </div>
             )}
 
-            {/* ── Modal 1: 記錄新支出 ────────────────────────────────────────── */}
+            {/* ── Modal 1: 記錄新支出 / 編輯分帳 ────────────────────────────────────────── */}
             {isAddModalOpen && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl text-slate-800 animate-in fade-in zoom-in-95 duration-150">
-                        <h3 className="font-bold text-base mb-4 flex items-center gap-2">
-                            <Plus className="w-5 h-5 text-indigo-600" /> 記錄新支出 (支援外幣與凍結匯率)
-                        </h3>
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl text-slate-800 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-bold text-base flex items-center gap-2">
+                                <Split className="w-5 h-5 text-indigo-600" />
+                                <span>{editingExpense ? (editingExpense.isSystemLinked ? `設定【${editingExpense.sourceLabel}】分帳與付款人` : '編輯支出與分帳') : '記錄新支出 (支援外幣與凍結匯率)'}</span>
+                            </h3>
+                            <button
+                                onClick={() => { setIsAddModalOpen(false); setEditingExpense(null); }}
+                                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+                            >
+                                &times;
+                            </button>
+                        </div>
                         <form onSubmit={handleAddExpenseSubmit} className="space-y-3.5">
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 mb-1">消費項目</label>
@@ -871,13 +1119,23 @@ export default function CostManager() {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">消費日期</label>
+                                    <input
+                                        type="date"
+                                        required
+                                        value={formDate}
+                                        onChange={(e) => setFormDate(e.target.value)}
+                                        className="w-full border border-gray-300 rounded-xl px-2.5 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                                    />
+                                </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 mb-1">分類</label>
                                     <select
                                         value={formCategory}
                                         onChange={(e) => setFormCategory(e.target.value)}
-                                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                                        className="w-full border border-gray-300 rounded-xl px-2.5 py-2 text-sm focus:outline-none focus:border-indigo-500"
                                     >
                                         {EXPENSE_CATEGORIES.map(c => (
                                             <option key={c.key} value={c.key}>{c.emoji} {c.label}</option>
@@ -891,7 +1149,7 @@ export default function CostManager() {
                                         required
                                         value={formPaidBy}
                                         onChange={(e) => setFormPaidBy(e.target.value)}
-                                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                                        className="w-full border border-gray-300 rounded-xl px-2.5 py-2 text-sm focus:outline-none focus:border-indigo-500"
                                     />
                                 </div>
                             </div>
@@ -917,7 +1175,9 @@ export default function CostManager() {
                                         className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
                                     >
                                         {SUPPORTED_CURRENCIES.map(curr => (
-                                            <option key={curr} value={curr}>{curr}</option>
+                                            <option key={curr.code} value={curr.code}>
+                                                {curr.code} - {curr.name} ({curr.symbol})
+                                            </option>
                                         ))}
                                     </select>
                                 </div>
@@ -934,17 +1194,182 @@ export default function CostManager() {
                                 </div>
                             )}
 
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 mb-1">
-                                    分攤人員 (以逗號分隔，採用最大餘數法平分)
-                                </label>
-                                <input
-                                    type="text"
-                                    value={participantsText}
-                                    onChange={(e) => setParticipantsText(e.target.value)}
-                                    placeholder="我, 旅伴A, 旅伴B"
-                                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
-                                />
+                            {/* ── 分帳設定面板 ── */}
+                            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                        <Users className="w-3.5 h-3.5 text-indigo-600" />
+                                        <span>分帳設定方式</span>
+                                    </label>
+                                    <span className="text-[11px] text-slate-400">
+                                        {splitMode === 'equal' && '等額平分 (最大餘數法)'}
+                                        {splitMode === 'ratio' && '依設定份額/權重分配'}
+                                        {splitMode === 'exact' && '各人自訂固定金額'}
+                                        {splitMode === 'personal' && '付款人獨自全額承擔'}
+                                    </span>
+                                </div>
+
+                                {/* 分帳模式選擇器 */}
+                                <div className="grid grid-cols-4 gap-1.5 bg-white p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                                    {[
+                                        { key: 'equal', label: '👥 等額平分' },
+                                        { key: 'ratio', label: '⚖️ 依比例' },
+                                        { key: 'exact', label: '💵 自訂金額' },
+                                        { key: 'personal', label: '👤 個人自付' }
+                                    ].map(m => (
+                                        <button
+                                            key={m.key}
+                                            type="button"
+                                            onClick={() => setSplitMode(m.key)}
+                                            className={`py-1.5 rounded-lg text-center transition ${
+                                                splitMode === m.key
+                                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                                    : 'text-slate-600 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            {m.label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {splitMode !== 'personal' && (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+                                            <span>參與分攤旅伴：</span>
+                                            <span className="text-[11px] text-indigo-600">已選 {selectedMembers.length} 人</span>
+                                        </div>
+
+                                        {/* 快速標籤 Chips */}
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            {allMembers.map(m => {
+                                                const isSelected = selectedMembers.includes(m);
+                                                return (
+                                                    <button
+                                                        key={m}
+                                                        type="button"
+                                                        onClick={() => handleToggleMember(m)}
+                                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 border ${
+                                                            isSelected
+                                                                ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                                                                : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'
+                                                        }`}
+                                                    >
+                                                        {isSelected && <Check className="w-3 h-3 text-indigo-600" />}
+                                                        <span>{m}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* 新增旅伴輸入 */}
+                                        <div className="flex items-center gap-1.5 pt-1">
+                                            <input
+                                                type="text"
+                                                placeholder="新增旅伴姓名 (如: 小明)"
+                                                value={newMemberName}
+                                                onChange={(e) => setNewMemberName(e.target.value)}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddMember(); } }}
+                                                className="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:border-indigo-500"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleAddMember}
+                                                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-0.5"
+                                            >
+                                                <Plus className="w-3 h-3" />
+                                                <span>加入</span>
+                                            </button>
+                                        </div>
+
+                                        {/* 依比例模式：調整各人權重份額 */}
+                                        {splitMode === 'ratio' && (
+                                            <div className="pt-2 border-t border-slate-200 space-y-1.5">
+                                                <div className="text-[11px] text-slate-500 font-bold">設定每位成員的負擔份額 (例: 1 份、2 份)：</div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {selectedMembers.map(m => (
+                                                        <div key={m} className="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs">
+                                                            <span className="font-bold text-slate-700 truncate">{m}</span>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setMemberWeights(p => ({ ...p, [m]: Math.max(1, (p[m] || 1) - 1) }))}
+                                                                    className="w-5 h-5 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded text-slate-600"
+                                                                >
+                                                                    <Minus className="w-3 h-3" />
+                                                                </button>
+                                                                <span className="font-mono font-bold w-4 text-center">{memberWeights[m] || 1}</span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setMemberWeights(p => ({ ...p, [m]: (p[m] || 1) + 1 }))}
+                                                                    className="w-5 h-5 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded text-slate-600"
+                                                                >
+                                                                    <Plus className="w-3 h-3" />
+                                                                </button>
+                                                                <span className="text-[10px] text-slate-400">份</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* 自訂金額模式：手動輸入固定負擔金額 */}
+                                        {splitMode === 'exact' && (
+                                            <div className="pt-2 border-t border-slate-200 space-y-1.5">
+                                                <div className="flex items-center justify-between text-[11px] font-bold">
+                                                    <span className="text-slate-500">輸入每位成員各自負擔金額 ({baseCurrency})：</span>
+                                                    <span className={exactDiff === 0 ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
+                                                        {exactDiff === 0 ? '✓ 完全平衡' : `差額: ${exactDiff > 0 ? `+${exactDiff}` : exactDiff}`}
+                                                    </span>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {selectedMembers.map(m => (
+                                                        <div key={m} className="flex items-center justify-between bg-white px-2.5 py-1 rounded-lg border border-slate-200 text-xs">
+                                                            <span className="font-bold text-slate-700 truncate mr-2">{m}</span>
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-[10px] text-slate-400">$</span>
+                                                                <input
+                                                                    type="number"
+                                                                    step="any"
+                                                                    value={memberExactAmounts[m] ?? ''}
+                                                                    onChange={(e) => setMemberExactAmounts(p => ({ ...p, [m]: e.target.value }))}
+                                                                    placeholder="0"
+                                                                    className="w-16 font-mono text-right bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-indigo-500"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* 個人自付提示 */}
+                                {splitMode === 'personal' && (
+                                    <div className="p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-lg text-xs text-indigo-800 flex items-center gap-2">
+                                        <Info className="w-4 h-4 text-indigo-600 shrink-0" />
+                                        <span>此筆費用將全額計為【{formPaidBy || '我'}】的個人開銷，不計入其他旅伴的結算拆帳中。</span>
+                                    </div>
+                                )}
+
+                                {/* 即時試算預覽 */}
+                                {liveEstimatedBase > 0 && Object.keys(previewShares).length > 0 && (
+                                    <div className="pt-2 border-t border-slate-200/80">
+                                        <div className="text-[11px] font-bold text-slate-500 mb-1.5 flex items-center justify-between">
+                                            <span>即時試算預覽 ({baseCurrency})：</span>
+                                            <span className="font-mono text-indigo-600 font-bold">總計 ${liveEstimatedBase.toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {Object.entries(previewShares).map(([m, amt]) => (
+                                                <span key={m} className="inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-slate-200 rounded text-xs text-slate-700 font-medium">
+                                                    <span className="text-slate-500">{m}:</span>
+                                                    <span className="font-mono font-bold text-indigo-700">${amt.toLocaleString()}</span>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex gap-2 pt-3">
