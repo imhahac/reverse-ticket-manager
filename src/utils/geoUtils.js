@@ -224,3 +224,147 @@ export async function getAirportCoordinates(code, apiKey) {
     }
     return null;
 }
+
+/**
+ * 全球主流旅遊城市預設中心坐標 (供未加入景點時的備援氣象與地圖定位)
+ */
+export const DEFAULT_CITY_COORDINATES = {
+    // 台灣
+    '台北': { lat: 25.0330, lng: 121.5654 },
+    '臺北': { lat: 25.0330, lng: 121.5654 },
+    'TAIPEI': { lat: 25.0330, lng: 121.5654 },
+    '高雄': { lat: 22.6273, lng: 120.3014 },
+    // 日本
+    '東京': { lat: 35.6812, lng: 139.7671 },
+    'TOKYO': { lat: 35.6812, lng: 139.7671 },
+    '大阪': { lat: 34.6937, lng: 135.5023 },
+    'OSAKA': { lat: 34.6937, lng: 135.5023 },
+    '京都': { lat: 35.0116, lng: 135.7681 },
+    'KYOTO': { lat: 35.0116, lng: 135.7681 },
+    '沖繩': { lat: 26.2124, lng: 127.6809 },
+    '福岡': { lat: 33.5904, lng: 130.4017 },
+    '北海道': { lat: 43.0642, lng: 141.3469 },
+    '札幌': { lat: 43.0642, lng: 141.3469 },
+    // 韓國
+    '首爾': { lat: 37.5665, lng: 126.9780 },
+    '首尔': { lat: 37.5665, lng: 126.9780 },
+    'SEOUL': { lat: 37.5665, lng: 126.9780 },
+    '釜山': { lat: 35.1796, lng: 129.0756 },
+    'BUSAN': { lat: 35.1796, lng: 129.0756 },
+    '濟州': { lat: 33.4996, lng: 126.5312 },
+    // 泰國
+    '曼谷': { lat: 13.7563, lng: 100.5018 },
+    'BANGKOK': { lat: 13.7563, lng: 100.5018 },
+    '清邁': { lat: 18.7883, lng: 98.9853 },
+    'CHIANG MAI': { lat: 18.7883, lng: 98.9853 },
+    '普吉島': { lat: 7.8804, lng: 98.3923 },
+    'PHUKET': { lat: 7.8804, lng: 98.3923 },
+    // 英國
+    '倫敦': { lat: 51.5074, lng: -0.1278 },
+    'LONDON': { lat: 51.5074, lng: -0.1278 },
+    '愛丁堡': { lat: 55.9533, lng: -3.1883 },
+    // 法國與歐洲
+    '巴黎': { lat: 48.8566, lng: 2.3522 },
+    'PARIS': { lat: 48.8566, lng: 2.3522 },
+    '羅馬': { lat: 41.9028, lng: 12.4964 },
+    'ROME': { lat: 41.9028, lng: 12.4964 },
+    '米蘭': { lat: 45.4642, lng: 9.1900 },
+    '巴塞隆納': { lat: 41.3879, lng: 2.1699 },
+    '阿姆斯特丹': { lat: 52.3676, lng: 4.9041 },
+    '柏林': { lat: 52.5200, lng: 13.4050 },
+    '維也納': { lat: 48.2082, lng: 16.3738 },
+    // 美國
+    '紐約': { lat: 40.7128, lng: -74.0060 },
+    'NEW YORK': { lat: 40.7128, lng: -74.0060 },
+    '洛杉磯': { lat: 34.0522, lng: -118.2437 },
+    'LOS ANGELES': { lat: 34.0522, lng: -118.2437 },
+    '舊金山': { lat: 37.7749, lng: -122.4194 },
+    'SAN FRANCISCO': { lat: 37.7749, lng: -122.4194 },
+    '西雅圖': { lat: 47.6062, lng: -122.3321 },
+    'SEATTLE': { lat: 47.6062, lng: -122.3321 },
+    // 新加坡 / 澳洲
+    '新加坡': { lat: 1.3521, lng: 103.8198 },
+    'SINGAPORE': { lat: 1.3521, lng: 103.8198 },
+    '雪梨': { lat: -33.8688, lng: 151.2093 },
+    'SYDNEY': { lat: -33.8688, lng: 151.2093 }
+};
+
+/**
+ * 依城市或國家名稱比對預設經緯度
+ * @param {string} destinationName 
+ * @returns {{lat: number, lng: number}|null}
+ */
+export function getCityDefaultCoordinates(destinationName) {
+    if (!destinationName || typeof destinationName !== 'string') return null;
+    const clean = destinationName.trim().toUpperCase();
+    for (const [key, coords] of Object.entries(DEFAULT_CITY_COORDINATES)) {
+        if (clean.includes(key.toUpperCase())) return coords;
+    }
+    return null;
+}
+
+/**
+ * 從地址字串中精準提煉行政「地區」（支援台日韓、東南亞、歐美英全球各國）
+ * 專供天氣預報等宏觀標籤使用，避免重複顯示微觀景點或飯店名稱。
+ * 
+ * @param {string} address - Nominatim 結構化地址或地址字串
+ * @param {string} [fallback=''] - 提取失敗時的回退預設值
+ * @returns {string} 提取到的行政地區名稱
+ */
+export function extractRegionName(address, fallback = '') {
+    if (!address || typeof address !== 'string') return fallback;
+
+    // 0. 清洗 Nominatim 雙語分號 (如 "大倫敦;大伦敦" -> "大倫敦", "纽约;紐約" -> "紐約")
+    const cleanAddress = address.replace(/;[\u4e00-\u9fa5a-zA-Z\s]+/g, '');
+
+    // 1. 切分逗號段落
+    const rawParts = cleanAddress.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+
+    // 優先 (1): 中文標準區級 (如：澀谷區、第七区、鍾路區、信義區)
+    const chineseDistrict = rawParts.find(p => /^[\u4e00-\u9fa5]{1,5}[區区]$/.test(p));
+    if (chineseDistrict) return chineseDistrict;
+
+    // 優先 (2): 歐美英泰韓之行政區關鍵字 (Borough, Arrondissement, District, -gu, 구)
+    const westernDistrict = rawParts.find(p => {
+        if (/London Borough of\s+([A-Za-z\s]+)/i.test(p)) return true;
+        if (/^(Manhattan|Brooklyn|Queens|Bronx|Staten Island)$/i.test(p)) return true;
+        if (/Arrondissement/i.test(p)) return true;
+        if (/(?<!Sub)District$/i.test(p) && !/Community/i.test(p)) return true;
+        if (/^[A-Za-z]+-gu$/i.test(p)) return true;
+        if (/^[가-힣]{1,4}구$/.test(p)) return true;
+        return false;
+    });
+    if (westernDistrict) {
+        const boroughMatch = westernDistrict.match(/London Borough of\s+([A-Za-z\s]+)/i);
+        if (boroughMatch) return `${boroughMatch[1].trim()} 區`;
+        return westernDistrict.replace(/\s+District$/i, ' 區');
+    }
+
+    // 優先 (3): 中文市/町/村級 (如：京都市、大阪市、輕井澤町、首爾特別市)
+    const chineseCity = rawParts.find(p => /^[\u4e00-\u9fa5]{1,6}[市町村]$/.test(p));
+    if (chineseCity) return chineseCity;
+
+    // 優先 (4): 全球無「市」字之中文旅遊名城 (曼谷, 倫敦, 巴黎, 紐約, 首爾, 羅馬, 清邁, 普吉島等)
+    const globalCityZh = rawParts.find(p => /^(曼谷|清邁|普吉島|首爾|首尔|倫敦|伦敦|巴黎|紐約|纽约|舊金山|旧金山|洛杉磯|洛杉矶|西雅圖|西雅图|芝加哥|羅馬|罗马|米蘭|米兰|威尼斯|佛羅倫斯|巴塞隆納|巴塞罗那|馬德里|马德里|阿姆斯特丹|柏林|維也納|维也纳|新加坡|雪梨|墨爾本|杜拜)$/i.test(p));
+    if (globalCityZh) return globalCityZh;
+
+    // 優先 (5): 歐美知名城市英文與當地拼寫 (London, Paris, Roma, Milano, etc.)
+    const globalCityEn = rawParts.find(p => /^(London|Paris|New York|Bangkok|Seoul|Rome|Roma|Milan|Milano|Venice|Venezia|Florence|Firenze|Barcelona|Madrid|Amsterdam|Berlin|Munich|München|Vienna|Wien|Prague|Praha|Zurich|Zürich|Geneva|Genève|Singapore|Sydney|Melbourne|Dubai|Tokyo|Kyoto|Osaka)$/i.test(p));
+    if (globalCityEn) return globalCityEn;
+
+    // 優先 (6): 中文都/府/縣/道/州 (如：東京都、京都府、紐約州、加州、英格蘭)
+    const chinesePref = rawParts.find(p => /^[\u4e00-\u9fa5]{1,5}[都府縣道州]$/.test(p));
+    if (chinesePref) return chinesePref;
+
+    // 優先 (7): 連續中文地址正則提取 (無逗號時)
+    const inlineDistrict = cleanAddress.match(/(?:[都府縣道市])?([^\s,，都府縣道市]{1,4}[區区])/);
+    if (inlineDistrict) return inlineDistrict[1];
+
+    const inlineCity = cleanAddress.match(/(?:[都府縣道郡]+)?([^\s,，都府縣道郡]{1,4}[市町村])/);
+    if (inlineCity) return inlineCity[1];
+
+    const inlinePref = cleanAddress.match(/([^\s,，]{1,4}[都府縣道州])/);
+    if (inlinePref) return inlinePref[1];
+
+    return fallback;
+}

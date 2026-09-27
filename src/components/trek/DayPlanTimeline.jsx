@@ -40,6 +40,7 @@ import { optimizeRouteWith2Opt, calculateTotalRouteDistance } from '../../servic
 import { getOSRMRoute, getGoogleMapsRouteUrl } from '../../services/map/routeService';
 import { searchPlaces, enrichPlaceWithWikipedia } from '../../services/places/placeSearchService';
 import { getDayWeather } from '../../services/weather/weatherService';
+import { extractRegionName, getCityDefaultCoordinates, AIRPORT_COORDINATES } from '../../utils/geoUtils';
 import { logger } from '../../utils/logger';
 
 export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, unifiedReservations = null }) {
@@ -227,42 +228,66 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, 
 
     // ── 計算當日天氣代表地區與坐標 ──────────────────────────
     const currentDayLocation = useMemo(() => {
-        // 1. 優先使用當日排定的第一個景點
+        // 全球動態坐標回退解析：1. 旅程目的地/標題對應城市 2. 機票抵達機場坐標 3. 預設東京
+        const dest = activeTrip?.destination || activeTrip?.title || '';
+        let defaultCoords = getCityDefaultCoordinates(dest);
+
+        if (!defaultCoords) {
+            const flightRes = (activeReservations || []).find(r => r.type === 'flight');
+            const arrCode = flightRes?.flightDetails?.arrivalAirport || flightRes?.flightDetails?.destinationAirport;
+            if (arrCode && AIRPORT_COORDINATES[arrCode.toUpperCase()]) {
+                defaultCoords = AIRPORT_COORDINATES[arrCode.toUpperCase()];
+            }
+        }
+        if (!defaultCoords) {
+            defaultCoords = { lat: 35.6812, lng: 139.7671 };
+        }
+
+        // 基礎地區標籤備援
+        const fallbackRegion = activeTrip?.destination
+            ? (activeTrip.destination.endsWith('區') || activeTrip.destination.endsWith('市') || activeTrip.destination.endsWith('都')
+                ? activeTrip.destination
+                : `${activeTrip.destination}市區`)
+            : (activeTrip?.title?.includes('Tokyo') || activeTrip?.title?.includes('東京') ? '東京市區' : '當地市區');
+
+        // 1. 若當天有景點：精準抓取景點坐標供微氣候 API 查詢，標籤「只顯示行政地區」避免與下方景點清單重複
         if (activeDayPlaces.length > 0) {
             const first = activeDayPlaces[0];
-            let district = '';
-            if (first.address) {
-                const parts = first.address.split(',').map(s => s.trim());
-                const match = parts.find(p => /[區市都縣府DistrictWardCity]/.test(p));
-                if (match) district = match;
+            // 優先從第一景點提取純地區（例如：澀谷區、臺東區、Manhattan、Camden），若無則嘗試從當日其餘景點提取
+            let region = extractRegionName(first.address);
+            if (!region) {
+                const otherWithRegion = activeDayPlaces.find(p => p.address && extractRegionName(p.address));
+                if (otherWithRegion) {
+                    region = extractRegionName(otherWithRegion.address);
+                }
             }
+
             return {
-                lat: first.lat,
-                lng: first.lng,
-                label: district ? `${district} · ${first.name}` : first.name
+                lat: first.lat || defaultCoords.lat,
+                lng: first.lng || defaultCoords.lng,
+                label: region || fallbackRegion
             };
         }
 
-        // 2. 次之使用當日住宿飯店
+        // 2. 當天無景點，次之檢查當天飯店住宿
         const hotelRes = dayReservations.find(r => r.type === 'hotel' || r.type === 'accommodation');
         if (hotelRes) {
-            const rawTitle = hotelRes.accommodationDetails?.name || hotelRes.title?.replace('🏨 住宿:', '').trim() || '住宿周邊';
-            const shortName = rawTitle.split(' ')[0] || rawTitle;
+            const hotelAddress = hotelRes.accommodationDetails?.address || hotelRes.address || '';
+            const hotelRegion = extractRegionName(hotelAddress);
             return {
-                lat: 35.6812,
-                lng: 139.7671,
-                label: shortName
+                lat: defaultCoords.lat,
+                lng: defaultCoords.lng,
+                label: hotelRegion || fallbackRegion
             };
         }
 
         // 3. 預設行程目的地或基準中心
-        const dest = activeTrip?.destination || (activeTrip?.title?.includes('Tokyo') || activeTrip?.title?.includes('東京') ? '東京' : '');
         return {
-            lat: 35.6812,
-            lng: 139.7671,
-            label: dest ? `${dest} (市中心)` : '東京 (市中心)'
+            lat: defaultCoords.lat,
+            lng: defaultCoords.lng,
+            label: fallbackRegion
         };
-    }, [activeDayPlaces, dayReservations, activeTrip]);
+    }, [activeDayPlaces, dayReservations, activeTrip, activeReservations]);
 
     // 4. 抓取當前選取日期的天氣預報 (依 currentDayLocation 動態查詢微氣候)
     useEffect(() => {
@@ -451,27 +476,49 @@ export default function DayPlanTimeline({ onSelectDayPlaces, onRouteCalculated, 
                     </p>
                 </div>
 
-                {/* 天氣預報 Badge (附帶地點與地區標籤) */}
-                {currentWeather ? (
-                    <div className="flex items-center gap-2.5 bg-sky-50/90 border border-sky-100 px-3 py-1.5 rounded-xl text-sky-800 shadow-2xs">
-                        <span className="text-xl shrink-0">{currentWeather.icon}</span>
-                        <div>
-                            <div className="flex items-center gap-1.5 leading-tight flex-wrap">
-                                <span className="text-xs font-bold">{currentWeather.desc}</span>
-                                {currentDayLocation.label && (
-                                    <span className="text-[10px] font-semibold bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-sky-200/50">
-                                        <MapPin className="w-2.5 h-2.5 shrink-0 text-sky-600" />
-                                        <span className="truncate max-w-[130px]">{currentDayLocation.label}</span>
+                {/* 天氣預報 Badge (優化視覺階層與標籤呈現) */}
+                {currentWeather ? (() => {
+                    const cleanDesc = (currentWeather.condition || currentWeather.desc || '晴朗').replace(/\s*\(歷年氣候預估\)/, '');
+                    return (
+                        <div className="flex items-center gap-3 bg-gradient-to-br from-sky-50/90 via-sky-50/50 to-blue-50/30 border border-sky-100/90 px-3.5 py-2 rounded-2xl shadow-2xs">
+                            <span className="text-2xl shrink-0 select-none filter drop-shadow-xs">{currentWeather.icon}</span>
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap leading-tight">
+                                    <span className="text-xs font-black text-slate-800 tracking-tight">
+                                        {cleanDesc}
                                     </span>
-                                )}
-                            </div>
-                            <div className="text-[10px] text-sky-600 mt-0.5 font-medium">
-                                {currentWeather.tempMin}°C ~ {currentWeather.tempMax}°C · 降雨 {currentWeather.rainProb}%
+                                    {currentWeather.isHistoricalEstimate ? (
+                                        <span className="text-[10px] font-semibold bg-amber-100/80 text-amber-700 px-1.5 py-0.2 rounded border border-amber-200/50 shrink-0">
+                                            歷年預估
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] font-semibold bg-emerald-100/80 text-emerald-700 px-1.5 py-0.2 rounded border border-emerald-200/50 shrink-0">
+                                            即時預報
+                                        </span>
+                                    )}
+                                    {currentDayLocation.label && (
+                                        <span className="text-[10px] font-bold bg-white text-sky-700 px-1.5 py-0.2 rounded border border-sky-200/60 shadow-2xs flex items-center gap-0.5 shrink-0">
+                                            <MapPin className="w-2.5 h-2.5 shrink-0 text-sky-500" />
+                                            <span>{currentDayLocation.label}</span>
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2 font-mono">
+                                    <span className="font-semibold text-slate-700">
+                                        {currentWeather.tempMin}°C ~ {currentWeather.tempMax}°C
+                                    </span>
+                                    <span className="text-slate-300">·</span>
+                                    <span className={currentWeather.rainProb >= 40 ? 'text-blue-600 font-bold' : 'text-slate-500'}>
+                                        💧 降雨 {currentWeather.rainProb}%
+                                    </span>
+                                </div>
                             </div>
                         </div>
+                    );
+                })() : (
+                    <div className="text-xs text-slate-400 bg-slate-50 px-3 py-2 rounded-xl border border-dashed border-slate-200">
+                        載入天氣中...
                     </div>
-                ) : (
-                    <div className="text-xs text-slate-400">載入天氣中...</div>
                 )}
             </div>
 
