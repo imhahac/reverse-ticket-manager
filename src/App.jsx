@@ -25,10 +25,11 @@ const WORKSPACES = [
         label: '🗺️ 行程工作台',
         defaultTab: 'planner',
         tabs: [
-            { key: 'planner',    label: '⚡ 智能雙欄 (每日排程)' },
-            { key: 'timeline',   label: '📆 旅程時間軸 (全景連動)' },
-            { key: 'calendar',   label: '📅 月曆視圖' },
-            { key: 'map',        label: '🌐 航線地圖' },
+            { key: 'planner',      label: '⚡ 每日排程時間表' },
+            { key: 'timeline',     label: '📆 旅程全景時間軸' },
+            { key: 'reservations', label: '🎟️ 預訂總覽' },
+            { key: 'calendar',     label: '📅 月曆視圖' },
+            { key: 'map',          label: '🌐 航線地圖' },
         ]
     },
     {
@@ -61,16 +62,17 @@ const WORKSPACES = [
 
 // Flat tabs kept for backward compatibility
 const TABS = [
-    { key: 'planner',    label: '🧭 規劃工作台' },
-    { key: 'costs',      label: '💰 多幣別費用' },
-    { key: 'packing',    label: '🎒 行李待辦檔案' },
-    { key: 'timeline',   label: '📆 行程時間軸' },
-    { key: 'list',       label: '🎟️ 機票管理' },
-    { key: 'hotels',     label: '🏨 飯店管理' },
-    { key: 'activities', label: '🎫 票券與活動' },
-    { key: 'calendar',   label: '📅 月曆' },
-    { key: 'map',        label: '🗺️ 航線地圖' },
-    { key: 'analytics',  label: '📊 成本分析' },
+    { key: 'planner',      label: '🧭 規劃工作台' },
+    { key: 'costs',        label: '💰 多幣別費用' },
+    { key: 'packing',      label: '🎒 行李待辦檔案' },
+    { key: 'timeline',     label: '📆 行程時間軸' },
+    { key: 'reservations', label: '🎟️ 預訂總覽' },
+    { key: 'list',         label: '🎟️ 機票管理' },
+    { key: 'hotels',       label: '🏨 飯店管理' },
+    { key: 'activities',   label: '🎫 票券與活動' },
+    { key: 'calendar',     label: '📅 月曆' },
+    { key: 'map',          label: '🗺️ 航線地圖' },
+    { key: 'analytics',    label: '📊 成本分析' },
 ];
 
 const FORM_COMPONENT_BY_TAB = {
@@ -83,6 +85,7 @@ const FORM_COMPONENT_BY_TAB = {
 const CONTENT_COMPONENT_BY_TAB = {
     planner: SplitPlannerView,
     timeline: SplitPlannerView,
+    reservations: SplitPlannerView,
     costs: CostManager,
     packing: PackingAndTodoManager,
     analytics: CostManager,
@@ -117,7 +120,7 @@ function AppContent() {
         ws.tabs.some(t => t.key === activeTab) || 
         (ws.id === 'finance' && activeTab === 'analytics')
     ) || WORKSPACES[0];
-    const isModernTab = ['planner', 'timeline', 'costs', 'packing'].includes(activeTab);
+    const isModernTab = ['planner', 'timeline', 'reservations', 'costs', 'packing'].includes(activeTab);
     const ActiveForm = FORM_COMPONENT_BY_TAB[activeTab] || null;
     const ActiveContent = CONTENT_COMPONENT_BY_TAB[activeTab] || TabContent;
 
@@ -155,7 +158,7 @@ function AppContent() {
 
                     {/* Secondary Sub-tab Navigation Bar (若當前工作區包含多個視圖) */}
                     {currentWorkspace.tabs.length > 1 && (
-                        <div className="hidden md:flex items-center justify-between px-4 py-2 border-b border-slate-200/90 bg-slate-50/80 overflow-x-auto">
+                        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200/90 bg-slate-50/80 overflow-x-auto">
                             <div className="flex items-center gap-1.5">
                                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-2 hidden sm:inline">
                                     視圖切換：

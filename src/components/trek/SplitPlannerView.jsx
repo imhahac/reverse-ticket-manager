@@ -12,7 +12,6 @@ import {
     Minimize2,
     Map as MapIcon,
     ListFilter,
-    Clock,
     Sparkles,
     Edit2,
     Trash2
@@ -37,8 +36,13 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
     const { activeTrip, reservations, dayPlans, viewMode, setViewMode, updateTrip, deleteTrip, trips } = useTrek();
     const { activeTab } = useUIContext();
 
-    // 智能雙欄的內部視圖：'daily' (每日排程時間表) | 'timeline' (全景旅程時間軸) | 'reservations' (預訂憑證)
-    const [subTab, setSubTab] = useState(activeTab === 'timeline' ? 'timeline' : defaultSubTab);
+    // 智能雙欄的子視圖由 activeTab 同步驅動：'daily' | 'timeline' | 'reservations'
+    const currentSubTab = useMemo(() => {
+        if (activeTab === 'timeline') return 'timeline';
+        if (activeTab === 'reservations') return 'reservations';
+        if (activeTab === 'planner') return 'daily';
+        return defaultSubTab;
+    }, [activeTab, defaultSubTab]);
     const [mobileActiveView, setMobileActiveView] = useState('planner'); // 'planner' | 'map'
     const [selectedPlaces, setSelectedPlaces] = useState([]);
     const [routeGeometry, setRouteGeometry] = useState(null);
@@ -109,12 +113,11 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
         setRouteGeometry(null);
     }, [activeTrip]);
 
-    const handleSwitchSubTab = (newTab) => {
-        setSubTab(newTab);
-        if (newTab === 'timeline') {
+    useEffect(() => {
+        if (currentSubTab === 'timeline') {
             loadAllTripPlaces();
         }
-    };
+    }, [currentSubTab, loadAllTripPlaces]);
 
     // 點選時間軸上的飯店時，在地圖上高亮該飯店
     const handleSelectHotelForTimeline = (hotelId) => {
@@ -210,49 +213,8 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
                             </div>
                         </div>
 
-                        {/* 三位一體整合式導航列：每日行程時間表 / 旅程全景時間軸 / 預訂憑證總覽 */}
-                        <div className="flex items-center justify-between border-b border-gray-200 pb-2">
-                            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
-                                <button
-                                    onClick={() => handleSwitchSubTab('daily')}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                                        subTab === 'daily' 
-                                            ? 'bg-white text-indigo-700 shadow-sm' 
-                                            : 'text-slate-600 hover:text-slate-900'
-                                    }`}
-                                >
-                                    <Calendar className="w-3.5 h-3.5" />
-                                    <span>⚡ 每日排程時間表</span>
-                                </button>
-
-                                <button
-                                    onClick={() => handleSwitchSubTab('timeline')}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                                        subTab === 'timeline' 
-                                            ? 'bg-white text-indigo-700 shadow-sm' 
-                                            : 'text-slate-600 hover:text-slate-900'
-                                    }`}
-                                >
-                                    <Clock className="w-3.5 h-3.5" />
-                                    <span>📆 旅程全景時間軸</span>
-                                </button>
-
-                                <button
-                                    onClick={() => handleSwitchSubTab('reservations')}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                                        subTab === 'reservations' 
-                                            ? 'bg-white text-indigo-700 shadow-sm' 
-                                            : 'text-slate-600 hover:text-slate-900'
-                                    }`}
-                                >
-                                    <Ticket className="w-3.5 h-3.5" />
-                                    <span>🎟️ 預訂總覽 ({unifiedReservations.length})</span>
-                                </button>
-                            </div>
-                        </div>
-
                         {/* SubTab 核心內容區 */}
-                        {subTab === 'daily' && (
+                        {currentSubTab === 'daily' && (
                             <DayPlanTimeline 
                                 onSelectDayPlaces={setSelectedPlaces} 
                                 onRouteCalculated={setRouteGeometry} 
@@ -260,7 +222,7 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
                             />
                         )}
 
-                        {subTab === 'timeline' && (
+                        {currentSubTab === 'timeline' && (
                             <div className="space-y-4">
                                 <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl text-xs text-indigo-800 flex items-center justify-between">
                                     <span>💡 全景時間軸已與右側地圖連動，可隨時點擊各趟次與飯店查看詳細時序</span>
@@ -286,7 +248,7 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
                             </div>
                         )}
 
-                        {subTab === 'reservations' && (
+                        {currentSubTab === 'reservations' && (
                             <ReservationManager unifiedReservations={unifiedReservations} />
                         )}
                     </div>
