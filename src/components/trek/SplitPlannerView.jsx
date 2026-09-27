@@ -21,6 +21,7 @@ import DayPlanTimeline from './DayPlanTimeline';
 import MapLibreView from './MapLibreView';
 import ReservationManager from './ReservationManager';
 import TripTimeline from '../TripTimeline';
+import ShareButton from '../ShareButton';
 import { useFilterContext } from '../../contexts/FilterContext';
 import { useUIContext } from '../../contexts/UIContext';
 import {
@@ -180,6 +181,7 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
                                 <div className="flex items-center justify-between gap-3 mb-1">
                                     <h2 className="text-xl font-black tracking-wide truncate">{activeTrip.title}</h2>
                                     <div className="flex items-center gap-1.5 shrink-0">
+                                        <ShareButton variant="header" />
                                         <button
                                             onClick={handleOpenEditTrip}
                                             className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-1 border border-white/20"

@@ -9,7 +9,6 @@ import {
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import TripCard from './TripCard';
 import { TripPropType } from '../types/propTypes';
-import ShareButton from './ShareButton';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { getAirportTimeZone } from '../utils/googleSync/mapper';
 
@@ -160,14 +159,13 @@ export default function TripTimeline({
 
     return (
         <div className="space-y-6 w-full min-w-0">
-            <div className="flex justify-end items-center gap-2">
-                <ShareButton />
-                {hasOverrides && (
+            {hasOverrides && (
+                <div className="flex justify-end items-center gap-2">
                     <button type="button" onClick={onClearAllOverrides} className="text-xs font-bold px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600">
                         清除手動重組
                     </button>
-                )}
-            </div>
+                </div>
+            )}
 
             {/* 視圖與篩選按鈕列 */}
             <div className="bg-white/80 backdrop-blur-md sticky top-2 z-30 shadow-md border border-indigo-100 p-2 rounded-2xl flex flex-col md:flex-row items-center gap-3">
