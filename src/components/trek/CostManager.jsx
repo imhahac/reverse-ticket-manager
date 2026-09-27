@@ -32,7 +32,8 @@ import {
     Scale,
     Minus,
     Check,
-    Info
+    Info,
+    ArrowUpDown
 } from 'lucide-react';
 import { 
     PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
@@ -110,6 +111,7 @@ export default function CostManager() {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
     const [editingExpense, setEditingExpense] = useState(null);
+    const [sortBy, setSortBy] = useState('date-asc'); // 'date-asc' | 'date-desc' | 'amount-desc' | 'amount-asc' | 'category'
 
     // 新增支出表單狀態
     const [formTitle, setFormTitle] = useState('');
@@ -180,7 +182,11 @@ export default function CostManager() {
 
     // 4. 核心：將機票、飯店、活動無縫聚合進支出與拆帳項目
     const unifiedExpenses = useMemo(() => {
-        const list = [...customExpenses];
+        const list = customExpenses.map(exp => ({
+            ...exp,
+            date: exp.date || (exp.createdAt ? new Date(exp.createdAt).toISOString().slice(0, 10) : ''),
+            dateRange: exp.dateRange || exp.date || (exp.createdAt ? new Date(exp.createdAt).toISOString().slice(0, 10) : '')
+        }));
         const existingIds = new Set(list.map(e => e.id));
 
         // 整合機票
@@ -189,6 +195,9 @@ export default function CostManager() {
             if (existingIds.has(id)) return;
             const amtTWD = ticket.priceTWD || ticket.price || 0;
             if (amtTWD <= 0) return;
+            const outboundDate = ticket.outboundDate ? ticket.outboundDate.slice(0, 10) : '';
+            const returnDate = ticket.returnDate ? ticket.returnDate.slice(0, 10) : '';
+            const dateRange = outboundDate && returnDate && outboundDate !== returnDate ? `${outboundDate} ~ ${returnDate}` : outboundDate;
             list.push({
                 id,
                 tripId: ticket.tripId || activeTrip?.id,
@@ -205,7 +214,9 @@ export default function CostManager() {
                 settled: ticket.isPaid ?? true,
                 sourceLabel: '機票管理',
                 isSystemLinked: true,
-                createdAt: ticket.outboundDate ? new Date(ticket.outboundDate).getTime() : Date.now()
+                date: outboundDate,
+                dateRange: dateRange,
+                createdAt: outboundDate ? new Date(outboundDate).getTime() : Date.now()
             });
         });
 
@@ -215,6 +226,9 @@ export default function CostManager() {
             if (existingIds.has(id)) return;
             const amtTWD = hotel.priceTWD || hotel.priceTotal || 0;
             if (amtTWD <= 0) return;
+            const checkIn = hotel.checkIn ? hotel.checkIn.slice(0, 10) : '';
+            const checkOut = hotel.checkOut ? hotel.checkOut.slice(0, 10) : '';
+            const dateRange = checkIn && checkOut ? `${checkIn} ~ ${checkOut}` : checkIn;
             list.push({
                 id,
                 tripId: hotel.tripId || activeTrip?.id,
@@ -231,7 +245,9 @@ export default function CostManager() {
                 settled: true,
                 sourceLabel: '飯店管理',
                 isSystemLinked: true,
-                createdAt: hotel.checkIn ? new Date(hotel.checkIn).getTime() : Date.now()
+                date: checkIn,
+                dateRange: dateRange,
+                createdAt: checkIn ? new Date(checkIn).getTime() : Date.now()
             });
         });
 
@@ -241,6 +257,9 @@ export default function CostManager() {
             if (existingIds.has(id)) return;
             const amtTWD = act.priceTWD || act.cost || 0;
             if (amtTWD <= 0) return;
+            const actStart = act.startDate ? act.startDate.slice(0, 10) : '';
+            const actEnd = act.endDate ? act.endDate.slice(0, 10) : '';
+            const dateRange = actStart && actEnd && actStart !== actEnd ? `${actStart} ~ ${actEnd}` : actStart;
             list.push({
                 id,
                 tripId: act.tripId || activeTrip?.id,
@@ -257,7 +276,9 @@ export default function CostManager() {
                 settled: true,
                 sourceLabel: '票券憑證',
                 isSystemLinked: true,
-                createdAt: act.startDate ? new Date(act.startDate).getTime() : Date.now()
+                date: actStart,
+                dateRange: dateRange,
+                createdAt: actStart ? new Date(actStart).getTime() : Date.now()
             });
         });
 
@@ -269,6 +290,9 @@ export default function CostManager() {
             if (existingIds.has(id)) return;
             const cost = Number(res.cost) || 0;
             if (cost <= 0) return;
+            const resDate = res.startDate?.slice(0, 10) || res.flightDetails?.departureTime?.slice(0, 10) || res.accommodationDetails?.checkInDate?.slice(0, 10) || res.activityDetails?.date?.slice(0, 10) || '';
+            const resEndDate = res.endDate?.slice(0, 10) || res.accommodationDetails?.checkOutDate?.slice(0, 10) || '';
+            const dateRange = resDate && resEndDate && resDate !== resEndDate ? `${resDate} ~ ${resEndDate}` : resDate;
             list.push({
                 id,
                 tripId: res.tripId || activeTrip?.id,
@@ -285,13 +309,49 @@ export default function CostManager() {
                 settled: true,
                 sourceLabel: '預訂憑證',
                 isSystemLinked: true,
-                createdAt: res.createdAt || Date.now()
+                date: resDate,
+                dateRange: dateRange,
+                createdAt: resDate ? new Date(resDate).getTime() : (res.createdAt || Date.now())
             });
         });
 
-        list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         return list;
     }, [customExpenses, scopedTickets, scopedHotels, scopedActivities, reservations, activeTrip?.id, scope]);
+
+    // 4.1 依使用者設定之排序規則（日期升冪/降冪、金額大到小/小到大、類別）產出明細
+    const sortedUnifiedExpenses = useMemo(() => {
+        const list = [...unifiedExpenses];
+        list.sort((a, b) => {
+            const dateA = a.date || (a.createdAt ? new Date(a.createdAt).toISOString().slice(0, 10) : '9999-12-31');
+            const dateB = b.date || (b.createdAt ? new Date(b.createdAt).toISOString().slice(0, 10) : '9999-12-31');
+
+            if (sortBy === 'date-asc') {
+                const cmp = dateA.localeCompare(dateB);
+                if (cmp !== 0) return cmp;
+                return (a.createdAt || 0) - (b.createdAt || 0);
+            }
+            if (sortBy === 'date-desc') {
+                const cmp = dateB.localeCompare(dateA);
+                if (cmp !== 0) return cmp;
+                return (b.createdAt || 0) - (a.createdAt || 0);
+            }
+            if (sortBy === 'amount-desc') {
+                return (b.baseAmount || 0) - (a.baseAmount || 0);
+            }
+            if (sortBy === 'amount-asc') {
+                return (a.baseAmount || 0) - (b.baseAmount || 0);
+            }
+            if (sortBy === 'category') {
+                const catA = a.category || 'other';
+                const catB = b.category || 'other';
+                const cmp = catA.localeCompare(catB);
+                if (cmp !== 0) return cmp;
+                return dateA.localeCompare(dateB);
+            }
+            return 0;
+        });
+        return list;
+    }, [unifiedExpenses, sortBy]);
 
     // 5. 費用總計與預算計算 (以唯一真實來源 unifiedExpenses 加總，徹底杜絕自訂分帳時之雙重加總錯帳)
     const baseCurrency = activeTrip?.baseCurrency || 'TWD';
@@ -700,7 +760,7 @@ export default function CostManager() {
                     </div>
 
                     <button
-                        onClick={() => exportExpensesToCSV(scope === 'trip' ? (activeTrip?.title || '旅程費用') : '全域財務總匯', unifiedExpenses, settleTransactions, baseCurrency)}
+                        onClick={() => exportExpensesToCSV(scope === 'trip' ? (activeTrip?.title || '旅程費用') : '全域財務總匯', sortedUnifiedExpenses, settleTransactions, baseCurrency)}
                         title="匯出 UTF-8 BOM CSV 財務清冊"
                         className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-gray-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs"
                     >
@@ -946,7 +1006,7 @@ export default function CostManager() {
                                     查看還款建議 (Settle-up)
                                 </button>
                                 <button
-                                    onClick={() => exportExpensesToCSV(scope === 'trip' ? (activeTrip?.title || '費用清冊') : '全域財務總匯', unifiedExpenses, settleTransactions, baseCurrency)}
+                                    onClick={() => exportExpensesToCSV(scope === 'trip' ? (activeTrip?.title || '費用清冊') : '全域財務總匯', sortedUnifiedExpenses, settleTransactions, baseCurrency)}
                                     title="匯出 CSV 報表"
                                     className="p-1.5 border border-gray-200 hover:bg-slate-50 text-slate-600 rounded-lg transition"
                                 >
@@ -957,13 +1017,13 @@ export default function CostManager() {
                     </div>
 
                     {/* 消費明細清單標題 */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                             <h3 className="font-bold text-base text-slate-800 flex items-center gap-2">
                                 <Wallet className="w-5 h-5 text-indigo-600" />
                                 <span>消費與拆帳明細清單</span>
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono">
-                                    {unifiedExpenses.length} 筆
+                                    {sortedUnifiedExpenses.length} 筆
                                 </span>
                             </h3>
                             <p className="text-xs text-slate-400 mt-0.5">
@@ -972,25 +1032,42 @@ export default function CostManager() {
                                     : `已自動匯總全站所有 ${trips.length || 0} 個行程之機票、飯店住宿、活動票券與日常雜支`}
                             </p>
                         </div>
-                        <button
-                            onClick={handleOpenCreateModal}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5"
-                        >
-                            <Plus className="w-4 h-4" />
-                            <span>記一筆支出</span>
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center gap-1.5 bg-white border border-slate-200/80 rounded-xl px-2.5 py-1.5 shadow-2xs">
+                                <ArrowUpDown className="w-3.5 h-3.5 text-indigo-600" />
+                                <span className="text-xs text-slate-400 font-semibold">排序:</span>
+                                <select
+                                    value={sortBy}
+                                    onChange={(e) => setSortBy(e.target.value)}
+                                    className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+                                >
+                                    <option value="date-asc">📅 日期 (由舊到新)</option>
+                                    <option value="date-desc">📅 日期 (由新到舊)</option>
+                                    <option value="amount-desc">💰 金額 (大到小)</option>
+                                    <option value="amount-asc">💰 金額 (小到大)</option>
+                                    <option value="category">🏷️ 類別分組</option>
+                                </select>
+                            </div>
+                            <button
+                                onClick={handleOpenCreateModal}
+                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5"
+                            >
+                                <Plus className="w-4 h-4" />
+                                <span>記一筆支出</span>
+                            </button>
+                        </div>
                     </div>
 
                     {/* 消費明細卡片列表 */}
                     <div className="space-y-2.5">
-                        {unifiedExpenses.length === 0 ? (
+                        {sortedUnifiedExpenses.length === 0 ? (
                             <div className="bg-white rounded-2xl p-12 text-center text-slate-400 border border-gray-200 border-dashed">
                                 <DollarSign className="w-12 h-12 mx-auto mb-2 text-slate-300" />
                                 <p className="text-sm font-semibold">此旅程尚無任何支出紀錄</p>
                                 <p className="text-xs text-slate-400 mt-1">可點擊右上角「記一筆支出」，或至『票券憑證』新增機票、飯店與活動</p>
                             </div>
                         ) : (
-                            unifiedExpenses.map(exp => {
+                            sortedUnifiedExpenses.map(exp => {
                                 const cat = EXPENSE_CATEGORIES.find(c => c.key === exp.category) || EXPENSE_CATEGORIES[0];
                                 return (
                                     <div
@@ -1010,6 +1087,12 @@ export default function CostManager() {
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <span className="font-bold text-sm text-slate-800 truncate">{exp.title}</span>
+                                                    {(exp.dateRange || exp.date) && (
+                                                        <span className="text-[11px] font-mono font-bold bg-indigo-50/80 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-200/60 flex items-center gap-1 shrink-0">
+                                                            <Calendar className="w-3 h-3 text-indigo-500" />
+                                                            <span>{exp.dateRange || exp.date}</span>
+                                                        </span>
+                                                    )}
                                                     {exp.sourceLabel && (
                                                         <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.5 rounded border border-indigo-200/60">
                                                             🔗 {exp.sourceLabel}
