@@ -50,7 +50,8 @@ export default function PackingAndTodoManager() {
     const [selectedVisibility, setSelectedVisibility] = useState('all');
     const [showWeightRollup, setShowWeightRollup] = useState(true);
     const [newPackingName, setNewPackingName] = useState('');
-    const [newPackingCategory, setNewPackingCategory] = useState('clothes');
+    const [newPackingCategory, setNewPackingCategory] = useState('essential');
+    const [newPackingNotes, setNewPackingNotes] = useState('');
     const [newPackingWeight, setNewPackingWeight] = useState(200);
     const [newPackingVisibility, setNewPackingVisibility] = useState('all');
     const [newPackingAssignee, setNewPackingAssignee] = useState('全體');
@@ -121,6 +122,7 @@ export default function PackingAndTodoManager() {
             tripId: targetTripId,
             category: newPackingCategory,
             itemName: newPackingName.trim(),
+            notes: newPackingNotes.trim(),
             isPacked: false,
             assignee: newPackingAssignee.trim() || '全體',
             visibilityTier: newPackingVisibility, // 'all' | 'travellers' | 'private'
@@ -131,6 +133,7 @@ export default function PackingAndTodoManager() {
         await packingRepo.save(newItem);
         setPackingItems(prev => [...prev, newItem]);
         setNewPackingName('');
+        setNewPackingNotes('');
         toast.success(`已加入行李清單：${newItem.itemName}`);
     };
 
@@ -144,10 +147,11 @@ export default function PackingAndTodoManager() {
             tripId: targetTripId,
             category: item.category,
             itemName: item.name,
+            notes: item.notes || '',
             isPacked: false,
             assignee: '全體',
             visibilityTier: 'all',
-            weightGrams: item.weightGrams,
+            weightGrams: item.weightGrams || 0,
             createdAt: Date.now()
         }));
 
@@ -477,6 +481,13 @@ export default function PackingAndTodoManager() {
                                 <option key={c.key} value={c.key}>{c.emoji} {c.label}</option>
                             ))}
                         </select>
+                        <input
+                            type="text"
+                            placeholder="備註 (例: 樂敦、需大於6個月效期...)"
+                            value={newPackingNotes}
+                            onChange={(e) => setNewPackingNotes(e.target.value)}
+                            className="w-40 border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none"
+                        />
                         <select
                             value={newPackingVisibility}
                             onChange={(e) => setNewPackingVisibility(e.target.value)}
@@ -527,7 +538,7 @@ export default function PackingAndTodoManager() {
                                 >
                                     <div className="flex items-center gap-3">
                                         {item.isPacked ? (
-                                            <CheckSquare className="w-4 h-4 text-emerald-600 shrink-0" />
+                                             <CheckSquare className="w-4 h-4 text-emerald-600 shrink-0" />
                                         ) : (
                                             <Square className="w-4 h-4 text-slate-400 shrink-0" />
                                         )}
@@ -535,7 +546,14 @@ export default function PackingAndTodoManager() {
                                             <span className={`text-xs font-semibold ${item.isPacked ? 'line-through text-slate-400' : 'text-slate-800'}`}>
                                                 {item.itemName}
                                             </span>
-                                            <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400">
+                                            {item.notes && (
+                                                <div className="mt-1">
+                                                    <span className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-md inline-flex items-center gap-1 font-medium">
+                                                        💡 {item.notes}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
                                                 <span>負責: {item.assignee || '全體'}</span>
                                                 {item.visibilityTier === 'private' && (
                                                     <span className="text-amber-600 bg-amber-50 px-1 rounded">🔒 私人</span>
