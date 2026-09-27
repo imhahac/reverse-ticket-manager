@@ -140,3 +140,7 @@ export function useTrek() {
     }
     return ctx;
 }
+
+export function useOptionalTrek() {
+    return useContext(TrekContext) || {};
+}

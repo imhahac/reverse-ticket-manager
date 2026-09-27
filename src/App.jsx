@@ -1,4 +1,5 @@
 import React from 'react';
+import { MapPin, Globe } from 'lucide-react';
 import { AppProvider } from './contexts/AppContext';
 import { useFilterContext } from './contexts/FilterContext';
 import { useUIContext } from './contexts/UIContext';
@@ -15,7 +16,7 @@ import TrekHeader from './components/trek/TrekHeader';
 import SplitPlannerView from './components/trek/SplitPlannerView';
 import CostManager from './components/trek/CostManager';
 import PackingAndTodoManager from './components/trek/PackingAndTodoManager';
-import { TrekProvider } from './contexts/TrekContext';
+import { useTrek, TrekProvider } from './contexts/TrekContext';
 
 // ── Workspaces Definition (商業分組導航) ──────────────────────────────────
 const WORKSPACES = [
@@ -35,8 +36,7 @@ const WORKSPACES = [
         label: '💰 財務中心',
         defaultTab: 'costs',
         tabs: [
-            { key: 'costs',      label: '💳 多幣別拆帳與結算' },
-            { key: 'analytics',  label: '📊 成本與 CP 值分析' },
+            { key: 'costs',      label: '💰 財務總覽與記帳' },
         ]
     },
     {
@@ -89,7 +89,8 @@ const CONTENT_COMPONENT_BY_TAB = {
 };
 
 function AppContent() {
-    const { activeTab, setActiveTab } = useUIContext();
+    const { activeTab, setActiveTab, ticketScope = 'trip', setTicketScope } = useUIContext();
+    const { activeTrip } = useTrek();
     const { renderError } = useFilterContext();
 
     if (renderError) {
@@ -112,7 +113,10 @@ function AppContent() {
         );
     }
 
-    const currentWorkspace = WORKSPACES.find(ws => ws.tabs.some(t => t.key === activeTab)) || WORKSPACES[0];
+    const currentWorkspace = WORKSPACES.find(ws => 
+        ws.tabs.some(t => t.key === activeTab) || 
+        (ws.id === 'finance' && activeTab === 'analytics')
+    ) || WORKSPACES[0];
     const isModernTab = ['planner', 'timeline', 'costs', 'packing'].includes(activeTab);
     const ActiveForm = FORM_COMPONENT_BY_TAB[activeTab] || null;
     const ActiveContent = CONTENT_COMPONENT_BY_TAB[activeTab] || TabContent;
@@ -151,23 +155,55 @@ function AppContent() {
 
                     {/* Secondary Sub-tab Navigation Bar (若當前工作區包含多個視圖) */}
                     {currentWorkspace.tabs.length > 1 && (
-                        <div className="hidden md:flex items-center gap-1.5 px-4 py-2 border-b border-slate-200/90 bg-slate-50/80 overflow-x-auto">
-                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-2 hidden sm:inline">
-                                視圖切換：
-                            </span>
-                            {currentWorkspace.tabs.map(subTab => (
-                                <button
-                                    key={subTab.key}
-                                    onClick={() => setActiveTab(subTab.key)}
-                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                                        activeTab === subTab.key
-                                            ? 'bg-slate-900 text-white shadow-xs'
-                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                                    }`}
-                                >
-                                    {subTab.label}
-                                </button>
-                            ))}
+                        <div className="hidden md:flex items-center justify-between px-4 py-2 border-b border-slate-200/90 bg-slate-50/80 overflow-x-auto">
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-2 hidden sm:inline">
+                                    視圖切換：
+                                </span>
+                                {currentWorkspace.tabs.map(subTab => (
+                                    <button
+                                        key={subTab.key}
+                                        onClick={() => setActiveTab(subTab.key)}
+                                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                                            activeTab === subTab.key
+                                                ? 'bg-slate-900 text-white shadow-xs'
+                                                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                                        }`}
+                                    >
+                                        {subTab.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* 票券憑證專用 Scope Switcher */}
+                            {currentWorkspace.id === 'tickets' && setTicketScope && (
+                                <div className="flex items-center p-1 bg-slate-200/70 rounded-xl border border-slate-300/50">
+                                    <button
+                                        onClick={() => setTicketScope('trip')}
+                                        className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                                            ticketScope === 'trip' 
+                                                ? 'bg-white text-indigo-700 shadow-sm' 
+                                                : 'text-slate-600 hover:text-slate-900'
+                                        }`}
+                                        title={`僅顯示當前行程：${activeTrip?.title || '未選定'}`}
+                                    >
+                                        <MapPin className="w-3.5 h-3.5 text-indigo-500" />
+                                        <span className="max-w-[130px] truncate">{activeTrip?.title || '當前行程'}</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setTicketScope('all')}
+                                        className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                                            ticketScope === 'all' 
+                                                ? 'bg-white text-indigo-700 shadow-sm' 
+                                                : 'text-slate-600 hover:text-slate-900'
+                                        }`}
+                                        title="顯示全站所有票券憑證"
+                                    >
+                                        <Globe className="w-3.5 h-3.5 text-emerald-500" />
+                                        <span>全域總匯</span>
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -193,10 +229,10 @@ function AppContent() {
 
 export default function App() {
     return (
-        <AppProvider>
-            <TrekProvider>
+        <TrekProvider>
+            <AppProvider>
                 <AppContent />
-            </TrekProvider>
-        </AppProvider>
+            </AppProvider>
+        </TrekProvider>
     );
 }

@@ -149,6 +149,7 @@ export const reservationRepo = {
 };
 
 export const expenseRepo = {
+    getAll: () => getAll(STORES.EXPENSES),
     getByTrip: (tripId) => getByIndex(STORES.EXPENSES, 'tripId', tripId),
     get: (id) => getById(STORES.EXPENSES, id),
     save: (expense) => putItem(STORES.EXPENSES, expense),
@@ -165,6 +166,7 @@ export const expenseRepo = {
 };
 
 export const packingRepo = {
+    getAll: () => getAll(STORES.PACKING_ITEMS),
     getByTrip: (tripId) => getByIndex(STORES.PACKING_ITEMS, 'tripId', tripId),
     save: (item) => putItem(STORES.PACKING_ITEMS, item),
     delete: (id) => deleteItem(STORES.PACKING_ITEMS, id),
@@ -180,6 +182,7 @@ export const packingRepo = {
 };
 
 export const todoRepo = {
+    getAll: () => getAll(STORES.TODOS),
     getByTrip: (tripId) => getByIndex(STORES.TODOS, 'tripId', tripId),
     save: (todo) => putItem(STORES.TODOS, todo),
     delete: (id) => deleteItem(STORES.TODOS, id),
@@ -195,6 +198,7 @@ export const todoRepo = {
 };
 
 export const fileRepo = {
+    getAll: () => getAll(STORES.ATTACHED_FILES),
     getByParent: (parentId) => getByIndex(STORES.ATTACHED_FILES, 'parentId', parentId),
     getByTrip: (tripId) => getByIndex(STORES.ATTACHED_FILES, 'tripId', tripId),
     save: (file) => putItem(STORES.ATTACHED_FILES, file),

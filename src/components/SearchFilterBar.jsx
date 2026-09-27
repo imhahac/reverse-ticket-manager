@@ -31,25 +31,29 @@ export default function SearchFilterBar() {
                     onChange={(e) => setInputValue(e.target.value)}
                 />
             </div>
-            <div className="flex gap-1 bg-slate-200/70 p-1 rounded-lg w-full md:w-auto shrink-0">
-                {[
-                    { key: 'all', label: '全部' },
-                    { key: 'upcoming', label: '未來' },
-                    { key: 'warning', label: '⚠️ 警告' }
-                ].map(opt => (
-                    <button
-                        key={opt.key}
-                        onClick={() => setFilterStatus(opt.key)}
-                        className={`flex-1 md:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-all ${
-                            filterStatus === opt.key 
-                                ? 'bg-white text-indigo-600 shadow-sm' 
-                                : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                    >
-                        {opt.label}
-                    </button>
-                ))}
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto shrink-0 justify-between md:justify-end">
+                {/* 狀態篩選 (全部 / 未來 / 警告) */}
+                <div className="flex gap-1 bg-slate-200/70 p-1 rounded-lg">
+                    {[
+                        { key: 'all', label: '全部' },
+                        { key: 'upcoming', label: '未來' },
+                        { key: 'warning', label: '⚠️ 警告' }
+                    ].map(opt => (
+                        <button
+                            key={opt.key}
+                            onClick={() => setFilterStatus(opt.key)}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                                filterStatus === opt.key 
+                                    ? 'bg-white text-indigo-600 shadow-sm' 
+                                    : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
             </div>
         </div>
     );
 }
+

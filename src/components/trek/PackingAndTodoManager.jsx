@@ -6,7 +6,7 @@
  * - 檔案中心：50MB 大檔與 500MB 影片直傳 Google Drive、軟刪除垃圾桶與一鍵還原
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
     CheckSquare, 
     Square, 
@@ -24,7 +24,9 @@ import {
     Layers, 
     SlidersHorizontal,
     Sparkles,
-    Loader2
+    Loader2,
+    MapPin,
+    Globe
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTrek } from '../../contexts/TrekContext';
@@ -34,8 +36,11 @@ import { uploadLargeFileToDrive } from '../../services/files/gdriveUploadService
 import { useSyncContext } from '../../contexts/SyncContext';
 
 export default function PackingAndTodoManager() {
-    const { activeTrip } = useTrek();
+    const { activeTrip, trips = [] } = useTrek();
     const { accessToken } = useSyncContext();
+
+    // 範圍模式：'trip' (預設：僅當前選定行程) | 'all' (全域：所有行程整合總匯)
+    const [scope, setScope] = useState('trip');
 
     const [activeSubTab, setActiveSubTab] = useState('packing'); // 'packing' | 'todos' | 'files'
 
@@ -62,25 +67,42 @@ export default function PackingAndTodoManager() {
     const [showTrash, setShowTrash] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(null);
 
-    // 1. 載入資料
-    const loadAllData = async () => {
-        if (!activeTrip) return;
-        const pItems = await packingRepo.getByTrip(activeTrip.id);
-        setPackingItems(pItems);
+    // 1. 載入資料 (依 Scope 區分當前旅程或全域)
+    const loadAllData = useCallback(async () => {
+        if (scope === 'trip') {
+            if (!activeTrip?.id) {
+                setPackingItems([]);
+                setTodos([]);
+                setFiles([]);
+                return;
+            }
+            const pItems = await packingRepo.getByTrip(activeTrip.id);
+            setPackingItems(pItems);
 
-        const tItems = await todoRepo.getByTrip(activeTrip.id);
-        tItems.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
-        setTodos(tItems);
+            const tItems = await todoRepo.getByTrip(activeTrip.id);
+            tItems.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+            setTodos(tItems);
 
-        const fItems = await fileRepo.getByTrip(activeTrip.id);
-        setFiles(fItems);
-    };
+            const fItems = await fileRepo.getByTrip(activeTrip.id);
+            setFiles(fItems);
+        } else {
+            const pItems = await packingRepo.getAll();
+            setPackingItems(pItems);
+
+            const tItems = await todoRepo.getAll();
+            tItems.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+            setTodos(tItems);
+
+            const fItems = await fileRepo.getAll();
+            setFiles(fItems);
+        }
+    }, [scope, activeTrip]);
 
     useEffect(() => {
         loadAllData();
-    }, [activeTrip?.id]);
+    }, [loadAllData]);
 
-    if (!activeTrip) return null;
+    if (!activeTrip && scope === 'trip') return null;
 
     // ── 行李操作 ──────────────────────────────────────────────────────────
     const handleTogglePacked = async (item) => {
@@ -93,9 +115,10 @@ export default function PackingAndTodoManager() {
         e.preventDefault();
         if (!newPackingName.trim()) return;
 
+        const targetTripId = activeTrip?.id || (trips[0]?.id || 'default');
         const newItem = {
             id: `pack_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-            tripId: activeTrip.id,
+            tripId: targetTripId,
             category: newPackingCategory,
             itemName: newPackingName.trim(),
             isPacked: false,
@@ -115,9 +138,10 @@ export default function PackingAndTodoManager() {
         const tpl = PACKING_TEMPLATES.find(t => t.id === templateId);
         if (!tpl) return;
 
+        const targetTripId = activeTrip?.id || (trips[0]?.id || 'default');
         const newItems = tpl.items.map(item => ({
             id: `pack_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-            tripId: activeTrip.id,
+            tripId: targetTripId,
             category: item.category,
             itemName: item.name,
             isPacked: false,
@@ -150,12 +174,13 @@ export default function PackingAndTodoManager() {
         e.preventDefault();
         if (!newTodoTitle.trim()) return;
 
+        const targetTripId = activeTrip?.id || (trips[0]?.id || 'default');
         const newTodo = {
             id: `todo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-            tripId: activeTrip.id,
+            tripId: targetTripId,
             title: newTodoTitle.trim(),
             priority: newTodoPriority,
-            dueDate: newTodoDueDate || activeTrip.startDate,
+            dueDate: newTodoDueDate || activeTrip?.startDate || '',
             assignee: newTodoAssignee || '我',
             completed: false,
             createdAt: Date.now()
@@ -210,10 +235,11 @@ export default function PackingAndTodoManager() {
                 }
             }
 
+            const targetTripId = activeTrip?.id || (trips[0]?.id || 'default');
             const newFile = {
                 id: `file_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                tripId: activeTrip.id,
-                parentId: activeTrip.id,
+                tripId: targetTripId,
+                parentId: targetTripId,
                 parentType: 'trip',
                 fileName: file.name,
                 fileSize: file.size,
@@ -265,38 +291,68 @@ export default function PackingAndTodoManager() {
 
     return (
         <div className="space-y-4">
-            {/* 1. 主功能切換按鈕 (行李 / 待辦 / 檔案) */}
-            <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
-                <button
-                    onClick={() => setActiveSubTab('packing')}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                        activeSubTab === 'packing'
-                            ? 'bg-indigo-600 text-white shadow-sm'
-                            : 'bg-white text-slate-600 hover:bg-slate-100 border border-gray-200'
-                    }`}
-                >
-                    <span>🎒 行李清單 ({packingItems.length})</span>
-                </button>
-                <button
-                    onClick={() => setActiveSubTab('todos')}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                        activeSubTab === 'todos'
-                            ? 'bg-indigo-600 text-white shadow-sm'
-                            : 'bg-white text-slate-600 hover:bg-slate-100 border border-gray-200'
-                    }`}
-                >
-                    <span>✅ 行前待辦 ({todos.length})</span>
-                </button>
-                <button
-                    onClick={() => setActiveSubTab('files')}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                        activeSubTab === 'files'
-                            ? 'bg-indigo-600 text-white shadow-sm'
-                            : 'bg-white text-slate-600 hover:bg-slate-100 border border-gray-200'
-                    }`}
-                >
-                    <span>📁 附件檔案 ({activeFiles.length})</span>
-                </button>
+            {/* 1. 主功能切換按鈕 (行李 / 待辦 / 檔案) + Scope 範圍切換器 */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-gray-200 pb-3">
+                <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
+                    <button
+                        onClick={() => setActiveSubTab('packing')}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                            activeSubTab === 'packing'
+                                ? 'bg-white text-indigo-700 shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                    >
+                        <span>🎒 行李清單 ({packingItems.length})</span>
+                    </button>
+                    <button
+                        onClick={() => setActiveSubTab('todos')}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                            activeSubTab === 'todos'
+                                ? 'bg-white text-indigo-700 shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                    >
+                        <span>✅ 行前待辦 ({todos.length})</span>
+                    </button>
+                    <button
+                        onClick={() => setActiveSubTab('files')}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                            activeSubTab === 'files'
+                                ? 'bg-white text-indigo-700 shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                    >
+                        <span>📁 附件檔案 ({activeFiles.length})</span>
+                    </button>
+                </div>
+
+                {/* Scope 切換器：當前行程 vs 全域總匯 */}
+                <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200/80">
+                    <button
+                        onClick={() => setScope('trip')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                            scope === 'trip'
+                                ? 'bg-white text-indigo-700 shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title={`僅統計當前行程：${activeTrip?.title || '未選定'}`}
+                    >
+                        <MapPin className="w-3.5 h-3.5 text-indigo-500" />
+                        <span className="max-w-[140px] truncate">{activeTrip?.title || '當前行程'}</span>
+                    </button>
+                    <button
+                        onClick={() => setScope('all')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                            scope === 'all'
+                                ? 'bg-white text-indigo-700 shadow-sm'
+                                : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title="聚合全站所有行程的行李與待辦事項"
+                    >
+                        <Globe className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>全域總匯</span>
+                    </button>
+                </div>
             </div>
 
             {/* ── SubTab 1: 行李清單 ─────────────────────────────────────── */}

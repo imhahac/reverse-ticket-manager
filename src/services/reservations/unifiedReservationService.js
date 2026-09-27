@@ -10,7 +10,7 @@
 /**
  * 檢查日期是否在旅程期間內（具備前後 1 天寬容度，涵蓋跨日航班或時差）
  */
-function isDateOverlap(start1, end1, start2, end2) {
+export function isDateOverlap(start1, end1, start2, end2) {
     if (!start1 || !start2) return true;
     const s1 = (start1 || '').slice(0, 10);
     const e1 = (end1 || start1).slice(0, 10);

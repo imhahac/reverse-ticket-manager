@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { useUIContext } from './UIContext';
+import { useOptionalTrek } from './TrekContext';
 import {
     useActivityDataContext,
     useHotelDataContext,
@@ -10,11 +11,13 @@ import { useFilteredItems } from '../hooks/useFilteredItems';
 import { useDecoratedTrips } from '../hooks/useDecoratedTrips';
 import { useItinerary } from '../hooks/useItinerary';
 import { applyTripOverrides } from '../utils/tripOverrides';
+import { isDateOverlap } from '../services/reservations/unifiedReservationService';
 
 const FilterContext = createContext();
 
 export function FilterProvider({ children }) {
-    const { searchTerm, filterStatus, selectedTripIdForMap } = useUIContext();
+    const { searchTerm, filterStatus, ticketScope = 'trip', selectedTripIdForMap } = useUIContext();
+    const { activeTrip } = useOptionalTrek();
     const { tickets, tripLabels, trips } = useTicketDataContext();
     const { rawHotels } = useHotelDataContext();
     const { activities } = useActivityDataContext();
@@ -38,10 +41,35 @@ export function FilterProvider({ children }) {
         Array.isArray(activities) ? activities : []
     );
 
+    // 依 ticketScope 篩選目前作用域的票券憑證清單 (預設 By 當前行程)
+    const targetTickets = useMemo(() => {
+        if (ticketScope === 'all' || !activeTrip) return safeTickets;
+        return (safeTickets || []).filter(t => 
+            (t.tripId && t.tripId === activeTrip.id) ||
+            isDateOverlap(t.outboundDate, t.returnDate, activeTrip.startDate, activeTrip.endDate)
+        );
+    }, [safeTickets, ticketScope, activeTrip]);
+
+    const targetHotels = useMemo(() => {
+        if (ticketScope === 'all' || !activeTrip) return safeHotels;
+        return (safeHotels || []).filter(h => 
+            (h.tripId && h.tripId === activeTrip.id) ||
+            isDateOverlap(h.checkIn, h.checkOut, activeTrip.startDate, activeTrip.endDate)
+        );
+    }, [safeHotels, ticketScope, activeTrip]);
+
+    const targetActivities = useMemo(() => {
+        if (ticketScope === 'all' || !activeTrip) return safeActivities;
+        return (safeActivities || []).filter(a => 
+            (a.tripId && a.tripId === activeTrip.id) ||
+            isDateOverlap(a.startDate, a.endDate, activeTrip.startDate, activeTrip.endDate)
+        );
+    }, [safeActivities, ticketScope, activeTrip]);
+
     // 4. 執行搜尋與狀態篩選
-    const filteredTickets = useFilteredItems(safeTickets, searchTerm, filterStatus, 'tickets');
-    const filteredHotels = useFilteredItems(safeHotels, searchTerm, filterStatus, 'hotels');
-    const filteredActivities = useFilteredItems(safeActivities, searchTerm, filterStatus, 'activities');
+    const filteredTickets = useFilteredItems(targetTickets, searchTerm, filterStatus, 'tickets');
+    const filteredHotels = useFilteredItems(targetHotels, searchTerm, filterStatus, 'hotels');
+    const filteredActivities = useFilteredItems(targetActivities, searchTerm, filterStatus, 'activities');
     const filteredItinerary = useFilteredItems(itinerary, searchTerm, filterStatus, 'itinerary', tripLabels);
 
     // 5. 地圖專用過濾

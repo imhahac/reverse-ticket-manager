@@ -7,6 +7,7 @@ export function UIProvider({ children }) {
     const [activeTab, setActiveTab] = useState('timeline');
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
+    const [ticketScope, setTicketScope] = useState('trip'); // 'trip' | 'all'
     const [configWarnings, setConfigWarnings] = useState([]);
     
     // Map selection states
@@ -39,6 +40,7 @@ export function UIProvider({ children }) {
         activeTab, setActiveTab,
         searchTerm, setSearchTerm,
         filterStatus, setFilterStatus,
+        ticketScope, setTicketScope,
         configWarnings, setConfigWarnings,
         selectedHotelIdForMap, setSelectedHotelIdForMap,
         selectedTripIdForMap, setSelectedTripIdForMap,

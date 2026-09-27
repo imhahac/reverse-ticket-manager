@@ -19,5 +19,7 @@ module.exports = {
     },
     plugins: ['react-hooks'],
     extends: [],
-    rules: {},
+    rules: {
+        'no-undef': 'error',
+    },
 };

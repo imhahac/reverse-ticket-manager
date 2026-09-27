@@ -6,7 +6,7 @@
  * 3. 雙向資料打通：自動聚合全域票券憑證 (機票、飯店、活動) 與手動多幣別日常支出，拒絕空內容
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
     DollarSign, 
     Plus, 
@@ -26,7 +26,9 @@ import {
     Calendar,
     Plane,
     Hotel,
-    Ticket
+    Ticket,
+    MapPin,
+    Globe
 } from 'lucide-react';
 import { 
     PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
@@ -38,6 +40,7 @@ import { useFilterContext } from '../../contexts/FilterContext';
 import { useUIContext } from '../../contexts/UIContext';
 import { useTicketDataContext } from '../../contexts/DataContext';
 import { expenseRepo } from '../../services/db';
+import { isDateOverlap } from '../../services/reservations/unifiedReservationService';
 import { SUPPORTED_CURRENCIES, getExchangeRate, freezeExchangeRate } from '../../services/costs/currencyService';
 import { splitEqual, calculateNetBalances } from '../../services/costs/splitCalculator';
 import { calculateSettleUpTransactions } from '../../services/costs/settleUpService';
@@ -72,20 +75,18 @@ const CustomTooltip = ({ active, payload }) => {
 };
 
 export default function CostManager() {
-    const { activeTrip } = useTrek();
-    const { activeTab, setActiveTab } = useUIContext();
+    const { activeTrip, trips = [] } = useTrek();
+    const { activeTab } = useUIContext();
     const {
         safeTickets = [],
         safeHotels = [],
         safeActivities = [],
-        totalPriceTWD = 0,
-        totalHotelTWD = 0,
-        totalActivityTWD = 0,
-        totalPaidTWD = 0,
-        totalPendingTWD = 0,
         filteredItinerary = []
     } = useFilterContext();
-    const { tripBudgets } = useTicketDataContext();
+    const { tripBudgets = {} } = useTicketDataContext();
+
+    // 範圍模式：'trip' (預設：僅當前選定行程) | 'all' (全域：所有行程整合總匯)
+    const [scope, setScope] = useState('trip');
 
     // 視圖模式：'split' (多幣別拆帳) | 'analytics' (成本與CP值分析) | 'all' (全景整合)
     const [subView, setSubView] = useState(() => {
@@ -114,17 +115,26 @@ export default function CostManager() {
     const [formPaidBy, setFormPaidBy] = useState('我');
     const [participantsText, setParticipantsText] = useState('我, 旅伴A, 旅伴B');
 
-    // 1. 載入手動記帳支出
-    const loadCustomExpenses = async () => {
-        if (!activeTrip) return;
-        const all = await expenseRepo.getByTrip(activeTrip.id);
-        all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-        setCustomExpenses(all);
-    };
+    // 1. 載入手動記帳支出 (依 Scope 切換當前行程或全域)
+    const loadCustomExpenses = useCallback(async () => {
+        if (scope === 'trip') {
+            if (!activeTrip?.id) {
+                setCustomExpenses([]);
+                return;
+            }
+            const all = await expenseRepo.getByTrip(activeTrip.id);
+            all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            setCustomExpenses(all);
+        } else {
+            const all = await expenseRepo.getAll();
+            all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            setCustomExpenses(all);
+        }
+    }, [scope, activeTrip]);
 
     useEffect(() => {
         loadCustomExpenses();
-    }, [activeTrip?.id]);
+    }, [loadCustomExpenses]);
 
     // 2. 當幣別變動時，即時獲取 Frankfurter 預估匯率
     useEffect(() => {
@@ -132,20 +142,45 @@ export default function CostManager() {
         getExchangeRate(formCurrency, base).then(r => setLiveRate(r));
     }, [formCurrency, activeTrip?.baseCurrency]);
 
-    // 3. 核心：將全域機票、飯店、活動無縫聚合進支出與拆帳項目
+    // 3. 依 Scope 篩選歸屬的機票、飯店、活動
+    const scopedTickets = useMemo(() => {
+        if (scope === 'all' || !activeTrip) return safeTickets || [];
+        return (safeTickets || []).filter(ticket => {
+            if (ticket.tripId && ticket.tripId === activeTrip.id) return true;
+            return isDateOverlap(ticket.outboundDate, ticket.returnDate, activeTrip.startDate, activeTrip.endDate);
+        });
+    }, [scope, safeTickets, activeTrip]);
+
+    const scopedHotels = useMemo(() => {
+        if (scope === 'all' || !activeTrip) return safeHotels || [];
+        return (safeHotels || []).filter(hotel => {
+            if (hotel.tripId && hotel.tripId === activeTrip.id) return true;
+            return isDateOverlap(hotel.checkIn, hotel.checkOut, activeTrip.startDate, activeTrip.endDate);
+        });
+    }, [scope, safeHotels, activeTrip]);
+
+    const scopedActivities = useMemo(() => {
+        if (scope === 'all' || !activeTrip) return safeActivities || [];
+        return (safeActivities || []).filter(act => {
+            if (act.tripId && act.tripId === activeTrip.id) return true;
+            return isDateOverlap(act.startDate, act.endDate, activeTrip.startDate, activeTrip.endDate);
+        });
+    }, [scope, safeActivities, activeTrip]);
+
+    // 4. 核心：將機票、飯店、活動無縫聚合進支出與拆帳項目
     const unifiedExpenses = useMemo(() => {
         const list = [...customExpenses];
         const existingIds = new Set(list.map(e => e.id));
 
         // 整合機票
-        (safeTickets || []).forEach(ticket => {
+        scopedTickets.forEach(ticket => {
             const id = `ticket_${ticket.id}`;
             if (existingIds.has(id)) return;
             const amtTWD = ticket.priceTWD || ticket.price || 0;
             if (amtTWD <= 0) return;
             list.push({
                 id,
-                tripId: activeTrip?.id,
+                tripId: ticket.tripId || activeTrip?.id,
                 title: `✈️ 機票: ${ticket.airline || ''} (${ticket.departRegion?.split(' ')[0] || ''} ⇄ ${ticket.returnRegion?.split(' ')[0] || ''})`,
                 category: 'ticket',
                 amount: ticket.price || amtTWD,
@@ -164,14 +199,14 @@ export default function CostManager() {
         });
 
         // 整合住宿
-        (safeHotels || []).forEach(hotel => {
+        scopedHotels.forEach(hotel => {
             const id = `hotel_${hotel.id}`;
             if (existingIds.has(id)) return;
             const amtTWD = hotel.priceTWD || hotel.priceTotal || 0;
             if (amtTWD <= 0) return;
             list.push({
                 id,
-                tripId: activeTrip?.id,
+                tripId: hotel.tripId || activeTrip?.id,
                 title: `🏨 住宿: ${hotel.name || '飯店'} (${hotel.totalNights || 1}晚)`,
                 category: 'lodging',
                 amount: hotel.priceTotal || amtTWD,
@@ -190,14 +225,14 @@ export default function CostManager() {
         });
 
         // 整合活動
-        (safeActivities || []).forEach(act => {
+        scopedActivities.forEach(act => {
             const id = `act_${act.id}`;
             if (existingIds.has(id)) return;
             const amtTWD = act.priceTWD || act.cost || 0;
             if (amtTWD <= 0) return;
             list.push({
                 id,
-                tripId: activeTrip?.id,
+                tripId: act.tripId || activeTrip?.id,
                 title: `🎫 活動: ${act.title || '票券'}`,
                 category: 'ticket',
                 amount: act.price || amtTWD,
@@ -217,26 +252,54 @@ export default function CostManager() {
 
         list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         return list;
-    }, [customExpenses, safeTickets, safeHotels, safeActivities, activeTrip?.id]);
+    }, [customExpenses, scopedTickets, scopedHotels, scopedActivities, activeTrip?.id]);
 
-    // 4. 費用總計與預算計算
+    // 5. 費用總計與預算計算
     const baseCurrency = activeTrip?.baseCurrency || 'TWD';
-    const totalCustomSpentTWD = customExpenses.reduce((sum, e) => sum + (e.baseAmount || 0), 0);
-    const totalSpentTWD = totalPriceTWD + totalHotelTWD + totalActivityTWD + totalCustomSpentTWD;
-    const tripBudget = activeTrip?.budget || 0;
-    const budgetRemaining = tripBudget > 0 ? tripBudget - totalSpentTWD : null;
+    const scopedTicketsTWD = useMemo(() => 
+        scopedTickets.reduce((sum, t) => sum + (t.priceTWD || t.price || 0), 0)
+    , [scopedTickets]);
 
-    // 5. 智慧清帳撮合
+    const scopedHotelsTWD = useMemo(() => 
+        scopedHotels.reduce((sum, h) => sum + (h.priceTWD || h.priceTotal || 0), 0)
+    , [scopedHotels]);
+
+    const scopedActivitiesTWD = useMemo(() => 
+        scopedActivities.reduce((sum, a) => sum + (a.priceTWD || a.cost || 0), 0)
+    , [scopedActivities]);
+
+    const totalCustomSpentTWD = useMemo(() => 
+        customExpenses.reduce((sum, e) => sum + (e.baseAmount || 0), 0)
+    , [customExpenses]);
+
+    const totalSpentTWD = scopedTicketsTWD + scopedHotelsTWD + scopedActivitiesTWD + totalCustomSpentTWD;
+
+    const totalPaidTWD = useMemo(() => 
+        unifiedExpenses.filter(e => e.settled).reduce((sum, e) => sum + (e.baseAmount || 0), 0)
+    , [unifiedExpenses]);
+
+    const totalPendingTWD = useMemo(() => 
+        unifiedExpenses.filter(e => !e.settled).reduce((sum, e) => sum + (e.baseAmount || 0), 0)
+    , [unifiedExpenses]);
+
+    const totalBudget = useMemo(() => {
+        if (scope === 'trip') return activeTrip?.budget || 0;
+        return (trips || []).reduce((acc, t) => acc + (t.budget || 0), 0);
+    }, [scope, activeTrip, trips]);
+
+    const budgetRemaining = totalBudget > 0 ? totalBudget - totalSpentTWD : null;
+
+    // 6. 智慧清帳撮合
     const netBalances = useMemo(() => calculateNetBalances(unifiedExpenses), [unifiedExpenses]);
     const settleTransactions = useMemo(() => calculateSettleUpTransactions(netBalances), [netBalances]);
 
-    // 6. 圖表分析資料
+    // 7. 圖表分析資料
     const pieData = useMemo(() => [
-        { name: '✈️ 機票', value: totalPriceTWD, key: 'flights' },
-        { name: '🏨 住宿', value: totalHotelTWD, key: 'hotels' },
-        { name: '🎫 活動', value: totalActivityTWD, key: 'activities' },
+        { name: '✈️ 機票', value: scopedTicketsTWD, key: 'flights' },
+        { name: '🏨 住宿', value: scopedHotelsTWD, key: 'hotels' },
+        { name: '🎫 活動', value: scopedActivitiesTWD, key: 'activities' },
         { name: '🛍️ 日常雜支', value: totalCustomSpentTWD, key: 'custom' },
-    ].filter(d => d.value > 0), [totalPriceTWD, totalHotelTWD, totalActivityTWD, totalCustomSpentTWD]);
+    ].filter(d => d.value > 0), [scopedTicketsTWD, scopedHotelsTWD, scopedActivitiesTWD, totalCustomSpentTWD]);
 
     const barData = useMemo(() => {
         return (filteredItinerary || [])
@@ -341,17 +404,13 @@ export default function CostManager() {
 
     const handleSwitchSubView = (mode) => {
         setSubView(mode);
-        if (mode === 'analytics') {
-            setActiveTab('analytics');
-        } else if (mode === 'split') {
-            setActiveTab('costs');
-        }
     };
 
     return (
         <div className="space-y-6">
-            {/* ── 頂部財務中心三合一視圖切換器 ───────────────────────────────── */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-gray-200 pb-3">
+            {/* ── 頂部財務中心三合一視圖切換器 + Scope 範圍切換 ──────────────── */}
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 border-b border-gray-200 pb-3">
+                {/* 視圖模式切換 */}
                 <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
                     <button
                         onClick={() => handleSwitchSubView('split')}
@@ -362,7 +421,7 @@ export default function CostManager() {
                         }`}
                     >
                         <CreditCard className="w-3.5 h-3.5" />
-                        <span>💳 多幣別拆帳與結算 ({unifiedExpenses.length})</span>
+                        <span>多幣別拆帳與結算 ({unifiedExpenses.length})</span>
                     </button>
 
                     <button
@@ -374,7 +433,7 @@ export default function CostManager() {
                         }`}
                     >
                         <PieIcon className="w-3.5 h-3.5" />
-                        <span>📊 成本與 CP 值分析</span>
+                        <span>成本與 CP 值分析</span>
                     </button>
 
                     <button
@@ -386,22 +445,51 @@ export default function CostManager() {
                         }`}
                     >
                         <LayoutDashboard className="w-3.5 h-3.5" />
-                        <span>📋 財務全景視圖</span>
+                        <span>財務全景視圖</span>
                     </button>
                 </div>
 
-                <div className="flex items-center gap-2">
+                {/* 範圍切換 (Scope Switcher) + 動作按鈕 */}
+                <div className="flex flex-wrap items-center gap-2">
+                    {/* Scope 切換器：當前行程 vs 全域總匯 */}
+                    <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200/80">
+                        <button
+                            onClick={() => setScope('trip')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                                scope === 'trip'
+                                    ? 'bg-white text-indigo-700 shadow-sm'
+                                    : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                            title={`僅統計當前行程：${activeTrip?.title || '未選定'}`}
+                        >
+                            <MapPin className="w-3.5 h-3.5 text-indigo-500" />
+                            <span className="max-w-[140px] truncate">{activeTrip?.title || '當前行程'}</span>
+                        </button>
+                        <button
+                            onClick={() => setScope('all')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                                scope === 'all'
+                                    ? 'bg-white text-indigo-700 shadow-sm'
+                                    : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                            title="聚合全站所有行程的票券與支出"
+                        >
+                            <Globe className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>全域總匯</span>
+                        </button>
+                    </div>
+
                     <button
-                        onClick={() => exportExpensesToCSV(activeTrip?.title || '旅程費用', unifiedExpenses, settleTransactions)}
+                        onClick={() => exportExpensesToCSV(scope === 'trip' ? (activeTrip?.title || '旅程費用') : '全域財務總匯', unifiedExpenses, settleTransactions)}
                         title="匯出 UTF-8 BOM CSV 財務清冊"
-                        className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-gray-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-2xs"
+                        className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-gray-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs"
                     >
                         <Download className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>匯出 CSV 報表</span>
+                        <span className="hidden sm:inline">匯出 CSV</span>
                     </button>
                     <button
                         onClick={() => setIsAddModalOpen(true)}
-                        className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-sm transition flex items-center gap-1.5"
+                        className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-1.5"
                     >
                         <Plus className="w-3.5 h-3.5" />
                         <span>記一筆支出</span>
@@ -430,22 +518,22 @@ export default function CostManager() {
 
                         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
                             <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">✈️ 機票支出</span>
-                            <div className="text-2xl font-black text-indigo-600 mt-1 font-mono">{NT(totalPriceTWD)}</div>
-                            <p className="text-[11px] text-slate-400 mt-1">共 {safeTickets.length} 筆機票訂單</p>
+                            <div className="text-2xl font-black text-indigo-600 mt-1 font-mono">{NT(scopedTicketsTWD)}</div>
+                            <p className="text-[11px] text-slate-400 mt-1">共 {scopedTickets.length} 筆機票訂單</p>
                         </div>
 
                         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
                             <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">🏨 住宿支出</span>
-                            <div className="text-2xl font-black text-teal-600 mt-1 font-mono">{NT(totalHotelTWD)}</div>
-                            <p className="text-[11px] text-slate-400 mt-1">共 {safeHotels.length} 筆飯店住宿</p>
+                            <div className="text-2xl font-black text-teal-600 mt-1 font-mono">{NT(scopedHotelsTWD)}</div>
+                            <p className="text-[11px] text-slate-400 mt-1">共 {scopedHotels.length} 筆飯店住宿</p>
                         </div>
 
                         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
                             <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">🎫 活動與雜支</span>
                             <div className="text-2xl font-black text-orange-600 mt-1 font-mono">
-                                {NT(totalActivityTWD + totalCustomSpentTWD)}
+                                {NT(scopedActivitiesTWD + totalCustomSpentTWD)}
                             </div>
-                            <p className="text-[11px] text-slate-400 mt-1">活動 {safeActivities.length} 項 · 雜支 {customExpenses.length} 筆</p>
+                            <p className="text-[11px] text-slate-400 mt-1">活動 {scopedActivities.length} 項 · 雜支 {customExpenses.length} 筆</p>
                         </div>
                     </div>
 
@@ -545,7 +633,7 @@ export default function CostManager() {
                                         const hotelCost = trip.totalHotelCostTWD ?? 0;
                                         const total = flightCost + hotelCost;
                                         const perDay = trip.tripDays > 0 ? Math.round(total / trip.tripDays) : null;
-                                        const tBudget = tripBudgets?.[trip.id] || 0;
+                                        const tBudget = trip.budget || tripBudgets?.[trip.id] || 0;
                                         const budgetPercent = tBudget > 0 ? Math.min(100, Math.round((total / tBudget) * 100)) : 0;
                                         const isOverBudget = budgetPercent >= 100;
 
@@ -605,10 +693,12 @@ export default function CostManager() {
                         </div>
 
                         <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
-                            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">當前旅程總預算</span>
+                            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+                                {scope === 'trip' ? '當前旅程總預算' : '全站旅程總預算'}
+                            </span>
                             <div className="text-2xl font-black text-slate-800 mt-1 font-mono">
-                                {tripBudget > 0 ? `$${tripBudget.toLocaleString()}` : '未設定'}
-                                {tripBudget > 0 && <span className="text-sm font-normal text-slate-400 ml-1.5">{baseCurrency}</span>}
+                                {totalBudget > 0 ? `$${totalBudget.toLocaleString()}` : '未設定'}
+                                {totalBudget > 0 && <span className="text-sm font-normal text-slate-400 ml-1.5">{baseCurrency}</span>}
                             </div>
                             {budgetRemaining != null && (
                                 <p className={`text-xs mt-2 font-bold ${budgetRemaining >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -636,7 +726,7 @@ export default function CostManager() {
                                     查看還款建議 (Settle-up)
                                 </button>
                                 <button
-                                    onClick={() => exportExpensesToCSV(activeTrip?.title || '費用清冊', unifiedExpenses, settleTransactions)}
+                                    onClick={() => exportExpensesToCSV(scope === 'trip' ? (activeTrip?.title || '費用清冊') : '全域財務總匯', unifiedExpenses, settleTransactions)}
                                     title="匯出 CSV 報表"
                                     className="p-1.5 border border-gray-200 hover:bg-slate-50 text-slate-600 rounded-lg transition"
                                 >
@@ -657,7 +747,9 @@ export default function CostManager() {
                                 </span>
                             </h3>
                             <p className="text-xs text-slate-400 mt-0.5">
-                                已自動匯總全域機票、飯店住宿、活動票券與旅程多幣別日常雜支
+                                {scope === 'trip' 
+                                    ? `已過濾為『${activeTrip?.title || '當前行程'}』期間 (${activeTrip?.startDate || ''} ~ ${activeTrip?.endDate || ''}) 之機票、飯店住宿、活動票券與日常雜支` 
+                                    : `已自動匯總全站所有 ${trips.length || 0} 個行程之機票、飯店住宿、活動票券與日常雜支`}
                             </p>
                         </div>
                         <button
