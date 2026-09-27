@@ -138,8 +138,23 @@ export default function HotelList({ hotels, onEdit, onDelete }) {
         );
     }
 
-    const futureHotels = hotels.filter(h => !h.isPast);
-    const pastHotels   = hotels.filter(h => h.isPast);
+    // 即將入住：依入住日由近至遠 (升冪，最近要入住的排最前面)
+    const futureHotels = hotels
+        .filter(h => !h.isPast)
+        .sort((a, b) => {
+            if (!a.checkIn) return 1;
+            if (!b.checkIn) return -1;
+            return a.checkIn.localeCompare(b.checkIn) || (a.checkOut || '').localeCompare(b.checkOut || '');
+        });
+
+    // 已完成住宿：依入住日由近至遠 (降冪，最近剛住完的排在最前)
+    const pastHotels = hotels
+        .filter(h => h.isPast)
+        .sort((a, b) => {
+            if (!a.checkIn) return 1;
+            if (!b.checkIn) return -1;
+            return b.checkIn.localeCompare(a.checkIn) || (b.checkOut || '').localeCompare(a.checkOut || '');
+        });
 
     return (
         <div className="space-y-6">

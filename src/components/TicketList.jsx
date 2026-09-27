@@ -39,11 +39,17 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
         </div>
     );
 
+    const sortedTickets = [...tickets].sort((a, b) => {
+        if (!a.outboundDate) return 1;
+        if (!b.outboundDate) return -1;
+        return a.outboundDate.localeCompare(b.outboundDate) || (a.outboundTime || '').localeCompare(b.outboundTime || '');
+    });
+
     return (
         <div className="mt-6">
             {/* Mobile View: Cards */}
             <div className="md:hidden space-y-4">
-                {tickets.map(ticket => {
+                {sortedTickets.map(ticket => {
                     const Segment1 = ticket.type === 'normal' || ticket.type === 'oneway'
                         ? `${ticket.departRegion} ✈️ ${ticket.returnRegion}`
                         : `${ticket.returnRegion} ✈️ ${ticket.departRegion}`;
@@ -119,7 +125,7 @@ export default function TicketList({ tickets, onDelete, onEdit }) {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {tickets.map(ticket => {
+                            {sortedTickets.map(ticket => {
                                 const Segment1 = ticket.type === 'normal' || ticket.type === 'oneway'
                                     ? `${ticket.departRegion} ✈️ ${ticket.returnRegion}`
                                     : `${ticket.returnRegion} ✈️ ${ticket.departRegion}`;

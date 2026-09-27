@@ -16,9 +16,15 @@ export default function ActivityList({ activities, onDelete, onEdit }) {
         voucher: '🎫'
     };
 
+    const sortedActivities = [...activities].sort((a, b) => {
+        if (!a.startDate) return 1;
+        if (!b.startDate) return -1;
+        return a.startDate.localeCompare(b.startDate) || (a.time || '').localeCompare(b.time || '');
+    });
+
     return (
         <div className="mt-6 space-y-4">
-            {activities.map(act => (
+            {sortedActivities.map(act => (
                 <div key={act.id} className="bg-white p-4 rounded-xl shadow-sm border border-orange-100 hover:border-orange-300 transition flex flex-col md:flex-row gap-4 relative group">
                     {/* 左側資訊區 */}
                     <div className="flex-1 flex flex-col gap-2">

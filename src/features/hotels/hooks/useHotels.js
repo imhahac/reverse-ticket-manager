@@ -28,7 +28,7 @@ export function useHotels() {
         const now = Date.now();
         const validHotels = Array.isArray(hotels) ? hotels : [];
         const safeHotels = validHotels.filter(h => h && typeof h === 'object' && h.id);
-        return safeHotels.map(h => {
+        const mapped = safeHotels.map(h => {
             let totalNights = null;
             if (h.checkIn && h.checkOut) {
                 const diff = new Date(h.checkOut) - new Date(h.checkIn);
@@ -42,6 +42,15 @@ export function useHotels() {
                 : false;
             return { ...h, totalNights, costPerNight, isPast };
         });
+
+        // 依入住日期 (checkIn) 由近至遠升冪排序 (無日期者排於末尾)
+        mapped.sort((a, b) => {
+            if (!a.checkIn) return 1;
+            if (!b.checkIn) return -1;
+            return a.checkIn.localeCompare(b.checkIn) || (a.checkOut || '').localeCompare(b.checkOut || '');
+        });
+
+        return mapped;
     }, [hotels]);
 
     // ── CRUD ──────────────────────────────────────────────────────────────
