@@ -130,13 +130,13 @@ export function useGoogleAuth() {
                     lastSilentRefreshFailRef.current = Date.now();
                     refreshResolverRef.current(false);
                     refreshResolverRef.current = null;
-                    toast.error('Google Token 更新超時', { description: '若持續出現異常，請手動重新登入。' });
+                    logger.warn('Google Token silent refresh timeout');
                 }
             }, TIMING.SILENT_REFRESH_TIMEOUT_MS);
         });
     };
 
-    // ── 背景 interval：token 剩阈值時自動嘗試更新 ─────────────────────
+    // ── 背景 interval：僅背景靜默維護，不主動彈窗打擾使用者 ─────────────
     useEffect(() => {
         if (!accessToken) return;
 
@@ -146,11 +146,10 @@ export function useGoogleAuth() {
             const now = Date.now();
             const timeRemaining = accessTokenState.expiresAt - now;
 
-            // 情況 1：token 已徹底過期（超過 1 分鐘緩衝）-> 直接登出，不嘗試背景刷新
+            // 情況 1：token 已徹底過期 -> 清理狀態即可，不主動彈出報錯打擾排程
             if (timeRemaining < -60000) {
-                logger.info('Token severely expired, clearing state.');
+                logger.info('Token severely expired, clearing state quietly.');
                 logout();
-                toast.error(ERRORS.AUTH_EXPIRED);
                 return;
             }
 
@@ -160,9 +159,6 @@ export function useGoogleAuth() {
                 trySilentRefresh();
             }
         };
-
-        // 首次掛載時立即檢查一次
-        checkExpiration();
 
         const interval = setInterval(checkExpiration, TIMING.AUTH_CHECK_INTERVAL);
         return () => clearInterval(interval);
