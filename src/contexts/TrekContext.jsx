@@ -4,7 +4,7 @@
  * 負責 IndexedDB 資料響應式同步、Trip 切換、以及舊版外站票無縫遷移
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { tripRepo, reservationRepo, dayPlanRepo } from '../services/db';
 import { runLegacyMigration } from '../services/migration/legacyMigration';
@@ -24,6 +24,12 @@ export function TrekProvider({ children }) {
     const [viewMode, setViewMode] = useState('split'); // 'split' | 'planner-only' | 'map-only'
     const [sharedTripData, setSharedTripData] = useState(null);
 
+    const activeTripIdRef = useRef(activeTripId);
+    activeTripIdRef.current = activeTripId;
+
+    const sharedTripDataRef = useRef(sharedTripData);
+    sharedTripDataRef.current = sharedTripData;
+
     const refreshTrips = useCallback(async (preferredTripId = null) => {
         try {
             const allTrips = await tripRepo.getAll();
@@ -31,13 +37,13 @@ export function TrekProvider({ children }) {
             setTrips(sortedTrips);
 
             // 若目前為分享預覽模式，維持分享旅程
-            if (sharedTripData?.trip && !preferredTripId) {
+            if (sharedTripDataRef.current?.trip && !preferredTripId) {
                 return;
             }
 
             // 優先選擇指定旅程，否則優先選取進行中/即將出發之旅程
             const defaultTarget = activeTrips[0]?.id || sortedTrips[0]?.id || null;
-            const targetId = preferredTripId || activeTripId || defaultTarget;
+            const targetId = preferredTripId || activeTripIdRef.current || defaultTarget;
             setActiveTripId(targetId);
 
             const selected = sortedTrips.find(t => t.id === targetId) || sortedTrips[0] || null;
@@ -59,9 +65,12 @@ export function TrekProvider({ children }) {
         } finally {
             setIsLoading(false);
         }
-    }, [activeTripId, sharedTripData]);
+    }, []);
 
-    // 啟動時檢查是否含有 ?view= 分享連結，或執行平滑遷移並載入旅程
+    const refreshTripsRef = useRef(refreshTrips);
+    refreshTripsRef.current = refreshTrips;
+
+    // 啟動時檢查是否含有 ?view= 分享連結，或執行平滑遷移並載入旅程 (僅在掛載時執行一次)
     useEffect(() => {
         let isMounted = true;
         async function init() {
@@ -111,12 +120,12 @@ export function TrekProvider({ children }) {
                 logger.error('Migration error:', err);
             }
             if (isMounted) {
-                await refreshTrips();
+                await refreshTripsRef.current();
             }
         }
         init();
         return () => { isMounted = false; };
-    }, [refreshTrips]);
+    }, []);
 
     const exitSharedView = useCallback(() => {
         const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
