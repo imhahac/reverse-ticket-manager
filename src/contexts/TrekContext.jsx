@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { tripRepo, reservationRepo, dayPlanRepo } from '../services/db';
 import { runLegacyMigration } from '../services/migration/legacyMigration';
 import { sortTripsByTime, isTripArchivedOrEnded } from '../services/trips/tripStatusService';
+import { fetchShareSnapshot } from '../services/shareService';
 import { logger } from '../utils/logger';
 
 const TrekContext = createContext(null);
@@ -21,12 +22,18 @@ export function TrekProvider({ children }) {
     const [dayPlans, setDayPlans] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [viewMode, setViewMode] = useState('split'); // 'split' | 'planner-only' | 'map-only'
+    const [sharedTripData, setSharedTripData] = useState(null);
 
     const refreshTrips = useCallback(async (preferredTripId = null) => {
         try {
             const allTrips = await tripRepo.getAll();
             const { activeTrips, sortedTrips } = sortTripsByTime(allTrips);
             setTrips(sortedTrips);
+
+            // 若目前為分享預覽模式，維持分享旅程
+            if (sharedTripData?.trip && !preferredTripId) {
+                return;
+            }
 
             // 優先選擇指定旅程，否則優先選取進行中/即將出發之旅程
             const defaultTarget = activeTrips[0]?.id || sortedTrips[0]?.id || null;
@@ -52,12 +59,49 @@ export function TrekProvider({ children }) {
         } finally {
             setIsLoading(false);
         }
-    }, [activeTripId]);
+    }, [activeTripId, sharedTripData]);
 
-    // 啟動時執行平滑遷移並載入旅程
+    // 啟動時檢查是否含有 ?view= 分享連結，或執行平滑遷移並載入旅程
     useEffect(() => {
         let isMounted = true;
         async function init() {
+            // 1. 優先檢查網址是否有 ?view=<UUID> 分享行程識別碼
+            const queryParams = new URLSearchParams(window.location.search);
+            const viewId = queryParams.get('view');
+
+            if (viewId) {
+                const toastId = toast.loading('正在載入分享的行程快照...');
+                try {
+                    const normalized = await fetchShareSnapshot(viewId);
+                    if (isMounted) {
+                        setSharedTripData(normalized);
+                        setActiveTrip(normalized.trip);
+                        setActiveTripId(normalized.trip.id);
+                        setReservations(normalized.reservations || []);
+                        setDayPlans(normalized.dayPlans || []);
+                        setIsLoading(false);
+                        toast.dismiss(toastId);
+                        toast.info(`👀 正在檢視唯讀分享行程：${normalized.trip.title}`, {
+                            description: '可點擊上方橫幅「📥 匯入至我的旅程」進行儲存與編輯。',
+                            duration: 6000
+                        });
+
+                        // 同步載入本機旅程清單供下拉切換
+                        const allTrips = await tripRepo.getAll();
+                        const { sortedTrips } = sortTripsByTime(allTrips);
+                        setTrips(sortedTrips);
+                        return;
+                    }
+                } catch (err) {
+                    toast.dismiss(toastId);
+                    toast.error('無法載入分享行程', {
+                        description: err.message || '該分享連結可能已過期或不存在，已為您載入本地旅程。',
+                        duration: 6000
+                    });
+                }
+            }
+
+            // 2. 常規模式：平滑遷移並載入本地 IndexedDB 旅程
             try {
                 const migrationRes = await runLegacyMigration();
                 if (migrationRes.migrated && isMounted) {
@@ -74,9 +118,76 @@ export function TrekProvider({ children }) {
         return () => { isMounted = false; };
     }, [refreshTrips]);
 
-    const selectTrip = useCallback((tripId) => {
-        refreshTrips(tripId);
+    const exitSharedView = useCallback(() => {
+        const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+        window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
+        setSharedTripData(null);
+        refreshTrips();
+        toast.info('已退出唯讀分享模式，回到本地旅程');
     }, [refreshTrips]);
+
+    const importSharedTripToLocal = useCallback(async () => {
+        if (!sharedTripData?.trip) return;
+        const toastId = toast.loading('正在將分享行程匯入至本地旅程庫...');
+        try {
+            const rawTrip = sharedTripData.trip;
+            const newTripId = `trip_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+            const clonedTrip = {
+                ...rawTrip,
+                id: newTripId,
+                title: `${rawTrip.title.replace(/^分享的\s*/, '')} (匯入副本)`,
+                isShared: false,
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            };
+            await tripRepo.save(clonedTrip);
+
+            // 儲存預訂項目
+            if (Array.isArray(sharedTripData.reservations)) {
+                for (const res of sharedTripData.reservations) {
+                    await reservationRepo.save({
+                        ...res,
+                        id: `res_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                        tripId: newTripId
+                    });
+                }
+            }
+
+            // 儲存日程安排
+            if (Array.isArray(sharedTripData.dayPlans)) {
+                for (const plan of sharedTripData.dayPlans) {
+                    await dayPlanRepo.save({
+                        ...plan,
+                        id: `day_${newTripId}_${plan.dayIndex}`,
+                        tripId: newTripId
+                    });
+                }
+            }
+
+            // 清除 URL 參數
+            const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
+
+            setSharedTripData(null);
+            await refreshTrips(newTripId);
+
+            toast.success(`✨ 已成功匯入「${clonedTrip.title}」至您的旅程庫！`, {
+                id: toastId,
+                description: '您現在可以自由編輯與規劃這趟旅程。'
+            });
+        } catch (err) {
+            toast.error('匯入分享行程失敗', { id: toastId, description: err.message });
+        }
+    }, [sharedTripData, refreshTrips]);
+
+    const selectTrip = useCallback((tripId) => {
+        if (sharedTripData) {
+            const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
+            setSharedTripData(null);
+        }
+        refreshTrips(tripId);
+    }, [sharedTripData, refreshTrips]);
 
     const createTrip = useCallback(async (tripData) => {
         const id = `trip_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -136,6 +247,10 @@ export function TrekProvider({ children }) {
         isLoading,
         viewMode,
         setViewMode,
+        sharedTripData,
+        isSharedView: Boolean(sharedTripData),
+        importSharedTripToLocal,
+        exitSharedView,
         selectTrip,
         createTrip,
         updateTrip,

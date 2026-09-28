@@ -12,7 +12,7 @@ import { useFilterContext } from '../contexts/FilterContext';
 import { useTicketDataContext } from '../contexts/DataContext';
 import { useTrek } from '../contexts/TrekContext';
 
-const PROXY_BASE = import.meta.env.VITE_FLIGHT_PROXY_URL || '';
+const PROXY_BASE = (import.meta.env.VITE_FLIGHT_PROXY_URL || 'https://flight-api-proxy.imhahac.workers.dev').replace(/\/+$/, '');
 
 export default function ShareButton({ variant = 'default', className = '' }) {
     const [isSharing, setIsSharing] = useState(false);
@@ -26,8 +26,25 @@ export default function ShareButton({ variant = 'default', className = '' }) {
         try {
             // 1. 若有配置 Cloudflare Worker，走雲端快照連結分享
             if (PROXY_BASE) {
+                let tripToShare = activeTrip;
+                if (!tripToShare && filteredItinerary?.length > 0) {
+                    const firstItin = filteredItinerary[0];
+                    const seg = firstItin.segments?.[0];
+                    tripToShare = {
+                        id: `trip_shared_${Date.now()}`,
+                        title: firstItin.customLabel || (seg?.airline && seg?.flightNo ? `${seg.airline} ${seg.flightNo} 旅程` : '精彩旅程'),
+                        startDate: firstItin.tripStartAt ? firstItin.tripStartAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
+                        endDate: firstItin.tripEndAt ? firstItin.tripEndAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
+                        baseCurrency: 'TWD',
+                        budget: firstItin.totalCostTWD || 0,
+                        status: 'planning',
+                        createdAt: Date.now(),
+                        updatedAt: Date.now()
+                    };
+                }
+
                 const snapshot = {
-                    trip: activeTrip,
+                    trip: tripToShare,
                     itinerary: filteredItinerary,
                     tripLabels,
                     hotels: safeHotels,

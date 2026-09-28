@@ -16,7 +16,10 @@ import {
     Edit2,
     Trash2,
     Archive,
-    ArchiveRestore
+    ArchiveRestore,
+    Share2,
+    Download,
+    X
 } from 'lucide-react';
 import { useTrek } from '../../contexts/TrekContext';
 import { getTripStatus, isTripArchivedOrEnded } from '../../services/trips/tripStatusService';
@@ -37,7 +40,10 @@ import { getUnifiedReservations } from '../../services/reservations/unifiedReser
 import { placeItemRepo } from '../../services/db';
 
 export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
-    const { activeTrip, reservations, dayPlans, viewMode, setViewMode, updateTrip, deleteTrip, toggleArchiveTrip, trips } = useTrek();
+    const { 
+        activeTrip, reservations, dayPlans, viewMode, setViewMode, updateTrip, deleteTrip, toggleArchiveTrip, trips,
+        isSharedView, importSharedTripToLocal, exitSharedView
+    } = useTrek();
     const { activeTab } = useUIContext();
 
     // 智能雙欄的子視圖由 activeTab 同步驅動：'daily' | 'timeline' | 'reservations'
@@ -155,6 +161,46 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
 
     return (
         <div className="relative">
+            {/* 唯讀分享模式專屬橫幅 */}
+            {isSharedView && (
+                <div className="mb-4 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-indigo-500/10 border border-indigo-200 dark:border-indigo-800/60 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                            <Share2 className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+                                    唯讀分享預覽
+                                </span>
+                                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                                    正在檢視分享行程：{activeTrip.title}
+                                </h3>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                此為他人分享的行程快照。點擊「匯入至我的旅程」即可複製一份到本地並自由編輯。
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                        <button
+                            onClick={importSharedTripToLocal}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition active:scale-95"
+                        >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>匯入至我的旅程</span>
+                        </button>
+                        <button
+                            onClick={exitSharedView}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs font-semibold rounded-lg transition active:scale-95"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                            <span>退出預覽</span>
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Mobile View Toggle Bar (僅在手機螢幕顯示) */}
             <div className="lg:hidden flex mb-4 bg-slate-200/80 p-1 rounded-xl text-xs font-bold text-slate-600">
                 <button
@@ -185,38 +231,51 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
                                     <h2 className="text-xl font-black tracking-wide truncate">{activeTrip.title}</h2>
                                     <div className="flex items-center gap-1.5 shrink-0">
                                         <ShareButton variant="header" />
-                                        <button
-                                            onClick={handleOpenEditTrip}
-                                            className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-1 border border-white/20"
-                                            title="編輯旅程名稱、日期與預算"
-                                        >
-                                            <Edit2 className="w-3.5 h-3.5" />
-                                            <span className="hidden sm:inline">編輯</span>
-                                        </button>
-                                        <button
-                                            onClick={() => toggleArchiveTrip(activeTrip.id)}
-                                            className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-1 border border-white/20"
-                                            title={isTripArchivedOrEnded(activeTrip) ? "解除封存（移回規劃中）" : "封存旅程"}
-                                        >
-                                            {isTripArchivedOrEnded(activeTrip) ? (
-                                                <>
-                                                    <ArchiveRestore className="w-3.5 h-3.5 text-emerald-300" />
-                                                    <span className="hidden sm:inline">解除封存</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Archive className="w-3.5 h-3.5 text-amber-300" />
-                                                    <span className="hidden sm:inline">封存</span>
-                                                </>
-                                            )}
-                                        </button>
-                                        <button
-                                            onClick={handleDeleteCurrentTrip}
-                                            className="p-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/40 text-rose-200 hover:text-white text-xs font-bold transition border border-rose-500/30"
-                                            title="刪除此旅程"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                        {isSharedView ? (
+                                            <button
+                                                onClick={importSharedTripToLocal}
+                                                className="px-2.5 py-1 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold transition flex items-center gap-1 shadow-xs"
+                                                title="複製此分享行程至您的本地旅程庫"
+                                            >
+                                                <Download className="w-3.5 h-3.5" />
+                                                <span className="hidden sm:inline">匯入副本</span>
+                                            </button>
+                                        ) : (
+                                            <>
+                                                <button
+                                                    onClick={handleOpenEditTrip}
+                                                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-1 border border-white/20"
+                                                    title="編輯旅程名稱、日期與預算"
+                                                >
+                                                    <Edit2 className="w-3.5 h-3.5" />
+                                                    <span className="hidden sm:inline">編輯</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => toggleArchiveTrip(activeTrip.id)}
+                                                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-1 border border-white/20"
+                                                    title={isTripArchivedOrEnded(activeTrip) ? "解除封存（移回規劃中）" : "封存旅程"}
+                                                >
+                                                    {isTripArchivedOrEnded(activeTrip) ? (
+                                                        <>
+                                                            <ArchiveRestore className="w-3.5 h-3.5 text-emerald-300" />
+                                                            <span className="hidden sm:inline">解除封存</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Archive className="w-3.5 h-3.5 text-amber-300" />
+                                                            <span className="hidden sm:inline">封存</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                                <button
+                                                    onClick={handleDeleteCurrentTrip}
+                                                    className="p-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/40 text-rose-200 hover:text-white text-xs font-bold transition border border-rose-500/30"
+                                                    title="刪除此旅程"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            </>
+                                        )}
                                         {(() => {
                                             const st = getTripStatus(activeTrip);
                                             if (st === 'ongoing') {
