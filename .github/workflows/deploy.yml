@@ -74,14 +74,29 @@ jobs:
 
   # 3. 部署 Cloudflare Worker (Deploy Worker，需配置 API Token 與 KV ID)
   deploy-worker:
-    if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && vars.SHARED_TRIPS_KV_ID != '' }}
     runs-on: ubuntu-latest
     name: Deploy Worker
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Check Cloudflare deployment prerequisites
+        id: check-config
+        shell: bash
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          KV_ID: ${{ vars.SHARED_TRIPS_KV_ID }}
+        run: |
+          if [ -n "$CF_TOKEN" ] && [ -n "$KV_ID" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Cloudflare credentials detected. Proceeding with Worker deployment."
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice ::Cloudflare API Token (Secret) 或 SHARED_TRIPS_KV_ID (Variable) 未設定，跳過 Worker 自動發布。"
+          fi
+
       - name: Inject KV ID from GitHub Vars
+        if: steps.check-config.outputs.configured == 'true'
         shell: bash
         run: |
           # 將 wrangler.toml 中的 __KV_ID__ 替換為 GitHub Variables 中的值
@@ -89,6 +104,7 @@ jobs:
           sed -i "s/__KV_ID__/${{ vars.SHARED_TRIPS_KV_ID }}/g" cloudflare-worker/wrangler.toml
 
       - name: Deploy to Cloudflare Workers
+        if: steps.check-config.outputs.configured == 'true'
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
