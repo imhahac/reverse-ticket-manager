@@ -51,16 +51,24 @@ export function generateTripIcs(trip, dayPlans = [], reservations = [], todos = 
     // 1. 匯出預訂憑證 (航班、火車、住宿、票券)
     reservations.forEach((res, index) => {
         const uid = `res_${res.id || index}_${Date.now()}@trek.app`;
+        const resType = (res.type || '').toLowerCase();
 
-        if (res.type === 'flight') {
+        if (resType === 'flight') {
             // 航班航段
-            const depCode = res.departureAirport || 'DEP';
-            const arrCode = res.arrivalAirport || 'ARR';
-            const flightNo = `${res.airline || ''} ${res.flightNumber || ''}`.trim() || '航班';
-            const depDate = res.departureTime ? res.departureTime.slice(0, 10) : res.date;
-            const depTime = res.departureTime ? res.departureTime.slice(11, 16) : null;
-            const arrDate = res.arrivalTime ? res.arrivalTime.slice(0, 10) : depDate;
-            const arrTime = res.arrivalTime ? res.arrivalTime.slice(11, 16) : null;
+            const fd = res.flightDetails || {};
+            const depCode = fd.from || res.departureAirport || 'DEP';
+            const arrCode = fd.to || res.arrivalAirport || 'ARR';
+            const flightAirline = fd.airline || res.airline || '';
+            const flightNum = fd.flightNumber || res.flightNumber || res.title || '';
+            const flightNo = `${flightAirline} ${flightNum}`.trim() || '航班';
+
+            const rawDepTime = fd.departureTime || res.departureTime || res.startDate || res.date || '';
+            const rawArrTime = fd.arrivalTime || res.arrivalTime || res.endDate || rawDepTime;
+
+            const depDate = rawDepTime ? rawDepTime.slice(0, 10) : res.date;
+            const depTime = rawDepTime && rawDepTime.includes('T') ? rawDepTime.slice(11, 16) : null;
+            const arrDate = rawArrTime ? rawArrTime.slice(0, 10) : depDate;
+            const arrTime = rawArrTime && rawArrTime.includes('T') ? rawArrTime.slice(11, 16) : depTime;
 
             lines.push('BEGIN:VEVENT');
             lines.push(`UID:${uid}`);
@@ -69,27 +77,30 @@ export function generateTripIcs(trip, dayPlans = [], reservations = [], todos = 
             if (depDate) lines.push(`DTSTART${formatIcsDateTime(depDate, depTime)}`);
             if (arrDate) lines.push(`DTEND${formatIcsDateTime(arrDate, arrTime || depTime)}`);
             lines.push(`LOCATION:${escapeIcsText(depCode)}`);
-            lines.push(`DESCRIPTION:${escapeIcsText(`訂位代碼 (PNR): ${res.confirmationCode || '無'}\\n座位: ${res.seatNumber || '未指定'}\\n航廈: ${res.departureTerminal || '-'}`)}`);
+            lines.push(`DESCRIPTION:${escapeIcsText(`訂位代碼 (PNR): ${res.confirmationCode || '無'}\\n座位: ${res.seatNumber || '未指定'}\\n航廈: ${fd.departureTerminal || res.departureTerminal || '-'}`)}`);
             lines.push('STATUS:CONFIRMED');
             lines.push('END:VEVENT');
-        } else if (res.type === 'hotel') {
+        } else if (resType === 'hotel' || resType === 'accommodation') {
             // 飯店住宿 (跨日全天事件)
-            const checkIn = res.checkInDate || res.date;
-            const checkOut = res.checkOutDate || res.endDate || checkIn;
+            const ad = res.accommodationDetails || {};
+            const hotelTitle = ad.name || res.title || res.hotelName || '飯店';
+            const checkIn = ad.checkInDate || res.checkInDate || (res.startDate ? res.startDate.slice(0, 10) : res.date);
+            const checkOut = ad.checkOutDate || res.checkOutDate || (res.endDate ? res.endDate.slice(0, 10) : checkIn);
+            const address = ad.address || res.address || '';
 
             lines.push('BEGIN:VEVENT');
             lines.push(`UID:${uid}`);
             lines.push(`DTSTAMP:${nowStamp}`);
-            lines.push(`SUMMARY:🏨 住宿: ${escapeIcsText(res.title || res.hotelName || '飯店')}`);
+            lines.push(`SUMMARY:🏨 住宿: ${escapeIcsText(hotelTitle)}`);
             if (checkIn) lines.push(`DTSTART${formatIcsDateTime(checkIn)}`);
             if (checkOut) lines.push(`DTEND${formatIcsDateTime(checkOut)}`);
-            lines.push(`LOCATION:${escapeIcsText(res.address || '')}`);
+            if (address) lines.push(`LOCATION:${escapeIcsText(address)}`);
             lines.push(`DESCRIPTION:${escapeIcsText(`確認號: ${res.confirmationCode || '無'}\\n房型: ${res.roomType || '-'}`)}`);
             lines.push('STATUS:CONFIRMED');
             lines.push('END:VEVENT');
         } else {
             // 其他票券或活動
-            const actDate = res.date || trip?.startDate;
+            const actDate = res.date || (res.startDate ? res.startDate.slice(0, 10) : trip?.startDate);
             lines.push('BEGIN:VEVENT');
             lines.push(`UID:${uid}`);
             lines.push(`DTSTAMP:${nowStamp}`);

@@ -168,7 +168,7 @@ export default function TripTimeline({
             )}
 
             {/* 視圖與篩選按鈕列 */}
-            <div className="bg-white/80 backdrop-blur-md sticky top-2 z-30 shadow-md border border-indigo-100 p-2 rounded-2xl flex flex-col md:flex-row items-center gap-3">
+            <div className="bg-white/90 backdrop-blur-md sticky top-[64px] z-10 shadow-md border border-indigo-100 p-2 rounded-2xl flex flex-col md:flex-row items-center gap-3">
                 <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl w-full md:w-fit shrink-0">
                     <button
                         onClick={() => setViewMode('time')}

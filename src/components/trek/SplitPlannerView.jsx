@@ -14,9 +14,12 @@ import {
     ListFilter,
     Sparkles,
     Edit2,
-    Trash2
+    Trash2,
+    Archive,
+    ArchiveRestore
 } from 'lucide-react';
 import { useTrek } from '../../contexts/TrekContext';
+import { getTripStatus, isTripArchivedOrEnded } from '../../services/trips/tripStatusService';
 import DayPlanTimeline from './DayPlanTimeline';
 import MapLibreView from './MapLibreView';
 import ReservationManager from './ReservationManager';
@@ -34,7 +37,7 @@ import { getUnifiedReservations } from '../../services/reservations/unifiedReser
 import { placeItemRepo } from '../../services/db';
 
 export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
-    const { activeTrip, reservations, dayPlans, viewMode, setViewMode, updateTrip, deleteTrip, trips } = useTrek();
+    const { activeTrip, reservations, dayPlans, viewMode, setViewMode, updateTrip, deleteTrip, toggleArchiveTrip, trips } = useTrek();
     const { activeTab } = useUIContext();
 
     // 智能雙欄的子視圖由 activeTab 同步驅動：'daily' | 'timeline' | 'reservations'
@@ -188,7 +191,24 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
                                             title="編輯旅程名稱、日期與預算"
                                         >
                                             <Edit2 className="w-3.5 h-3.5" />
-                                            <span>編輯行程</span>
+                                            <span className="hidden sm:inline">編輯</span>
+                                        </button>
+                                        <button
+                                            onClick={() => toggleArchiveTrip(activeTrip.id)}
+                                            className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition flex items-center gap-1 border border-white/20"
+                                            title={isTripArchivedOrEnded(activeTrip) ? "解除封存（移回規劃中）" : "封存旅程"}
+                                        >
+                                            {isTripArchivedOrEnded(activeTrip) ? (
+                                                <>
+                                                    <ArchiveRestore className="w-3.5 h-3.5 text-emerald-300" />
+                                                    <span className="hidden sm:inline">解除封存</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Archive className="w-3.5 h-3.5 text-amber-300" />
+                                                    <span className="hidden sm:inline">封存</span>
+                                                </>
+                                            )}
                                         </button>
                                         <button
                                             onClick={handleDeleteCurrentTrip}
@@ -197,9 +217,35 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
                                         >
                                             <Trash2 className="w-3.5 h-3.5" />
                                         </button>
-                                        <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-500/30 text-indigo-200 font-bold border border-indigo-400/30">
-                                            {activeTrip.status === 'completed' ? '已完成' : '規劃中'}
-                                        </span>
+                                        {(() => {
+                                            const st = getTripStatus(activeTrip);
+                                            if (st === 'ongoing') {
+                                                return (
+                                                    <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/30 text-emerald-200 font-bold border border-emerald-400/40">
+                                                        進行中
+                                                    </span>
+                                                );
+                                            }
+                                            if (st === 'completed') {
+                                                return (
+                                                    <span className="text-xs px-2.5 py-1 rounded-full bg-slate-700/80 text-slate-300 font-bold border border-slate-600">
+                                                        已結束
+                                                    </span>
+                                                );
+                                            }
+                                            if (st === 'archived') {
+                                                return (
+                                                    <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/30 text-amber-200 font-bold border border-amber-400/40">
+                                                        已封存
+                                                    </span>
+                                                );
+                                            }
+                                            return (
+                                                <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-500/30 text-indigo-200 font-bold border border-indigo-400/30">
+                                                    規劃中
+                                                </span>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-4 text-xs text-indigo-200 font-medium mt-2">
@@ -356,8 +402,10 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
                                         onChange={(e) => setEditTripForm(p => ({ ...p, status: e.target.value }))}
                                         className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 bg-white"
                                     >
-                                        <option value="planning">規劃中 (Planning)</option>
-                                        <option value="completed">已完成 (Completed)</option>
+                                        <option value="planning">規劃中 (依行程日期自動運作)</option>
+                                        <option value="ongoing">進行中 (手動指定)</option>
+                                        <option value="completed">已結束 (Completed)</option>
+                                        <option value="archived">已封存 (Archived)</option>
                                     </select>
                                 </div>
                             </div>

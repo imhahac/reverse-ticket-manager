@@ -45,7 +45,7 @@ jobs:
 
       - name: Build project
         env:
-          VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID || secrets.VITE_GOOGLE_CLIENT_ID }}
           VITE_FLIGHT_PROXY_URL: ${{ vars.VITE_FLIGHT_PROXY_URL }}
           VITE_AVIATIONSTACK_API_KEY: ${{ secrets.VITE_AVIATIONSTACK_API_KEY }}
           VITE_AIRLABS_API_KEY: ${{ secrets.VITE_AIRLABS_API_KEY }}
@@ -72,8 +72,9 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v5
 
-  # 3. 部署 Cloudflare Worker (Deploy Worker)
+  # 3. 部署 Cloudflare Worker (Deploy Worker，需配置 API Token 與 KV ID)
   deploy-worker:
+    if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && vars.SHARED_TRIPS_KV_ID != '' }}
     runs-on: ubuntu-latest
     name: Deploy Worker
     steps:

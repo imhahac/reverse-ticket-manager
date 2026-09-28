@@ -8,6 +8,7 @@
  */
 
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
     X, 
     Upload, 
@@ -31,19 +32,45 @@ import { generateTripGpx, downloadGpxFile } from '../../services/export/gpxExpor
 import { shiftTripDates, calculateDayDifference } from '../../services/trips/tripShiftService';
 import { placeItemRepo, dayPlanRepo, packingRepo, expenseRepo, todoRepo } from '../../services/db';
 import { downloadDiagnosticDump } from '../../utils/diagnosticDump';
+import { 
+    useTicketDataContext, 
+    useHotelDataContext, 
+    useActivityDataContext 
+} from '../../contexts/DataContext';
+import { getUnifiedReservations } from '../../services/reservations/unifiedReservationService';
+import { assembleTripDays } from '../../services/trips/tripExportAssembler';
 import TripBrochureModal from './TripBrochureModal';
 
 export default function ExportImportModal({ isOpen, onClose }) {
     const { activeTrip, dayPlans, reservations, refreshTrips } = useTrek();
 
+    // 整合機票與飯店憑證資料
+    const ticketContext = useTicketDataContext?.() || {};
+    const hotelContext = useHotelDataContext?.() || {};
+    const activityContext = useActivityDataContext?.() || {};
+    const tickets = ticketContext.tickets || [];
+    const rawHotels = hotelContext.rawHotels || [];
+    const activities = activityContext.activities || [];
+
+    const unifiedReservations = React.useMemo(() => {
+        return getUnifiedReservations(activeTrip, reservations, tickets, rawHotels, activities);
+    }, [activeTrip, reservations, tickets, rawHotels, activities]);
+
     const [activeTab, setActiveTab] = useState('import'); // 'import' | 'export' | 'shift' | 'brochure'
     const [isBrochureOpen, setIsBrochureOpen] = useState(false);
+    const [tripPlaces, setTripPlaces] = useState([]);
+
+    // 計算可用天數清單 (確保無 dayPlan 紀錄時仍能精準選取 Day 1 ~ Day N)
+    const tripDays = React.useMemo(() => {
+        return assembleTripDays({ trip: activeTrip, dayPlans, places: [] });
+    }, [activeTrip, dayPlans]);
 
     // ── 景點匯入狀態 ────────────────────────────────────────────────────────
     const [pastedLinks, setPastedLinks] = useState('');
     const [parsedPlaces, setParsedPlaces] = useState([]);
     const [selectedTargetDay, setSelectedTargetDay] = useState(0); // 0 = 第一天
     const [isImporting, setIsImporting] = useState(false);
+    const [isParsingLinks, setIsParsingLinks] = useState(false);
 
     // ── 日期平移狀態 ────────────────────────────────────────────────────────
     const [newStartDate, setNewStartDate] = useState(activeTrip?.startDate || '');
@@ -75,16 +102,23 @@ export default function ExportImportModal({ isOpen, onClose }) {
         }
     };
 
-    // 2. 處理文字貼上連結解析 (Google / Naver / 座標)
-    const handleParseLinks = () => {
+    // 2. 處理文字貼上連結解析 (Google / Naver / 座標 / 純景點地名)
+    const handleParseLinks = async () => {
         if (!pastedLinks.trim()) return;
-        const places = parseMapLinks(pastedLinks);
-        if (places.length === 0) {
-            toast.warning('未能識別出有效的地圖連結或座標');
-            return;
+        setIsParsingLinks(true);
+        try {
+            const places = await parseMapLinks(pastedLinks);
+            if (places.length === 0) {
+                toast.warning('未能識別出有效的地圖連結、景點名稱或座標');
+                return;
+            }
+            setParsedPlaces(places);
+            toast.success(`🎉 成功解析 ${places.length} 個地標！請確認後匯入行程`);
+        } catch (err) {
+            toast.error(`解析失敗: ${err.message}`);
+        } finally {
+            setIsParsingLinks(false);
         }
-        setParsedPlaces(places);
-        toast.success(`成功解析 ${places.length} 個地標！`);
     };
 
     // 3. 確認匯入至指定日程
@@ -93,36 +127,28 @@ export default function ExportImportModal({ isOpen, onClose }) {
         setIsImporting(true);
 
         try {
-            const targetPlan = dayPlans[selectedTargetDay] || dayPlans[0];
-            if (!targetPlan) {
-                toast.error('目前旅程尚無有效日程，請先建立日程');
-                return;
-            }
+            const targetDayIndex = selectedTargetDay;
+            // 查詢現有景點以排定 orderIndex
+            const existingPlaces = await placeItemRepo.getByTrip(activeTrip.id).catch(() => []);
+            const dayPlacesCount = existingPlaces.filter(p => (p.dayIndex ?? 0) === targetDayIndex).length;
 
             const newPlaces = parsedPlaces.map((p, idx) => ({
                 id: `place_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
                 tripId: activeTrip.id,
-                dayPlanId: targetPlan.id,
+                dayIndex: targetDayIndex,
                 name: p.name,
                 lat: p.lat,
                 lng: p.lng,
-                address: p.desc || p.originalUrl || '',
-                notes: `從外部匯入 (${p.source || '外部'})`,
+                address: p.address || p.desc || p.originalUrl || '',
+                notes: p.notes || `從外部匯入 (${p.source || '外部'})`,
+                orderIndex: dayPlacesCount + idx,
                 createdAt: Date.now()
             }));
 
             // 儲存至 placeItemRepo
             await placeItemRepo.saveBatch(newPlaces);
 
-            // 更新 dayPlan 的 places 陣列
-            const updatedPlan = {
-                ...targetPlan,
-                places: [...(targetPlan.places || []), ...newPlaces],
-                updatedAt: Date.now()
-            };
-            await dayPlanRepo.save(updatedPlan);
-
-            toast.success(`✨ 已將 ${newPlaces.length} 個景點匯入至 Day ${selectedTargetDay + 1}！`);
+            toast.success(`✨ 已將 ${newPlaces.length} 個景點成功匯入至 Day ${targetDayIndex + 1}！`);
             setParsedPlaces([]);
             setPastedLinks('');
             await refreshTrips(activeTrip.id);
@@ -136,19 +162,33 @@ export default function ExportImportModal({ isOpen, onClose }) {
 
     // 4. 匯出 ICS 行事曆
     const handleExportIcs = async () => {
-        const todos = await todoRepo.getByTrip(activeTrip.id);
-        const icsContent = generateTripIcs(activeTrip, dayPlans, reservations, todos);
-        const fileName = `${activeTrip.title || 'trip'}_calendar.ics`;
-        downloadIcsFile(fileName, icsContent);
-        toast.success('已匯出 iCalendar 行事曆檔案 (.ics)！');
+        try {
+            const [todos, places] = await Promise.all([
+                todoRepo.getByTrip(activeTrip.id).catch(() => []),
+                placeItemRepo.getByTrip(activeTrip.id).catch(() => [])
+            ]);
+            const assembledDays = assembleTripDays({ trip: activeTrip, dayPlans, places });
+            const icsContent = generateTripIcs(activeTrip, assembledDays, unifiedReservations, todos);
+            const fileName = `${activeTrip.title || 'trip'}_calendar.ics`;
+            downloadIcsFile(fileName, icsContent);
+            toast.success('已匯出 iCalendar 行事曆檔案 (.ics)！');
+        } catch (err) {
+            toast.error(`匯出 ICS 失敗: ${err.message}`);
+        }
     };
 
     // 5. 匯出 GPX 航跡
-    const handleExportGpx = () => {
-        const gpxContent = generateTripGpx(activeTrip, dayPlans);
-        const fileName = `${activeTrip.title || 'trip'}_route.gpx`;
-        downloadGpxFile(fileName, gpxContent);
-        toast.success('已匯出 GPX 航跡檔案 (.gpx)！');
+    const handleExportGpx = async () => {
+        try {
+            const places = await placeItemRepo.getByTrip(activeTrip.id).catch(() => []);
+            const assembledDays = assembleTripDays({ trip: activeTrip, dayPlans, places });
+            const gpxContent = generateTripGpx(activeTrip, assembledDays);
+            const fileName = `${activeTrip.title || 'trip'}_route.gpx`;
+            downloadGpxFile(fileName, gpxContent);
+            toast.success('已匯出 GPX 航跡檔案 (.gpx)！');
+        } catch (err) {
+            toast.error(`匯出 GPX 失敗: ${err.message}`);
+        }
     };
 
     // 5.1 匯出系統除錯診斷包 (Diagnostic Dump)
@@ -187,20 +227,28 @@ export default function ExportImportModal({ isOpen, onClose }) {
         }
     };
 
-    // 7. 開啟手冊預覽時讀取費用與行李資料
+    // 7. 開啟手冊預覽時讀取景點、費用與行李資料
     const handleOpenBrochure = async () => {
-        const pItems = await packingRepo.getByTrip(activeTrip.id);
-        setPackingItems(pItems);
-        const expItems = await expenseRepo.getByTrip(activeTrip.id);
-        setExpenses(expItems);
-        setIsBrochureOpen(true);
+        try {
+            const [pItems, expItems, places] = await Promise.all([
+                packingRepo.getByTrip(activeTrip.id).catch(() => []),
+                expenseRepo.getByTrip(activeTrip.id).catch(() => []),
+                placeItemRepo.getByTrip(activeTrip.id).catch(() => [])
+            ]);
+            setPackingItems(pItems);
+            setExpenses(expItems);
+            setTripPlaces(places);
+            setIsBrochureOpen(true);
+        } catch {
+            setIsBrochureOpen(true);
+        }
     };
 
     const dayDiff = calculateDayDifference(activeTrip.startDate, newStartDate);
 
-    return (
+    const modalContent = (
         <>
-            <div className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="fixed inset-0 z-[70] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
                 <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden border border-gray-100 flex flex-col max-h-[90vh]">
                     
                     {/* Header */}
@@ -267,14 +315,22 @@ export default function ExportImportModal({ isOpen, onClose }) {
                                             rows={3}
                                             value={pastedLinks}
                                             onChange={(e) => setPastedLinks(e.target.value)}
-                                            placeholder="貼上 Google Maps / Naver Maps 連結或座標 (每行一筆)"
+                                            placeholder="貼上 Google Maps / Naver Maps 連結、座標或景點名稱 (支援每行一筆批次匯入)"
                                             className="w-full border border-gray-200 rounded-xl p-2.5 text-xs focus:outline-none focus:border-indigo-500 resize-none font-mono"
                                         />
                                         <button
                                             onClick={handleParseLinks}
-                                            className="w-full py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition"
+                                            disabled={isParsingLinks || !pastedLinks.trim()}
+                                            className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
                                         >
-                                            智慧解析文字連結
+                                            {isParsingLinks ? (
+                                                <>
+                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                    <span>智慧解析與聯網定位中...</span>
+                                                </>
+                                            ) : (
+                                                <span>智慧解析文字連結或景點</span>
+                                            )}
                                         </button>
                                     </div>
                                 </div>
@@ -289,11 +345,11 @@ export default function ExportImportModal({ isOpen, onClose }) {
                                                 <select
                                                     value={selectedTargetDay}
                                                     onChange={(e) => setSelectedTargetDay(Number(e.target.value))}
-                                                    className="border border-gray-300 rounded-lg px-2 py-1 text-xs bg-white font-bold"
+                                                    className="border border-gray-300 rounded-lg px-2 py-1 text-xs bg-white font-bold text-slate-800"
                                                 >
-                                                    {dayPlans.map((dp, idx) => (
-                                                        <option key={dp.id || idx} value={idx}>
-                                                            Day {idx + 1} ({dp.date})
+                                                    {tripDays.map((td, idx) => (
+                                                        <option key={idx} value={idx}>
+                                                            Day {idx + 1} {td.date ? `(${td.date})` : ''}
                                                         </option>
                                                     ))}
                                                 </select>
@@ -474,10 +530,13 @@ export default function ExportImportModal({ isOpen, onClose }) {
                 onClose={() => setIsBrochureOpen(false)}
                 trip={activeTrip}
                 dayPlans={dayPlans}
-                reservations={reservations}
+                places={tripPlaces}
+                reservations={unifiedReservations}
                 packingItems={packingItems}
                 expenses={expenses}
             />
         </>
     );
+
+    return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 }

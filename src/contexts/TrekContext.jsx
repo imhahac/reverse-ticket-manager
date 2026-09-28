@@ -8,6 +8,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { toast } from 'sonner';
 import { tripRepo, reservationRepo, dayPlanRepo } from '../services/db';
 import { runLegacyMigration } from '../services/migration/legacyMigration';
+import { sortTripsByTime, isTripArchivedOrEnded } from '../services/trips/tripStatusService';
 import { logger } from '../utils/logger';
 
 const TrekContext = createContext(null);
@@ -24,13 +25,15 @@ export function TrekProvider({ children }) {
     const refreshTrips = useCallback(async (preferredTripId = null) => {
         try {
             const allTrips = await tripRepo.getAll();
-            allTrips.sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
-            setTrips(allTrips);
+            const { activeTrips, sortedTrips } = sortTripsByTime(allTrips);
+            setTrips(sortedTrips);
 
-            const targetId = preferredTripId || activeTripId || allTrips[0]?.id || null;
+            // 優先選擇指定旅程，否則優先選取進行中/即將出發之旅程
+            const defaultTarget = activeTrips[0]?.id || sortedTrips[0]?.id || null;
+            const targetId = preferredTripId || activeTripId || defaultTarget;
             setActiveTripId(targetId);
 
-            const selected = allTrips.find(t => t.id === targetId) || allTrips[0] || null;
+            const selected = sortedTrips.find(t => t.id === targetId) || sortedTrips[0] || null;
             setActiveTrip(selected);
 
             if (selected) {
@@ -110,6 +113,20 @@ export function TrekProvider({ children }) {
         await refreshTrips();
     }, [refreshTrips]);
 
+    const toggleArchiveTrip = useCallback(async (tripId) => {
+        const target = trips.find(t => t.id === tripId);
+        if (!target) return;
+        const isCurrentlyArchived = isTripArchivedOrEnded(target);
+        const newStatus = isCurrentlyArchived ? 'planning' : 'archived';
+        await tripRepo.save({
+            ...target,
+            status: newStatus,
+            updatedAt: Date.now()
+        });
+        toast.success(newStatus === 'archived' ? `已將「${target.title}」封存` : `已取消「${target.title}」的封存狀態`);
+        await refreshTrips(target.id);
+    }, [trips, refreshTrips]);
+
     const value = {
         trips,
         activeTripId,
@@ -123,6 +140,7 @@ export function TrekProvider({ children }) {
         createTrip,
         updateTrip,
         deleteTrip,
+        toggleArchiveTrip,
         refreshTrips
     };
 

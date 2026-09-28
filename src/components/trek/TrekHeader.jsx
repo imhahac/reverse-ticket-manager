@@ -4,12 +4,14 @@
  * 雙欄佈局視角切換器、以及 Google Drive 雲端同步狀態
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
     Compass, 
     Calendar, 
     Plus, 
     ChevronDown, 
+    ChevronRight,
     Cloud, 
     Check, 
     RefreshCw,
@@ -22,11 +24,14 @@ import {
     ShieldCheck,
     Info,
     X,
-    Edit2
+    Edit2,
+    Archive,
+    ArchiveRestore
 } from 'lucide-react';
 import { useTrek } from '../../contexts/TrekContext';
 import { useUIContext } from '../../contexts/UIContext';
 import { useSyncContext } from '../../contexts/SyncContext';
+import { getTripStatus, isTripArchivedOrEnded } from '../../services/trips/tripStatusService';
 import ExportImportModal from './ExportImportModal';
 
 export default function TrekHeader() {
@@ -37,7 +42,8 @@ export default function TrekHeader() {
         selectTrip, 
         createTrip, 
         updateTrip,
-        deleteTrip
+        deleteTrip,
+        toggleArchiveTrip
     } = useTrek();
 
     const { activeTab, setActiveTab, configWarnings } = useUIContext();
@@ -56,6 +62,7 @@ export default function TrekHeader() {
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+    const [isArchivedExpanded, setIsArchivedExpanded] = useState(true);
 
     const [newTitle, setNewTitle] = useState('');
     const [newStartDate, setNewStartDate] = useState(new Date().toISOString().slice(0, 10));
@@ -68,6 +75,21 @@ export default function TrekHeader() {
     const [editStartDate, setEditStartDate] = useState('');
     const [editEndDate, setEditEndDate] = useState('');
     const [editCurrency, setEditCurrency] = useState('TWD');
+    const [editStatus, setEditStatus] = useState('planning');
+
+    // 分組進行中/規劃中 vs 已結束/封存
+    const { activeTrips, archivedTrips } = useMemo(() => {
+        const active = [];
+        const archived = [];
+        (trips || []).forEach(trip => {
+            if (isTripArchivedOrEnded(trip)) {
+                archived.push(trip);
+            } else {
+                active.push(trip);
+            }
+        });
+        return { activeTrips: active, archivedTrips: archived };
+    }, [trips]);
 
     const handleCreateSubmit = async (e) => {
         e.preventDefault();
@@ -90,6 +112,7 @@ export default function TrekHeader() {
         setEditStartDate(trip.startDate || '');
         setEditEndDate(trip.endDate || '');
         setEditCurrency(trip.baseCurrency || 'TWD');
+        setEditStatus(trip.status || 'planning');
         setIsDropdownOpen(false);
     };
 
@@ -101,7 +124,8 @@ export default function TrekHeader() {
             title: editTitle.trim(),
             startDate: editStartDate,
             endDate: editEndDate,
-            baseCurrency: editCurrency
+            baseCurrency: editCurrency,
+            status: editStatus
         });
         setEditingTrip(null);
     };
@@ -146,7 +170,7 @@ export default function TrekHeader() {
                         className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 px-3 py-1.5 rounded-lg text-sm transition-all text-slate-200"
                     >
                         <Calendar className="w-4 h-4 text-indigo-400 shrink-0" />
-                        <span className="font-semibold max-w-[140px] sm:max-w-[200px] truncate">
+                        <span className="font-semibold max-w-[130px] sm:max-w-[200px] truncate">
                             {activeTrip ? activeTrip.title : '選擇或建立旅程'}
                         </span>
                         {activeTrip && (
@@ -154,12 +178,25 @@ export default function TrekHeader() {
                                 ({activeTrip.startDate} ~ {activeTrip.endDate?.slice(5)})
                             </span>
                         )}
+                        {activeTrip && (() => {
+                            const st = getTripStatus(activeTrip);
+                            if (st === 'ongoing') {
+                                return <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hidden sm:inline">進行中</span>;
+                            }
+                            if (st === 'completed') {
+                                return <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700/80 text-slate-300 border border-slate-600 hidden sm:inline">已結束</span>;
+                            }
+                            if (st === 'archived') {
+                                return <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 hidden sm:inline">已封存</span>;
+                            }
+                            return null;
+                        })()}
                         <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                     </button>
 
                     {isDropdownOpen && (
-                        <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-72 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 z-50">
-                            <div className="px-3 py-1.5 border-b border-slate-700/60 flex items-center justify-between text-xs text-slate-400 font-bold uppercase tracking-wider">
+                        <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-80 sm:w-96 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+                            <div className="px-3.5 py-1.5 border-b border-slate-700/60 flex items-center justify-between text-xs text-slate-400 font-bold uppercase tracking-wider">
                                 <span>所有旅程 ({trips.length})</span>
                                 <button
                                     onClick={() => { setIsCreateModalOpen(true); setIsDropdownOpen(false); }}
@@ -168,43 +205,160 @@ export default function TrekHeader() {
                                     <Plus className="w-3.5 h-3.5" /> 新增
                                 </button>
                             </div>
-                            <div className="max-h-60 overflow-y-auto py-1">
-                                {trips.length === 0 ? (
-                                    <div className="px-4 py-3 text-xs text-slate-400 text-center">尚無旅程，請點擊新增</div>
-                                ) : (
-                                    trips.map(trip => (
-                                        <div
-                                            key={trip.id}
-                                            className={`px-3 py-2 flex items-center justify-between hover:bg-slate-700/60 cursor-pointer ${trip.id === activeTripId ? 'bg-indigo-500/10 text-indigo-300 font-bold' : 'text-slate-300'}`}
-                                            onClick={() => { selectTrip(trip.id); setIsDropdownOpen(false); }}
-                                        >
-                                            <div className="truncate pr-2">
-                                                <div className="text-sm truncate">{trip.title}</div>
-                                                <div className="text-[11px] text-slate-400">{trip.startDate} ~ {trip.endDate}</div>
-                                            </div>
-                                            <div className="flex items-center gap-1 shrink-0">
-                                                <button
-                                                    onClick={(e) => handleOpenEdit(trip, e)}
-                                                    className="text-slate-400 hover:text-indigo-300 p-1 rounded hover:bg-slate-600/50 transition"
-                                                    title="編輯旅程"
-                                                >
-                                                    <Edit2 className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if (confirm(`確定要刪除旅程「${trip.title}」及其所有預訂與日程嗎？此操作無法復原。`)) {
-                                                            deleteTrip(trip.id);
-                                                        }
-                                                    }}
-                                                    className="text-slate-400 hover:text-rose-400 p-1 rounded hover:bg-slate-600/50 transition"
-                                                    title="刪除旅程"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
-                                            </div>
+
+                            <div className="max-h-80 overflow-y-auto divide-y divide-slate-700/40">
+                                {/* 區塊一：規劃與進行中 */}
+                                <div className="py-1">
+                                    <div className="px-3 py-1 text-[11px] font-semibold text-slate-400">
+                                        規劃與進行中 ({activeTrips.length})
+                                    </div>
+                                    {activeTrips.length === 0 ? (
+                                        <div className="px-4 py-2.5 text-xs text-slate-400 text-center">
+                                            無進行或規劃中的旅程
                                         </div>
-                                    ))
+                                    ) : (
+                                        activeTrips.map(trip => {
+                                            const status = getTripStatus(trip);
+                                            const isActive = trip.id === activeTripId;
+                                            return (
+                                                <div
+                                                    key={trip.id}
+                                                    className={`px-3 py-2 flex items-center justify-between hover:bg-slate-700/60 cursor-pointer transition ${isActive ? 'bg-indigo-500/15 text-indigo-200 font-bold border-l-2 border-indigo-500' : 'text-slate-300'}`}
+                                                    onClick={() => { selectTrip(trip.id); setIsDropdownOpen(false); }}
+                                                >
+                                                    <div className="truncate pr-2 flex-1">
+                                                        <div className="text-sm truncate flex items-center gap-1.5">
+                                                            <span className="truncate">{trip.title}</span>
+                                                            {status === 'ongoing' && (
+                                                                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shrink-0 font-normal">
+                                                                    進行中
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-[11px] text-slate-400 mt-0.5">{trip.startDate} ~ {trip.endDate}</div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        <button
+                                                            onClick={(e) => handleOpenEdit(trip, e)}
+                                                            className="text-slate-400 hover:text-indigo-300 p-1.5 rounded hover:bg-slate-600/50 transition"
+                                                            title="編輯旅程"
+                                                        >
+                                                            <Edit2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                toggleArchiveTrip(trip.id);
+                                                            }}
+                                                            className="text-slate-400 hover:text-amber-300 p-1.5 rounded hover:bg-slate-600/50 transition"
+                                                            title="封存此旅程"
+                                                        >
+                                                            <Archive className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (confirm(`確定要刪除旅程「${trip.title}」及其所有預訂與日程嗎？此操作無法復原。`)) {
+                                                                    deleteTrip(trip.id);
+                                                                }
+                                                            }}
+                                                            className="text-slate-400 hover:text-rose-400 p-1.5 rounded hover:bg-slate-600/50 transition"
+                                                            title="刪除旅程"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+
+                                {/* 區塊二：已結束與封存旅程 */}
+                                {archivedTrips.length > 0 && (
+                                    <div className="pt-1 bg-slate-900/40">
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setIsArchivedExpanded(!isArchivedExpanded);
+                                            }}
+                                            className="w-full px-3 py-1.5 flex items-center justify-between text-xs text-slate-400 hover:text-slate-200 transition font-medium"
+                                        >
+                                            <span className="flex items-center gap-1.5">
+                                                <Archive className="w-3 h-3 text-slate-400" />
+                                                <span>已結束 / 封存 ({archivedTrips.length})</span>
+                                            </span>
+                                            {isArchivedExpanded ? (
+                                                <ChevronDown className="w-3 h-3" />
+                                            ) : (
+                                                <ChevronRight className="w-3 h-3" />
+                                            )}
+                                        </button>
+                                        {isArchivedExpanded && (
+                                            <div className="pb-1">
+                                                {archivedTrips.map(trip => {
+                                                    const status = getTripStatus(trip);
+                                                    const isActive = trip.id === activeTripId;
+                                                    return (
+                                                        <div
+                                                            key={trip.id}
+                                                            className={`px-3 py-2 flex items-center justify-between hover:bg-slate-700/50 cursor-pointer transition ${isActive ? 'bg-indigo-500/15 text-indigo-300 font-bold border-l-2 border-indigo-500' : 'text-slate-400 hover:text-slate-200'}`}
+                                                            onClick={() => { selectTrip(trip.id); setIsDropdownOpen(false); }}
+                                                        >
+                                                            <div className="truncate pr-2 flex-1">
+                                                                <div className="text-sm truncate flex items-center gap-1.5">
+                                                                    <span className="truncate">{trip.title}</span>
+                                                                    {status === 'completed' && (
+                                                                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-700 text-slate-300 border border-slate-600 shrink-0 font-normal">
+                                                                            已結束
+                                                                        </span>
+                                                                    )}
+                                                                    {status === 'archived' && (
+                                                                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 shrink-0 font-normal">
+                                                                            已封存
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-[11px] text-slate-500 mt-0.5">{trip.startDate} ~ {trip.endDate}</div>
+                                                            </div>
+                                                            <div className="flex items-center gap-1 shrink-0">
+                                                                <button
+                                                                    onClick={(e) => handleOpenEdit(trip, e)}
+                                                                    className="text-slate-400 hover:text-indigo-300 p-1.5 rounded hover:bg-slate-600/50 transition"
+                                                                    title="編輯旅程"
+                                                                >
+                                                                    <Edit2 className="w-3.5 h-3.5" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        toggleArchiveTrip(trip.id);
+                                                                    }}
+                                                                    className="text-slate-400 hover:text-emerald-300 p-1.5 rounded hover:bg-slate-600/50 transition"
+                                                                    title="解除封存（移回規劃中）"
+                                                                >
+                                                                    <ArchiveRestore className="w-3.5 h-3.5" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        if (confirm(`確定要刪除旅程「${trip.title}」及其所有預訂與日程嗎？此操作無法復原。`)) {
+                                                                            deleteTrip(trip.id);
+                                                                        }
+                                                                    }}
+                                                                    className="text-slate-400 hover:text-rose-400 p-1.5 rounded hover:bg-slate-600/50 transition"
+                                                                    title="刪除旅程"
+                                                                >
+                                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -305,8 +459,8 @@ export default function TrekHeader() {
             </div>
 
             {/* 系統運行環境與狀態 Modal */}
-            {isStatusModalOpen && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            {isStatusModalOpen && typeof document !== 'undefined' && createPortal(
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
                     <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl text-slate-100 animate-in fade-in zoom-in-95 duration-150">
                         <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-700">
                             <h3 className="text-base font-bold flex items-center gap-2 text-white">
@@ -368,12 +522,13 @@ export default function TrekHeader() {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Create Trip Modal */}
-            {isCreateModalOpen && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            {isCreateModalOpen && typeof document !== 'undefined' && createPortal(
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
                     <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl text-slate-100 animate-in fade-in zoom-in-95 duration-150">
                         <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                             <Calendar className="w-5 h-5 text-indigo-400" /> 建立新旅程
@@ -448,8 +603,8 @@ export default function TrekHeader() {
             )}
 
             {/* 編輯現有旅程 Modal */}
-            {editingTrip && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            {editingTrip && typeof document !== 'undefined' && createPortal(
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
                     <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl text-white animate-in fade-in zoom-in-95 duration-150">
                         <div className="flex items-center justify-between mb-4 border-b border-slate-700/60 pb-3">
                             <h3 className="font-bold text-base flex items-center gap-2">
@@ -511,6 +666,19 @@ export default function TrekHeader() {
                                     <option value="THB">THB - 泰銖</option>
                                 </select>
                             </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1">旅程狀態</label>
+                                <select
+                                    value={editStatus}
+                                    onChange={(e) => setEditStatus(e.target.value)}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                                >
+                                    <option value="planning">規劃中 (依行程日期自動運作)</option>
+                                    <option value="ongoing">進行中 (手動指定)</option>
+                                    <option value="completed">已結束 (行程結束)</option>
+                                    <option value="archived">已封存 (封存收納)</option>
+                                </select>
+                            </div>
                             <div className="flex justify-end gap-3 pt-3 border-t border-slate-700/60">
                                 <button
                                     type="button"
@@ -528,7 +696,8 @@ export default function TrekHeader() {
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* 匯入匯出與手冊 Modal */}

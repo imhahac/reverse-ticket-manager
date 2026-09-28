@@ -5,7 +5,8 @@
  * 可直接透過瀏覽器一鍵「列印」或「另存為高品質向量 PDF」，亦可一鍵複製 Markdown 手冊文字。
  */
 
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
     Printer, 
     Copy, 
@@ -17,16 +18,82 @@ import {
     Clock, 
     ShieldAlert, 
     CheckSquare,
-    DollarSign
+    DollarSign,
+    Ticket
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { placeItemRepo, dayPlanRepo } from '../../services/db';
+import { assembleTripDays, normalizeReservations } from '../../services/trips/tripExportAssembler';
 
-export default function TripBrochureModal({ isOpen, onClose, trip, dayPlans = [], reservations = [], packingItems = [], expenses = [] }) {
+export default function TripBrochureModal({ 
+    isOpen, 
+    onClose, 
+    trip, 
+    dayPlans = [], 
+    reservations = [], 
+    places = null,
+    packingItems = [], 
+    expenses = [] 
+}) {
+    const [internalDays, setInternalDays] = useState(null);
+
+    // 檢查外部是否已傳入自帶 places 的 dayPlans
+    const hasExternalPlaces = useMemo(() => {
+        return Array.isArray(dayPlans) && dayPlans.some(dp => Array.isArray(dp.places) && dp.places.length > 0);
+    }, [dayPlans]);
+
+    // 當 Modal 開啟且缺乏完整景點資料時，非同步載入 placeItemRepo 與 dayPlanRepo
+    useEffect(() => {
+        if (!isOpen || !trip) return;
+
+        // 若外部已傳入 places 清單，直接進行組裝
+        if (Array.isArray(places)) {
+            const assembled = assembleTripDays({ trip, dayPlans, places });
+            setInternalDays(assembled);
+            return;
+        }
+
+        // 若外部 dayPlans 內已組裝好 places，直接採用
+        if (hasExternalPlaces) {
+            setInternalDays(dayPlans);
+            return;
+        }
+
+        let isMounted = true;
+        async function loadAndAssemble() {
+            try {
+                const [dbPlaces, dbDayPlans] = await Promise.all([
+                    placeItemRepo.getByTrip(trip.id).catch(() => []),
+                    dayPlanRepo.getByTrip(trip.id).catch(() => [])
+                ]);
+                if (!isMounted) return;
+                const mergedPlans = dayPlans.length > 0 ? dayPlans : dbDayPlans;
+                const assembled = assembleTripDays({ trip, dayPlans: mergedPlans, places: dbPlaces });
+                setInternalDays(assembled);
+            } catch {
+                if (isMounted) {
+                    setInternalDays(assembleTripDays({ trip, dayPlans, places: [] }));
+                }
+            }
+        }
+
+        loadAndAssemble();
+        return () => { isMounted = false; };
+    }, [isOpen, trip?.id, trip?.startDate, trip?.endDate, dayPlans, places, hasExternalPlaces]);
+
+    // 取得最終有效的每日行程規劃清單
+    const effectiveDayPlans = useMemo(() => {
+        if (internalDays) return internalDays;
+        if (hasExternalPlaces) return dayPlans;
+        return assembleTripDays({ trip, dayPlans, places: [] });
+    }, [internalDays, hasExternalPlaces, dayPlans, trip]);
+
+    // 標準化預訂項目 (包含統一機票、住宿與其他活動)
+    const { flights, hotels, others: otherReservations } = useMemo(() => {
+        return normalizeReservations(reservations);
+    }, [reservations]);
+
     if (!isOpen || !trip) return null;
-
-    const flights = reservations.filter(r => r.type === 'flight');
-    const hotels = reservations.filter(r => r.type === 'hotel');
-    const otherReservations = reservations.filter(r => r.type !== 'flight' && r.type !== 'hotel');
 
     const totalExpense = expenses.reduce((sum, e) => sum + (Number(e.amountTwd) || Number(e.amount) || 0), 0);
 
@@ -36,15 +103,16 @@ export default function TripBrochureModal({ isOpen, onClose, trip, dayPlans = []
 
     const handleCopyMarkdown = () => {
         let md = `# 📖 ${trip.title}\n\n`;
-        md += `**日期**：${trip.startDate} ~ ${trip.endDate}\n`;
-        md += `**幣別**：${trip.baseCurrency || 'TWD'} | **總費用**：約 $${totalExpense.toLocaleString()}\n\n`;
+        md += `**日期**：${trip.startDate || '未定'} ~ ${trip.endDate || '未定'}\n`;
+        md += `**天數**：共 ${effectiveDayPlans.length} 天 | **幣別**：${trip.baseCurrency || 'TWD'} | **總費用**：約 $${totalExpense.toLocaleString()}\n\n`;
 
         if (flights.length > 0) {
-            md += `## ✈️ 航班資訊\n`;
+            md += `## ✈️ 航班交通\n`;
             flights.forEach(f => {
-                md += `- **${f.airline || ''} ${f.flightNumber || ''}** (${f.departureAirport} ➔ ${f.arrivalAirport})\n`;
+                const route = (f.departureAirport || f.arrivalAirport) ? ` (${f.departureAirport || '-'} ➔ ${f.arrivalAirport || '-'})` : '';
+                md += `- **${f.airline || ''} ${f.flightNumber || ''}**${route}\n`;
                 md += `  起飛: ${f.departureTime || '-'} | 抵達: ${f.arrivalTime || '-'}\n`;
-                md += `  PNR: \`${f.confirmationCode || '無'}\` | 座位: ${f.seatNumber || '未指定'}\n`;
+                md += `  PNR: \`${f.confirmationCode || '無'}\` | 座位: ${f.seatNumber || '未指定'}${f.departureTerminal ? ` | 航廈: ${f.departureTerminal}` : ''}\n`;
             });
             md += `\n`;
         }
@@ -53,33 +121,52 @@ export default function TripBrochureModal({ isOpen, onClose, trip, dayPlans = []
             md += `## 🏨 住宿安排\n`;
             hotels.forEach(h => {
                 md += `- **${h.title || h.hotelName}** (${h.checkInDate || '-'} ~ ${h.checkOutDate || '-'})\n`;
-                md += `  地址: ${h.address || '-'}\n`;
-                md += `  確認代碼: \`${h.confirmationCode || '無'}\`\n`;
+                if (h.address) md += `  地址: ${h.address}\n`;
+                if (h.confirmationCode) md += `  確認代碼: \`${h.confirmationCode}\`\n`;
+            });
+            md += `\n`;
+        }
+
+        if (otherReservations.length > 0) {
+            md += `## 🎟️ 其他票券與預訂\n`;
+            otherReservations.forEach(r => {
+                md += `- **${r.title || '票券預訂'}** (${r.type || '其他'})\n`;
+                if (r.confirmationCode) md += `  確認代碼: \`${r.confirmationCode}\`\n`;
+                if (r.notes) md += `  備註: ${r.notes}\n`;
             });
             md += `\n`;
         }
 
         md += `## 📍 每日行程\n`;
-        dayPlans.forEach((plan, idx) => {
-            md += `### Day ${idx + 1} (${plan.date || '未定日期'})\n`;
-            const places = plan.places || [];
-            if (places.length === 0) {
-                md += `*自由活動*\n`;
+        effectiveDayPlans.forEach((plan, idx) => {
+            md += `### Day ${idx + 1} (${plan.date || '未定日期'})${plan.theme ? ` - ${plan.theme}` : ''}\n`;
+            if (plan.notes) md += `> 💡 ${plan.notes}\n\n`;
+            const planPlaces = plan.places || [];
+            if (planPlaces.length === 0) {
+                md += `*今日自由安排活動*\n`;
             } else {
-                places.forEach(p => {
-                    md += `- **${p.name}** ${p.address ? `(${p.address})` : ''}\n`;
-                    if (p.notes) md += `  備忘: ${p.notes}\n`;
+                planPlaces.forEach((p, pIdx) => {
+                    md += `${pIdx + 1}. **${p.name}** ${p.address ? `(${p.address})` : ''}\n`;
+                    if (p.notes) md += `   - 備忘: ${p.notes}\n`;
                 });
             }
             md += `\n`;
         });
 
+        if (packingItems.length > 0) {
+            md += `## 🎒 重要行前檢查\n`;
+            packingItems.forEach(item => {
+                md += `- [ ] ${item.itemName}\n`;
+            });
+            md += `\n`;
+        }
+
         navigator.clipboard.writeText(md);
         toast.success('已複製完整 Markdown 手冊內容至剪貼簿！');
     };
 
-    return (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-sm flex justify-center p-2 sm:p-6 print:p-0 print:bg-white print:static">
+    const brochureContent = (
+        <div className="fixed inset-0 z-[80] overflow-y-auto bg-slate-900/70 backdrop-blur-sm flex justify-center p-2 sm:p-6 print:p-0 print:bg-white print:static">
             <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col my-auto border border-gray-200 print:border-none print:shadow-none print:w-full print:max-w-none">
                 
                 {/* 頂部操作列 (列印時隱藏) */}
@@ -130,11 +217,11 @@ export default function TripBrochureModal({ isOpen, onClose, trip, dayPlans = []
                         <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600 font-medium">
                             <span className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg font-bold">
                                 <Calendar className="w-4 h-4 text-indigo-600" />
-                                {trip.startDate} ~ {trip.endDate}
+                                {trip.startDate || '未定日期'} ~ {trip.endDate || '未定日期'}
                             </span>
                             <span className="flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-1 rounded-lg">
                                 <Clock className="w-4 h-4 text-slate-500" />
-                                共 {dayPlans.length || 1} 天行程
+                                共 {effectiveDayPlans.length} 天行程
                             </span>
                             <span className="flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-1 rounded-lg">
                                 <DollarSign className="w-4 h-4 text-slate-500" />
@@ -161,25 +248,29 @@ export default function TripBrochureModal({ isOpen, onClose, trip, dayPlans = []
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {flights.map((flight, idx) => (
-                                    <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-slate-50/50 text-xs space-y-1.5">
+                                    <div key={flight.id || idx} className="p-3.5 rounded-xl border border-gray-200 bg-slate-50/50 text-xs space-y-1.5">
                                         <div className="flex items-center justify-between font-bold">
                                             <span className="text-indigo-700">{flight.airline || ''} {flight.flightNumber || ''}</span>
                                             <span className="font-mono bg-white px-2 py-0.5 rounded border border-gray-200">
                                                 PNR: {flight.confirmationCode || '無'}
                                             </span>
                                         </div>
-                                        <div className="text-slate-700 font-semibold flex items-center gap-2">
-                                            <span>{flight.departureAirport}</span>
-                                            <span>➔</span>
-                                            <span>{flight.arrivalAirport}</span>
-                                        </div>
+                                        {(flight.departureAirport || flight.arrivalAirport) && (
+                                            <div className="text-slate-700 font-semibold flex items-center gap-2">
+                                                <span>{flight.departureAirport || '-'}</span>
+                                                <span>➔</span>
+                                                <span>{flight.arrivalAirport || '-'}</span>
+                                            </div>
+                                        )}
                                         <div className="text-[11px] text-slate-500 flex justify-between">
                                             <span>起: {flight.departureTime || '-'}</span>
                                             <span>抵: {flight.arrivalTime || '-'}</span>
                                         </div>
-                                        {flight.seatNumber && (
+                                        {(flight.seatNumber || flight.departureTerminal) && (
                                             <div className="text-[11px] text-slate-500">
-                                                座位: <strong>{flight.seatNumber}</strong> | 航廈: {flight.departureTerminal || '-'}
+                                                {flight.seatNumber && <>座位: <strong>{flight.seatNumber}</strong></>}
+                                                {flight.seatNumber && flight.departureTerminal && ' | '}
+                                                {flight.departureTerminal && <>航廈: {flight.departureTerminal}</>}
                                             </div>
                                         )}
                                     </div>
@@ -197,7 +288,7 @@ export default function TripBrochureModal({ isOpen, onClose, trip, dayPlans = []
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {hotels.map((hotel, idx) => (
-                                    <div key={idx} className="p-3.5 rounded-xl border border-gray-200 bg-slate-50/50 text-xs space-y-1">
+                                    <div key={hotel.id || idx} className="p-3.5 rounded-xl border border-gray-200 bg-slate-50/50 text-xs space-y-1">
                                         <div className="flex items-center justify-between font-bold">
                                             <span className="text-slate-900">{hotel.title || hotel.hotelName}</span>
                                             <span className="font-mono text-slate-500 text-[10px]">
@@ -218,6 +309,35 @@ export default function TripBrochureModal({ isOpen, onClose, trip, dayPlans = []
                         </div>
                     )}
 
+                    {/* ── 3.1 其他預訂憑證 ─────────────────────────────────── */}
+                    {otherReservations.length > 0 && (
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
+                                <Ticket className="w-4 h-4 text-indigo-600" />
+                                <h2 className="text-base font-bold text-slate-900 uppercase tracking-wider">活動與票券預訂</h2>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {otherReservations.map((res, idx) => (
+                                    <div key={res.id || idx} className="p-3.5 rounded-xl border border-gray-200 bg-slate-50/50 text-xs space-y-1">
+                                        <div className="flex items-center justify-between font-bold">
+                                            <span className="text-slate-900">{res.title || '票券項目'}</span>
+                                            {res.confirmationCode && (
+                                                <span className="font-mono text-slate-500 text-[10px]">
+                                                    代碼: {res.confirmationCode}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {res.notes && (
+                                            <div className="text-slate-500 text-[11px]">
+                                                {res.notes}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* ── 4. 每日詳細行程時間軸 (Day-by-Day) ───────────────── */}
                     <div className="space-y-6">
                         <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
@@ -225,20 +345,33 @@ export default function TripBrochureModal({ isOpen, onClose, trip, dayPlans = []
                             <h2 className="text-base font-bold text-slate-900 uppercase tracking-wider">每日行程規劃</h2>
                         </div>
 
-                        {dayPlans.map((plan, pIdx) => {
-                            const places = plan.places || [];
+                        {effectiveDayPlans.map((plan, pIdx) => {
+                            const planPlaces = plan.places || [];
                             return (
                                 <div key={plan.id || pIdx} className="space-y-3 print:page-break-inside-avoid">
                                     <div className="bg-slate-100 p-2.5 rounded-xl flex items-center justify-between text-xs font-bold text-slate-800">
-                                        <span>Day {pIdx + 1} · {plan.date || '未排定'}</span>
-                                        <span className="text-slate-500 font-normal">景點數量: {places.length} 個</span>
+                                        <span className="flex items-center gap-2">
+                                            <span>Day {pIdx + 1} · {plan.date || '未排定'}</span>
+                                            {plan.theme && (
+                                                <span className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 text-[10px] font-semibold">
+                                                    {plan.theme}
+                                                </span>
+                                            )}
+                                        </span>
+                                        <span className="text-slate-500 font-normal">景點數量: {planPlaces.length} 個</span>
                                     </div>
 
-                                    {places.length === 0 ? (
+                                    {plan.notes && (
+                                        <p className="text-xs text-slate-600 bg-indigo-50/40 border border-indigo-100/60 rounded-xl p-2.5">
+                                            💡 {plan.notes}
+                                        </p>
+                                    )}
+
+                                    {planPlaces.length === 0 ? (
                                         <p className="text-xs text-slate-400 italic pl-3">今日無指定景點，自由安排探索活動。</p>
                                     ) : (
                                         <div className="pl-3 border-l-2 border-indigo-200 space-y-3">
-                                            {places.map((place, plIdx) => (
+                                            {planPlaces.map((place, plIdx) => (
                                                 <div key={place.id || plIdx} className="text-xs space-y-0.5">
                                                     <div className="flex items-center gap-2">
                                                         <span className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0">
@@ -284,4 +417,6 @@ export default function TripBrochureModal({ isOpen, onClose, trip, dayPlans = []
             </div>
         </div>
     );
+
+    return typeof document !== 'undefined' ? createPortal(brochureContent, document.body) : brochureContent;
 }
