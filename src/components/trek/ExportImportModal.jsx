@@ -538,5 +538,5 @@ export default function ExportImportModal({ isOpen, onClose }) {
         </>
     );
 
-    return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
+    return typeof document !== 'undefined' && document.body ? createPortal(modalContent, document.body) : modalContent;
 }

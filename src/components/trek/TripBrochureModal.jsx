@@ -418,5 +418,5 @@ export default function TripBrochureModal({
         </div>
     );
 
-    return typeof document !== 'undefined' ? createPortal(brochureContent, document.body) : brochureContent;
+    return typeof document !== 'undefined' && document.body ? createPortal(brochureContent, document.body) : brochureContent;
 }

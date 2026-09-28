@@ -464,7 +464,7 @@ export default function TrekHeader() {
             </div>
 
             {/* 系統運行環境與狀態 Modal */}
-            {isStatusModalOpen && typeof document !== 'undefined' && createPortal(
+            {isStatusModalOpen && typeof document !== 'undefined' && document.body && createPortal(
                 <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
                     <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl text-slate-100 animate-in fade-in zoom-in-95 duration-150">
                         <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-700">
@@ -532,7 +532,7 @@ export default function TrekHeader() {
             )}
 
             {/* Create Trip Modal */}
-            {isCreateModalOpen && typeof document !== 'undefined' && createPortal(
+            {isCreateModalOpen && typeof document !== 'undefined' && document.body && createPortal(
                 <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
                     <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl text-slate-100 animate-in fade-in zoom-in-95 duration-150">
                         <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
@@ -604,11 +604,12 @@ export default function TrekHeader() {
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* 編輯現有旅程 Modal */}
-            {editingTrip && typeof document !== 'undefined' && createPortal(
+            {editingTrip && typeof document !== 'undefined' && document.body && createPortal(
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
                     <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl text-white animate-in fade-in zoom-in-95 duration-150">
                         <div className="flex items-center justify-between mb-4 border-b border-slate-700/60 pb-3">
