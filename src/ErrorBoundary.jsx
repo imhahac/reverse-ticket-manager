@@ -1,5 +1,7 @@
 import React from 'react';
 import { logger } from './utils/logger';
+import { downloadDiagnosticDump } from './utils/diagnosticDump';
+import { DB_NAME } from './services/db';
 
 export class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -15,6 +17,21 @@ export class ErrorBoundary extends React.Component {
     logger.error("ErrorBoundary caught an error:", error, errorInfo);
     this.setState({ errorInfo });
   }
+
+  handleReset = async () => {
+    if (confirm('確定要徹底清除所有本地資料嗎？這將刪除 IndexedDB 資料庫、清除快取並重設設定（無法復原，除非有雲端備份）。\n\n建議先點擊上方按鈕下載「除錯診斷包」以保全證據。')) {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+        if (typeof window !== 'undefined' && window.indexedDB) {
+          window.indexedDB.deleteDatabase(DB_NAME);
+        }
+      } catch (err) {
+        logger.error('Failed to clean local storage/database:', err);
+      }
+      window.location.reload();
+    }
+  };
 
   render() {
     if (this.state.hasError) {
@@ -38,6 +55,13 @@ export class ErrorBoundary extends React.Component {
                 </div>
                 <div className="flex flex-col gap-3" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <button 
+                        onClick={() => downloadDiagnosticDump()} 
+                        className="w-full py-3 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition"
+                        style={{ padding: '12px', backgroundColor: '#059669', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                    >
+                        📥 下載除錯診斷包 (Diagnostic Dump)
+                    </button>
+                    <button 
                         onClick={() => window.location.reload()} 
                         className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition"
                         style={{ padding: '12px', backgroundColor: '#4f46e5', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer' }}
@@ -45,12 +69,7 @@ export class ErrorBoundary extends React.Component {
                         重新整理網頁
                     </button>
                     <button 
-                        onClick={() => {
-                            if (confirm('確定要清除所有本地資料嗎？這將無法復原（除非有雲端備份）。')) {
-                                localStorage.clear();
-                                window.location.reload();
-                            }
-                        }} 
+                        onClick={this.handleReset} 
                         className="w-full py-3 bg-white border border-red-200 text-red-600 font-bold rounded-lg hover:bg-red-50 transition"
                         style={{ padding: '12px', backgroundColor: 'white', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: '8px', cursor: 'pointer' }}
                     >

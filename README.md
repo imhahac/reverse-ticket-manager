@@ -4,7 +4,7 @@
 [![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-brightgreen)](https://nodejs.org/)
 [![React 18](https://img.shields.io/badge/React-18.2-blue)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-7.3-purple)](https://vitejs.dev/)
-[![Tests](https://img.shields.io/badge/Tests-40%2F40%20Passing-emerald)](https://vitest.dev/)
+[![Tests](https://img.shields.io/badge/Tests-24%20Files%20%2F%2066%20Passing-emerald)](https://vitest.dev/)
 [![PWA Ready](https://img.shields.io/badge/PWA-Ready-orange)](https://web.dev/progressive-web-apps/)
 [![IndexedDB](https://img.shields.io/badge/Storage-IndexedDB%2011%20Stores-indigo)](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)
 
@@ -36,8 +36,8 @@
 * **OSRM 實際道路路徑導航**：計算實際行車與步行轉折軌跡，並支援 Google Maps 與 Naver Maps 一鍵外部導航跳轉。
 * **Open-Meteo 16 天氣候預測與歷史回溯**：自動依日程與座標獲取 16 天精準氣象，超長遠期行程自動回溯歷史同期天候作為行前穿著參考。
 * **維基百科景點富化**：結合 OpenStreetMap Nominatim 搜尋，自動萃取維基百科歷史文化摘要與景點圖文。
-* **外部檔案與連結解析**：純前端解析 GPX 1.1、KML、KMZ（動態解壓縮）與多行 Google Maps / Naver Maps 分享連結。
-* **級聯原子日期平移 (Move Trip Dates)**：旅程改期或延期時，記憶體預算天數差並在單一 IndexedDB 跨 Store 交易原子提交，同步重新錨定日程、航班、飯店與待辦事項。
+* **外部檔案與連結解析**：純前端解析 GPX 1.1、KML、KMZ（動態解壓縮）與多行 Google Maps / Naver Maps 分享連結（支援純短網址 `maps.app.goo.gl` 自動展開與座標抽取）。
+* **級聯原子日期平移與 9-Store 完整物理級聯刪除**：旅程改期或刪除時，單一跨 Store 交易原子提交，連鎖清理日程、筆記、景點、航班住宿、記帳、行李與待辦事項，徹底杜絕殭屍孤兒資料。
 * **出版級 A4 旅遊手冊**：向量列印優化排版、支援另存高品質 PDF 與 Markdown 一鍵複製至 Notion/Obsidian。
 
 ### 2. 💰 多幣別財務與智慧清帳 (Finance Workspace)
@@ -56,7 +56,7 @@
 * **16 種通用預訂類型**：涵蓋機票、飯店、火車高鐵、渡輪、租車、活動、餐飲、保險、旅行團等，標配專屬視覺識別。
 * **純前端 Apple Wallet PKPass 解析器**：客戶端解壓縮讀取 `pass.json`，萃取航班時間、登機門、座位與 PNR。
 * **純前端 PDF 憑證文字抽取解析**：離線抽取機票與住宿憑證關鍵資訊。
-* **外站票自動拆解演算法**：以出發地機場為錨點，自動將多張單程票、Open-Jaw 機票重新重構為連續閉環趟次。
+* **外站票自動拆解與全球起錨閉環**：動態依起錨機場為核心，支援台灣及全球任意機場出發/返程之多段 Open-Jaw、Stopover 閉環識別。
 * **自然鍵 (confirmationCode) 查重防護**：防止使用者重複拖曳同一張憑證產生重複資料。
 
 ---
@@ -73,7 +73,7 @@ graph TD
     UI --> Ingestion[PKPass / PDF / GPX / KML 純前端解碼]
     
     Context -. 選擇性安全代理 .-> CFWorker[Cloudflare Worker 安全代理]
-    CFWorker -. 512KB限制/HTTPS/Bearer驗證 .-> ExtAPI[Aviation / Frankfurter / Nominatim]
+    CFWorker -. 512KB限制/HTTPS/SSRF防禦/KV快照 .-> ExtAPI[Aviation / AirLabs / Unshorten / Maps]
     
     Context -. 授權直連 .-> GDrive[(Google Drive 個人雲端備份 / 500MB 斷點續傳)]
     Context -. 匯出 .-> ExportEngine[A4 PDF 手冊 / RFC 5545 .ics / GPX 1.1]
@@ -115,7 +115,7 @@ npm run build
 # 靜態代碼檢查 (需為 0 錯誤、0 警告)
 npm run lint
 
-# 單元與整合測試 (40 項測試需 100% 通過)
+# 單元與整合測試 (24 個測試套件、66 項測試需 100% 通過)
 npm test
 ```
 
@@ -127,10 +127,12 @@ npm test
 2. **安全代理加固 (Cloudflare Worker)**：
    * 限制最大 Request Body 512KB，杜絕記憶體耗盡攻擊。
    * 嚴格 UUID 格式正則校驗，防 SQL/NoSQL 惡意字串。
-   * 強制 HTTPS 與 `encodeURIComponent` 參數消毒，消除 SSRF 與 Open Redirect 漏洞。
+   * 短網址邊緣還原代理（`?api=unshorten`）具備嚴格協議白名單與內網/私有 IP（SSRF）阻斷防護。
+   * 強制 HTTPS 與 `encodeURIComponent` 參數消毒，消除 Open Redirect 與未授權存取。
    * 支援 `SHARE_SECRET_TOKEN` Bearer 鑑權。
-3. **零成本除錯診斷包 (Diagnostic Dump)**：
-   * 當遭遇異常或瀏覽器儲存問題時，在 Error Boundary 崩潰頁或匯出中心點擊「下載除錯診斷包」，即可一鍵匯出包含瀏覽器環境、IndexedDB 11 個 Stores 記錄計數之 JSON 報告，無任何敏感個資洩漏。
+3. **零成本除錯診斷包與徹底自癒重設 (Diagnostic Dump & Recovery)**：
+   * 當遭遇異常或瀏覽器儲存問題時，Error Boundary 崩潰頁提供「📥 下載除錯診斷包」，一鍵匯出包含錯誤堆疊、瀏覽器環境、IndexedDB 11 個 Stores 記錄計數之 JSON 報告。
+   * 點擊「⚠️ 強制清除資料並重設」可徹底抹除 IndexedDB (`treklite_db`)、`localStorage` 與 `sessionStorage`，根除毀損數據死循環白屏。
 
 ---
 

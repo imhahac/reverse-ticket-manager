@@ -29,6 +29,8 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin") || "*";
+    const apiType = url.searchParams.get("api");
+    const rawFlightNo = url.searchParams.get("flight");
 
     // 嚴格 CORS 標頭控制
     const corsHeaders = {
@@ -115,6 +117,31 @@ export default {
       if (!targetUrl) {
         return json({ error: "缺少必要的 'url' 參數" }, 400);
       }
+
+      // SSRF 防護：驗證協議與禁止存取內網/私有 IP
+      try {
+        const parsed = new URL(targetUrl);
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+          return json({ error: "不支援的協議，僅允許 HTTP/HTTPS" }, 400);
+        }
+        const hostname = parsed.hostname.toLowerCase();
+        if (
+          hostname === 'localhost' ||
+          hostname.endsWith('.localhost') ||
+          hostname === '127.0.0.1' ||
+          hostname === '::1' ||
+          hostname === '0.0.0.0' ||
+          hostname.startsWith('169.254.') ||
+          hostname.startsWith('10.') ||
+          hostname.startsWith('192.168.') ||
+          /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
+        ) {
+          return json({ error: "禁止存取本機、內網或私有 IP 網址" }, 403);
+        }
+      } catch (_) {
+        return json({ error: "無效的 URL 格式" }, 400);
+      }
+
       try {
         const resp = await fetch(targetUrl, { redirect: "follow" });
         return json({ success: true, resolvedUrl: resp.url });

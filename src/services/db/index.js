@@ -74,19 +74,46 @@ export const tripRepo = {
         ], 'readwrite');
 
         await tx.objectStore(STORES.TRIPS).delete(id);
-        // Cascade delete related items
+
+        // 1. 級聯刪除日程 (DayPlans) 並蒐集其 ID，以連鎖清理隨手筆記 (DayNotes)
+        const dayPlanIds = [];
         const dayPlanIndex = tx.objectStore(STORES.DAY_PLANS).index('tripId');
         let cursor = await dayPlanIndex.openCursor(id);
         while (cursor) {
+            dayPlanIds.push(cursor.primaryKey);
             await cursor.delete();
             cursor = await cursor.continue();
         }
 
-        const resIndex = tx.objectStore(STORES.RESERVATIONS).index('tripId');
-        let resCursor = await resIndex.openCursor(id);
-        while (resCursor) {
-            await resCursor.delete();
-            resCursor = await resCursor.continue();
+        // 2. 級聯刪除日程筆記 (DayNotes)
+        if (dayPlanIds.length > 0) {
+            const dayNoteIndex = tx.objectStore(STORES.DAY_NOTES).index('dayPlanId');
+            for (const planId of dayPlanIds) {
+                let noteCursor = await dayNoteIndex.openCursor(planId);
+                while (noteCursor) {
+                    await noteCursor.delete();
+                    noteCursor = await noteCursor.continue();
+                }
+            }
+        }
+
+        // 3. 級聯刪除具備 tripId 索引的其餘 6 個 Store
+        const storesWithTripIdIndex = [
+            STORES.PLACE_ITEMS,
+            STORES.RESERVATIONS,
+            STORES.EXPENSES,
+            STORES.PACKING_ITEMS,
+            STORES.TODOS,
+            STORES.ATTACHED_FILES
+        ];
+
+        for (const storeName of storesWithTripIdIndex) {
+            const index = tx.objectStore(storeName).index('tripId');
+            let itemCursor = await index.openCursor(id);
+            while (itemCursor) {
+                await itemCursor.delete();
+                itemCursor = await itemCursor.continue();
+            }
         }
 
         await tx.done;

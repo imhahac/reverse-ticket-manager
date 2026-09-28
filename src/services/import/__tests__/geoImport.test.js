@@ -127,5 +127,5 @@ https://map.naver.com/v5/?c=15,0,0,0,dh&lat=37.5665&lng=126.9780
         expect(teamLab.lat).toBeCloseTo(35.6491, 2);
         expect(teamLab.lng).toBeCloseTo(139.7897, 2);
         expect(teamLab.source).toBe('google_maps');
-    });
+    }, 15000);
 });

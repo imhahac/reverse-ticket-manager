@@ -2,9 +2,9 @@
 
 **Light Trip Plan** 採用現代化 **Jamstack + Serverless** 雲原生架構：
 * **前端 (Client SPA / PWA)**：100% 靜態 React 應用程式，透過 **GitHub Actions** 自動化建置並發布至 **GitHub Pages**。
-* **安全代理 (Cloudflare Worker)**：作為微型邊緣安全閘道 (Edge Gateway)，負責轉發第三方航班查詢 API、儲存唯讀行程分享快照 (KV)、強制 512KB Payload 限制與防 SSRF。
+* **安全代理 (Cloudflare Worker)**：作為微型邊緣安全閘道 (Edge Gateway)，負責轉發第三方航班查詢 API、儲存唯讀行程分享快照 (KV)、短網址邊緣還原代理（`?api=unshorten`，支援 Google Maps 短網址展開）、強制 512KB Payload 限制與防 SSRF 內網阻斷。
 * **雲端同步 (Google Cloud OAuth 2.0)**：純前端授權直連 Google Drive API，提供使用者個人加密備份與 500MB 大檔斷點續傳。
-* **排程通知 (LINE Bot)**：透過 GitHub Actions Cron 排程讀取 Google Drive 備份，推播每日航班與住宿通知。
+* **排程通知 (LINE Bot)**：透過 GitHub Actions Cron 排程讀取 Google Drive 備份，推播每日航班與住宿通知（支援全球出發機場動態閉環）。
 
 ---
 
@@ -159,10 +159,11 @@
 
 1. **依賴鎖定**：`npm install` 依賴鎖定與結構驗證。
 2. **語法與代碼風格門禁**：`npm run lint`（強制 **0 錯誤、0 警告**）。
-3. **單元測試全數門禁**：`npm test`（強制 **21 個測試檔案、55 個單元測試** 100% 通過）。
+3. **單元測試全數門禁**：`npm test`（強制 **24 個測試檔案、66 個單元與整合測試** 100% 通過，涵蓋 9-Store 完整級聯物理刪除驗證）。
 4. **生產環境打包**：`npm run build`（注入環境變數、生成 PWA Service Worker 與預載入資產）。
 5. **發布至 GitHub Pages**：調用官方 `actions/deploy-pages@v5` 進行零停機熱發布。
-6. **(選用) 自動發布 Cloudflare Worker**：若有設定 `CLOUDFLARE_API_TOKEN` 與 `SHARED_TRIPS_KV_ID`，自動更新邊緣代理程式。
+6. **(選用) Cloudflare Worker 乾跑防線**：自動執行 `wrangler deploy --dry-run` 靜態檢驗邊緣腳本語法與環境綁定。
+7. **(選用) 自動發布 Cloudflare Worker**：若有設定 `CLOUDFLARE_API_TOKEN` 與 `SHARED_TRIPS_KV_ID`，自動更新邊緣代理程式。
 
 ---
 
@@ -194,13 +195,16 @@
    * 點擊 **`Exchange authorization code for tokens`**。
 6. 在右側欄位中，找到 **`Refresh token`** 並複製該字串。
 
-### 3. 設定 GitHub Secrets
-在 GitHub `Settings` ➔ `Secrets and variables` ➔ `Actions` ➔ **Secrets** 加入：
-* `LINE_CHANNEL_ACCESS_TOKEN`
-* `LINE_USER_ID`
-* `GOOGLE_CLIENT_ID`
-* `GOOGLE_CLIENT_SECRET`
-* `GOOGLE_REFRESH_TOKEN`
+### 3. 設定 GitHub Secrets 與 Variables
+在 GitHub `Settings` ➔ `Secrets and variables` ➔ `Actions` 加入：
+* **Secrets**:
+  * `LINE_CHANNEL_ACCESS_TOKEN`
+  * `LINE_USER_ID`
+  * `GOOGLE_CLIENT_ID`
+  * `GOOGLE_CLIENT_SECRET`
+  * `GOOGLE_REFRESH_TOKEN`
+* **Variables** (選配):
+  * `HOME_AIRPORTS`：自訂起錨機場代碼，以逗號分隔（例如 `TPE,TSA,KHH,RMQ,NRT,HND,LHR,JFK`，若留空預設以首段航班出發地為錨點）。
 
 ---
 
@@ -227,6 +231,7 @@
 * **原因**：Google 測試版專案的 OAuth Token 預設有效期限為 7 天，或是密碼修改導致失效。
 * **解決**：重新至 Google OAuth Playground 獲取新的 `refresh_token`，更新至 GitHub Secrets。
 
-### 4. 系統除錯診斷包匯出
-* 介面發生嚴重異常時，Error Boundary 會自動提供「📥 下載除錯診斷包 (Diagnostic Dump)」。
-* 平時亦可於導航列「匯入匯出 & 手冊」➔「資料匯出」中下載，包含 IndexedDB 11 個 Stores 的健康狀態與環境指標，不含個人機密。
+### 4. 系統除錯診斷包與徹底自癒重設
+* **崩潰自癒**：當介面遭遇未預期的渲染崩潰時，Error Boundary 提供「📥 下載除錯診斷包 (Diagnostic Dump)」保全錯誤堆疊與環境數據。
+* **徹底重設**：點擊「⚠️ 強制清除資料並重設」將完整抹除 IndexedDB (`treklite_db`)、`localStorage` 與 `sessionStorage`，根除毀損數據引發的死循環白屏。
+* **平時匯出**：亦可於導航列「匯入匯出 & 手冊」➔「資料匯出」中下載，包含 IndexedDB 11 個 Stores 的健康狀態與環境指標，不含個人機密。

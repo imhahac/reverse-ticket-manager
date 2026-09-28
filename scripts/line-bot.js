@@ -13,10 +13,16 @@ import { getFlightAwareUrl } from '../src/utils/flightUtils.js';
 // ==========================================
 // 1. 核心邏輯共享區 (由前端邏輯移植)
 // ==========================================
-const TW_CODES = ['TPE', 'TSA', 'KHH', 'RMQ'];
-const isTaiwan = (regionStr) => {
+const configuredHomes = (process.env.HOME_AIRPORTS || 'TPE,TSA,KHH,RMQ')
+    .split(',')
+    .map(c => c.trim().toUpperCase())
+    .filter(Boolean);
+
+const isHomeAirport = (regionStr, originCode = null) => {
     if (!regionStr) return false;
-    return TW_CODES.some(code => regionStr.includes(code));
+    const upper = regionStr.toUpperCase();
+    if (originCode && upper.includes(originCode.toUpperCase())) return true;
+    return configuredHomes.some(code => upper.includes(code));
 };
 
 function getItinerary(tickets, hotels, activities = []) {
@@ -45,13 +51,20 @@ function getItinerary(tickets, hotels, activities = []) {
     let currentTrip = null;
 
     segments.forEach(seg => {
+        const segOrigin = (seg.from || '').slice(0, 3).toUpperCase();
         if (!currentTrip) {
-            currentTrip = { id: seg.id, segments: [seg], isComplete: isTaiwan(seg.to) };
+            currentTrip = { id: seg.id, origin: segOrigin, segments: [seg], isComplete: isHomeAirport(seg.to, segOrigin) };
             if (currentTrip.isComplete) { flightTrips.push(currentTrip); currentTrip = null; }
         } else {
             currentTrip.segments.push(seg);
-            if (isTaiwan(seg.to)) { currentTrip.isComplete = true; flightTrips.push(currentTrip); currentTrip = null; }
-            else if (isTaiwan(seg.from)) { flightTrips.push(currentTrip); currentTrip = { id: seg.id, segments: [seg], isComplete: false }; }
+            if (isHomeAirport(seg.to, currentTrip.origin)) { 
+                currentTrip.isComplete = true; 
+                flightTrips.push(currentTrip); 
+                currentTrip = null; 
+            } else if (isHomeAirport(seg.from, currentTrip.origin)) { 
+                flightTrips.push(currentTrip); 
+                currentTrip = { id: seg.id, origin: segOrigin, segments: [seg], isComplete: false }; 
+            }
         }
     });
     if (currentTrip) flightTrips.push(currentTrip);
@@ -74,7 +87,7 @@ function getItinerary(tickets, hotels, activities = []) {
 
         const warns = [];
         let reqStart = start;
-        if (isTaiwan(segs[0].from) && segs[0].arrivalDate && segs[0].arrivalDate > start) reqStart = segs[0].arrivalDate;
+        if (isHomeAirport(segs[0].from, trip.origin) && segs[0].arrivalDate && segs[0].arrivalDate > start) reqStart = segs[0].arrivalDate;
         const tripDays = Math.ceil((new Date(end) - new Date(start)) / 86400000) + 1;
         if (tripDays > 1 && tripHotels.length === 0) warns.push('⚠️ 此趟次尚未安排任何住宿');
         const sortedH = [...tripHotels].sort((a, b) => a.checkIn.localeCompare(b.checkIn));
