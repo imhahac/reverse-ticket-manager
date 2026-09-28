@@ -93,7 +93,7 @@ const CONTENT_COMPONENT_BY_TAB = {
 
 function AppContent() {
     const { activeTab, setActiveTab, ticketScope = 'trip', setTicketScope } = useUIContext();
-    const { activeTrip, viewMode = 'split', setViewMode } = useTrek();
+    const { activeTrip, viewMode = 'split', setViewMode, isLoading } = useTrek();
     const { renderError } = useFilterContext();
 
     if (renderError) {
@@ -191,7 +191,7 @@ function AppContent() {
                                         title={`僅顯示當前行程：${activeTrip?.title || '未選定'}`}
                                     >
                                         <MapPin className="w-3.5 h-3.5 text-indigo-500" />
-                                        <span className="max-w-[130px] truncate">{activeTrip?.title || '當前行程'}</span>
+                                        <span className="max-w-[130px] truncate">{activeTrip?.title || (isLoading ? '載入中...' : '當前行程')}</span>
                                     </button>
                                     <button
                                         onClick={() => setTicketScope('all')}

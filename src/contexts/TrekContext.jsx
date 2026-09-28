@@ -79,7 +79,6 @@ export function TrekProvider({ children }) {
             const viewId = queryParams.get('view');
 
             if (viewId) {
-                const toastId = toast.loading('正在載入分享的行程快照...');
                 try {
                     const normalized = await fetchShareSnapshot(viewId);
                     if (isMounted) {
@@ -89,7 +88,6 @@ export function TrekProvider({ children }) {
                         setReservations(normalized.reservations || []);
                         setDayPlans(normalized.dayPlans || []);
                         setIsLoading(false);
-                        toast.dismiss(toastId);
                         toast.info(`👀 正在檢視唯讀分享行程：${normalized.trip.title}`, {
                             description: '可點擊上方橫幅「📥 匯入至我的旅程」進行儲存與編輯。',
                             duration: 6000
@@ -102,7 +100,6 @@ export function TrekProvider({ children }) {
                         return;
                     }
                 } catch (err) {
-                    toast.dismiss(toastId);
                     toast.error('無法載入分享行程', {
                         description: err.message || '該分享連結可能已過期或不存在，已為您載入本地旅程。',
                         duration: 6000

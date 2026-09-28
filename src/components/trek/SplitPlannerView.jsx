@@ -42,7 +42,7 @@ import { placeItemRepo } from '../../services/db';
 export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
     const { 
         activeTrip, reservations, dayPlans, viewMode, setViewMode, updateTrip, deleteTrip, toggleArchiveTrip, trips,
-        isSharedView, importSharedTripToLocal, exitSharedView
+        isSharedView, importSharedTripToLocal, exitSharedView, isLoading
     } = useTrek();
     const { activeTab } = useUIContext();
 
@@ -145,6 +145,16 @@ export default function SplitPlannerView({ defaultSubTab = 'daily' }) {
             ]);
         }
     };
+
+    if (isLoading) {
+        return (
+            <div className="p-16 flex flex-col items-center justify-center min-h-[400px] text-slate-400">
+                <div className="w-9 h-9 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
+                <p className="text-sm font-semibold text-slate-600">正在準備旅程資訊...</p>
+                <p className="text-xs text-slate-400 mt-1">讀取離線資料庫中</p>
+            </div>
+        );
+    }
 
     if (!activeTrip) {
         return (
