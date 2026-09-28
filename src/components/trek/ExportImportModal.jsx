@@ -315,7 +315,7 @@ export default function ExportImportModal({ isOpen, onClose }) {
                                             rows={3}
                                             value={pastedLinks}
                                             onChange={(e) => setPastedLinks(e.target.value)}
-                                            placeholder="貼上 Google Maps / Naver Maps 連結、座標或景點名稱 (支援每行一筆批次匯入)"
+                                            placeholder="貼上 Google Maps (含 maps.app.goo.gl 短網址) / Naver Maps / 經緯度或景點名稱 (支援每行一筆批次匯入)"
                                             className="w-full border border-gray-200 rounded-xl p-2.5 text-xs focus:outline-none focus:border-indigo-500 resize-none font-mono"
                                         />
                                         <button

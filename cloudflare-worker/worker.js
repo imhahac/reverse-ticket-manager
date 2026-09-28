@@ -109,11 +109,22 @@ export default {
       });
     }
 
-    // ── 功能一：航班 API 代理 (強制走 HTTPS 與參數 URL 編碼) ──────────────────
-    const apiType = url.searchParams.get('api');
-    const rawFlightNo = url.searchParams.get('flight');
+    // ── 功能一：短網址邊緣還原代理 ──────────────────────────────────────────
+    if (apiType === 'unshorten') {
+      const targetUrl = url.searchParams.get('url');
+      if (!targetUrl) {
+        return json({ error: "缺少必要的 'url' 參數" }, 400);
+      }
+      try {
+        const resp = await fetch(targetUrl, { redirect: "follow" });
+        return json({ success: true, resolvedUrl: resp.url });
+      } catch (error) {
+        return json({ error: error.message }, 500);
+      }
+    }
 
-    if (!apiType || !rawFlightNo) {
+    // ── 功能二：航班 API 代理 (強制走 HTTPS 與參數 URL 編碼) ──────────────────
+    if (!rawFlightNo) {
       return json({ error: "缺少必要的 'api' 或 'flight' 參數" }, 400);
     }
 
@@ -130,7 +141,7 @@ export default {
         if (!env.AIRLABS_API_KEY) throw new Error("Worker 環境變數遺失: AIRLABS_API_KEY");
         targetUrl = `https://airlabs.co/api/v9/routes?api_key=${encodeURIComponent(env.AIRLABS_API_KEY)}&flight_iata=${flightNo}`;
       } else {
-        return json({ error: "參數 'api' 無效。請使用 'aviationstack' 或 'airlabs'" }, 400);
+        return json({ error: "參數 'api' 無效。請使用 'unshorten'、'aviationstack' 或 'airlabs'" }, 400);
       }
 
       const response = await fetch(targetUrl);

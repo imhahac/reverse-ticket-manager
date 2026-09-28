@@ -291,6 +291,59 @@ export function parseMapLinksSync(text) {
 }
 
 /**
+ * 嘗試將 Google Maps 短網址 (maps.app.goo.gl 或 goo.gl/maps) 展開為完整包含地標名稱與經緯度的 URL
+ * 優先使用本地/部署的 Cloudflare Worker 代理，備援使用 unshorten.me 公用 CORS API
+ * @param {string} shortUrl
+ * @returns {Promise<string|null>}
+ */
+export async function resolveGoogleMapsShortUrl(shortUrl) {
+    if (!shortUrl || typeof shortUrl !== 'string') return null;
+
+    // 1. 若環境有設定 Worker 代理，優先走邊緣節點展開
+    const proxyBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FLIGHT_PROXY_URL) || '';
+    if (proxyBase) {
+        try {
+            const workerUrl = `${proxyBase.replace(/\/+$/, '')}?api=unshorten&url=${encodeURIComponent(shortUrl)}`;
+            const res = await fetch(workerUrl, { signal: AbortSignal.timeout(4000) });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.resolvedUrl) {
+                    let cleaned = data.resolvedUrl;
+                    if (cleaned.includes('continue=')) {
+                        const m = cleaned.match(/continue=([^&]+)/);
+                        if (m) cleaned = decodeURIComponent(m[1]);
+                    }
+                    return cleaned;
+                }
+            }
+        } catch {
+            // Worker 請求超時或未部署，繼續往下走備援
+        }
+    }
+
+    // 2. 備援：使用公開支援 CORS 的 unshorten.me API
+    try {
+        const unshortenApi = `https://unshorten.me/json/${encodeURIComponent(shortUrl)}`;
+        const res = await fetch(unshortenApi, { signal: AbortSignal.timeout(5000) });
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && data.resolved_url) {
+                let cleaned = data.resolved_url;
+                if (cleaned.includes('continue=')) {
+                    const m = cleaned.match(/continue=([^&]+)/);
+                    if (m) cleaned = decodeURIComponent(m[1]);
+                }
+                return cleaned;
+            }
+        }
+    } catch {
+        // 忽略連線失敗
+    }
+
+    return null;
+}
+
+/**
  * 智慧非同步解析文字中的地圖連結、經緯度或景點名稱
  * 當輸入缺乏直接座標時，自動從分享文字萃取名稱並透過 Nominatim 聯網定位
  * @param {string} text
@@ -302,9 +355,10 @@ export async function parseMapLinks(text) {
     // 1. 先執行同步提取已知座標
     const directResults = parseMapLinksSync(text);
 
-    // 2. 找出未直接匹配出座標但包含地名或分享連結的行
+    // 2. 找出未直接匹配出座標但包含地名、短網址或分享連結的行
     const lines = text.split(/[\r\n]+/);
     const searchTasks = [];
+    const shortUrlTasks = [];
     const directUrls = new Set(directResults.map(r => r.originalUrl).filter(Boolean));
 
     for (const rawLine of lines) {
@@ -313,6 +367,9 @@ export async function parseMapLinks(text) {
 
         let placeName = '';
         const originalUrl = line;
+
+        // 偵測 Google Maps 短網址 (maps.app.goo.gl 或 goo.gl/maps)
+        const shortUrlMatch = line.match(/https?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps)\/[A-Za-z0-9_-]+/i);
 
         // 模式 A: 手機 Google Maps 分享文字: 在 Google 地圖上查看「(名稱)」：https://...
         const shareTitleMatch = line.match(/(?:在\s*Google\s*地圖上)?查看[「『"“](.*?)[」』"”]/i) ||
@@ -327,7 +384,13 @@ export async function parseMapLinks(text) {
             }
         }
 
-        // 模式 C: Google Maps 搜尋或 Place 連結 (不含座標)
+        // 模式 C: 若有短網址但無法直接從行內取得有效景點名稱，加入短網址還原排程
+        if (!placeName && shortUrlMatch) {
+            shortUrlTasks.push({ shortUrl: shortUrlMatch[0], originalLine: line });
+            continue;
+        }
+
+        // 模式 D: Google Maps 搜尋或 Place 連結 (不含座標)
         if (!placeName && line.includes('google.com/maps')) {
             const searchParamMatch = line.match(/[?&]query=([^&#]+)/) ||
                                      line.match(/\/maps\/search\/([^/?&#]+)/);
@@ -341,7 +404,7 @@ export async function parseMapLinks(text) {
             }
         }
 
-        // 模式 D: Apple Maps 搜尋連結
+        // 模式 E: Apple Maps 搜尋連結
         if (!placeName && line.includes('maps.apple.com')) {
             const appleQMatch = line.match(/[?&]q=([^&#]+)/);
             if (appleQMatch) {
@@ -349,7 +412,7 @@ export async function parseMapLinks(text) {
             }
         }
 
-        // 模式 E: 純景點名稱文字 (不含 http:// 或 https://，長度 2 ~ 40 字)
+        // 模式 F: 純景點名稱文字 (不含 http:// 或 https://，長度 2 ~ 40 字)
         if (!placeName && !line.includes('http://') && !line.includes('https://') && line.length >= 2 && line.length <= 40) {
             if (!/^[0-9\s,.-]+$/.test(line)) {
                 placeName = line.replace(/^[0-9]+[.\-、\s]+/, '').trim();
@@ -361,8 +424,45 @@ export async function parseMapLinks(text) {
         }
     }
 
-    // 3. 透過 Nominatim 聯網並行搜尋解析真實座標
     const resolvedResults = [...directResults];
+
+    // 3. 處理短網址還原
+    if (shortUrlTasks.length > 0) {
+        const shortUrlPromises = shortUrlTasks.map(async task => {
+            const expandedUrl = await resolveGoogleMapsShortUrl(task.shortUrl);
+            if (expandedUrl) {
+                // 將展開後的 URL 嘗試直接同步抽取
+                const extracted = parseMapLinksSync(expandedUrl);
+                if (extracted.length > 0) {
+                    return extracted.map(item => ({
+                        ...item,
+                        originalUrl: task.originalLine
+                    }));
+                }
+                // 若只拿到 place 路徑中的地名但無經緯度
+                const placeMatch = expandedUrl.match(/\/place\/([^/@?&#]+)/);
+                if (placeMatch) {
+                    const fallbackName = decodeURIComponent(placeMatch[1].replace(/\+/g, ' ')).trim();
+                    if (fallbackName) {
+                        return [{ fallbackSearch: fallbackName, originalUrl: task.originalLine }];
+                    }
+                }
+            }
+            return null;
+        });
+
+        const shortUrlResults = await Promise.all(shortUrlPromises);
+        shortUrlResults.flat().forEach(item => {
+            if (!item) return;
+            if (item.fallbackSearch) {
+                searchTasks.push({ name: item.fallbackSearch, originalUrl: item.originalUrl });
+            } else {
+                resolvedResults.push(item);
+            }
+        });
+    }
+
+    // 4. 透過 Nominatim 聯網並行搜尋解析真實座標
     const searchedNames = new Set(resolvedResults.map(r => r.name.toLowerCase()));
 
     if (searchTasks.length > 0) {

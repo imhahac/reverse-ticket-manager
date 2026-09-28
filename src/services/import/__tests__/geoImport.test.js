@@ -116,4 +116,16 @@ https://map.naver.com/v5/?c=15,0,0,0,dh&lat=37.5665&lng=126.9780
         expect(skytree.lat).toBeGreaterThan(35);
         expect(skytree.lng).toBeGreaterThan(139);
     });
+
+    it('應能將純 Google Maps 短網址自動還原展開並解析出地標名稱與經緯度', async () => {
+        const pureShortUrl = 'https://maps.app.goo.gl/DCZgEbksd1NB8tUN7';
+        const places = await parseMapLinks(pureShortUrl);
+
+        expect(places.length).toBeGreaterThanOrEqual(1);
+        const teamLab = places[0];
+        expect(teamLab.name).toContain('teamLab');
+        expect(teamLab.lat).toBeCloseTo(35.6491, 2);
+        expect(teamLab.lng).toBeCloseTo(139.7897, 2);
+        expect(teamLab.source).toBe('google_maps');
+    });
 });
